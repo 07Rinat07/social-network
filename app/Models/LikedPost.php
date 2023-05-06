@@ -9,5 +9,4 @@ class LikedPost extends Model
 {
     protected $table = 'liked_posts';
     protected $guarded = false;
-
 }

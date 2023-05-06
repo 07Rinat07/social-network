@@ -3,7 +3,7 @@
         <div class="w-96 mx-auto">
 
             <div>
-                <input v-model="name" type="date" placeholder="name"
+                <input v-model="name" type="name" placeholder="name"
                        class="w-96 p-1 mb-2 border border-inherit rounded-lg">
             </div>
             <div>
