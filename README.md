@@ -15,15 +15,23 @@ demonstration and testing.
 ### Project written on Laravel 9.5&&Vue&&TailwindcInstructions and additional information for installing and testing the application: 
 1. Link how-to-install-vue-3-in-laravel-9-with-vite: https://techvblogs.com/blog/how-to-install-vue-3-in-laravel-9-with-vite
 2. Link Get started with Tailwind CSS: https://tailwindcss.com/docs/installation/using-postcss
-3. Composer require laravel/ui
-4. php artisan ui:auth
-5. Create a DB (in the .env file and the database, enter the correct data for configuration)
-6. Write and send command- php artisan migrate
-7. If necessary, do composer install or composer update
+3. composer install or composer update
+4. composer require laravel/ui
+5. php artisan ui:auth
+6. Create a DB (in the .env file and the database, enter the correct data for configuration)
+7. php artisan migrate
+8. If you want to deploy this site on hosting, then in .env
+   write a constant
+   SANCTUM_STATEFUL_DOMAINS=AND_HERE_YOUR_DOMAINS_OR_IP
+   For example, I have
+   SANCTUM_STATEFUL_DOMAINS=41.155.158.48
+
 
 ### To run the project locally, you need to type commands in the terminal in turn: 
+
 1. npm run dev 
 2. php artisan serve
+3. php artisan storage:link
 
 ### Additional actions in case of errors...
 1. php artisan route:cache
