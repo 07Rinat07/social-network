@@ -25,7 +25,8 @@ demonstration and testing.
    SANCTUM_STATEFUL_DOMAINS=AND_HERE_YOUR_DOMAINS_OR_IP
    For example, I have
    SANCTUM_STATEFUL_DOMAINS=41.155.158.48
-9. If you will deploy the site to a hosting, then first build for VUE locally or on the hosting if you have access to Node and SSH.
+9. npm run build - If you will deploy the site to a hosting, then first build for VUE locally or on the hosting if you have access to Node and SSH. 
+
 
 
 ### To run the project locally, you need to type commands in the terminal in turn: 
