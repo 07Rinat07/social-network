@@ -2,13 +2,16 @@
 
 namespace App\Models;
 
-// use Illuminate\Contracts\Auth\MustVerifyEmail;
+use Illuminate\Contracts\Auth\MustVerifyEmail;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
+use Illuminate\Database\Eloquent\Relations\BelongsToMany;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
+use Illuminate\Support\Facades\Storage;
 use Laravel\Sanctum\HasApiTokens;
 
-class User extends Authenticatable
+class User extends Authenticatable implements MustVerifyEmail
 {
     use HasApiTokens, HasFactory, Notifiable;
 
@@ -19,8 +22,12 @@ class User extends Authenticatable
      */
     protected $fillable = [
         'name',
+        'nickname',
         'email',
         'password',
+        'is_admin',
+        'media_storage_preference',
+        'avatar_path',
     ];
 
     /**
@@ -40,23 +47,80 @@ class User extends Authenticatable
      */
     protected $casts = [
         'email_verified_at' => 'datetime',
+        'is_admin' => 'boolean',
     ];
 
+    protected $appends = [
+        'display_name',
+        'avatar_url',
+    ];
 
-    public function posts()
+    public function posts(): HasMany
     {
         return $this->hasMany(Post::class, 'user_id', 'id');
     }
 
-
-    public function followings()
+    public function followings(): BelongsToMany
     {
         return $this->belongsToMany(User::class, 'subscriber_followings', 'subscriber_id', 'following_id');
     }
 
-    public function likedPosts()
+    public function followers(): BelongsToMany
+    {
+        return $this->belongsToMany(User::class, 'subscriber_followings', 'following_id', 'subscriber_id');
+    }
+
+    public function likedPosts(): BelongsToMany
     {
         return $this->belongsToMany(Post::class, 'liked_posts', 'user_id', 'post_id');
+    }
 
+    public function feedbackMessages(): HasMany
+    {
+        return $this->hasMany(FeedbackMessage::class, 'user_id', 'id');
+    }
+
+    public function conversations(): BelongsToMany
+    {
+        return $this->belongsToMany(Conversation::class, 'conversation_participants', 'user_id', 'conversation_id')
+            ->withTimestamps();
+    }
+
+    public function conversationMessages(): HasMany
+    {
+        return $this->hasMany(ConversationMessage::class, 'user_id', 'id');
+    }
+
+    public function blocksGiven(): HasMany
+    {
+        return $this->hasMany(UserBlock::class, 'blocker_id', 'id');
+    }
+
+    public function blocksReceived(): HasMany
+    {
+        return $this->hasMany(UserBlock::class, 'blocked_user_id', 'id');
+    }
+
+    public function isAdmin(): bool
+    {
+        return (bool) $this->is_admin;
+    }
+
+    public function getDisplayNameAttribute(): string
+    {
+        $nickname = trim((string) ($this->attributes['nickname'] ?? ''));
+
+        return $nickname !== '' ? $nickname : (string) ($this->attributes['name'] ?? '');
+    }
+
+    public function getAvatarUrlAttribute(): ?string
+    {
+        $path = (string) ($this->attributes['avatar_path'] ?? '');
+
+        if ($path === '') {
+            return null;
+        }
+
+        return Storage::disk('public')->url($path);
     }
 }

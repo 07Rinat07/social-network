@@ -13,7 +13,7 @@ class StoreRequest extends FormRequest
      */
     public function authorize()
     {
-        return true;
+        return $this->user() !== null;
     }
 
     /**
@@ -24,7 +24,14 @@ class StoreRequest extends FormRequest
     public function rules()
     {
         return [
-            'image' => 'required|file'
+            'file' => 'required|file|mimes:jpg,jpeg,png,webp,gif,mp4,webm,mov,m4v,avi|max:204800',
         ];
+    }
+
+    protected function prepareForValidation(): void
+    {
+        if (!$this->hasFile('file') && $this->hasFile('image')) {
+            $this->files->set('file', $this->file('image'));
+        }
     }
 }

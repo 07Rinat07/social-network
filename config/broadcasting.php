@@ -32,15 +32,16 @@ return [
 
         'pusher' => [
             'driver' => 'pusher',
-            'key' => env('PUSHER_APP_KEY'),
-            'secret' => env('PUSHER_APP_SECRET'),
-            'app_id' => env('PUSHER_APP_ID'),
+            'key' => env('REVERB_APP_KEY', env('PUSHER_APP_KEY')),
+            'secret' => env('REVERB_APP_SECRET', env('PUSHER_APP_SECRET')),
+            'app_id' => env('REVERB_APP_ID', env('PUSHER_APP_ID')),
             'options' => [
-                'host' => env('PUSHER_HOST', 'api-'.env('PUSHER_APP_CLUSTER', 'mt1').'.pusher.com') ?: 'api-'.env('PUSHER_APP_CLUSTER', 'mt1').'.pusher.com',
-                'port' => env('PUSHER_PORT', 443),
-                'scheme' => env('PUSHER_SCHEME', 'https'),
-                'encrypted' => true,
-                'useTLS' => env('PUSHER_SCHEME', 'https') === 'https',
+                'host' => env('REVERB_HOST', env('PUSHER_HOST', '127.0.0.1')),
+                'port' => (int) env('REVERB_PORT', env('PUSHER_PORT', 6001)),
+                'scheme' => env('REVERB_SCHEME', env('PUSHER_SCHEME', 'http')),
+                'path' => env('REVERB_PATH', env('PUSHER_APP_PATH', '')),
+                'encrypted' => env('REVERB_SCHEME', env('PUSHER_SCHEME', 'http')) === 'https',
+                'useTLS' => env('REVERB_SCHEME', env('PUSHER_SCHEME', 'http')) === 'https',
             ],
             'client_options' => [
                 // Guzzle client options: https://docs.guzzlephp.org/en/stable/request-options.html

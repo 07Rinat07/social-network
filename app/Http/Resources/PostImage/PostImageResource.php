@@ -17,6 +17,11 @@ class PostImageResource extends JsonResource
         return [
             'id' => $this->id,
             'path' => $this->path,
+            'storage_disk' => $this->storage_disk,
+            'type' => $this->type,
+            'mime_type' => $this->mime_type,
+            'size' => (int) ($this->size ?? 0),
+            'original_name' => $this->original_name,
             'url' => $this->url,
         ];
     }

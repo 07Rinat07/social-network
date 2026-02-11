@@ -1,42 +1,27 @@
 <template>
-    <div class="flex justify-between mb-8 text-sm text-center">
-        <div>
-            Subscribers
-            <div>
-                {{ stats.subscribers_count}}
-            </div>
+    <div class="stats-grid">
+        <div class="stat-card">
+            <span class="stat-label">Подписчики</span>
+            <div class="stat-value">{{ stats.subscribers_count ?? 0 }}</div>
         </div>
-        <div>
-            Likes
-            <div>
-                {{ stats.likes_count}}
-            </div>
+        <div class="stat-card">
+            <span class="stat-label">Лайки на постах</span>
+            <div class="stat-value">{{ stats.likes_count ?? 0 }}</div>
         </div>
-        <div>
-            Posts
-            <div>
-                {{ stats.posts_count}}
-            </div>
+        <div class="stat-card">
+            <span class="stat-label">Посты</span>
+            <div class="stat-value">{{ stats.posts_count ?? 0 }}</div>
         </div>
-        <div>
-            Follows
-            <div>
-                {{ stats.followings_count}}
-            </div>
+        <div class="stat-card">
+            <span class="stat-label">Подписки</span>
+            <div class="stat-value">{{ stats.followings_count ?? 0 }}</div>
         </div>
     </div>
 </template>
 
 <script>
 export default {
-    name: "Stat",
-
-    props: [
-        'stats'
-    ]
+    name: 'Stat',
+    props: ['stats']
 }
 </script>
-
-<style scoped>
-
-</style>

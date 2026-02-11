@@ -1,35 +1,106 @@
 <?php
 
+use App\Http\Controllers\AdminController;
+use App\Http\Controllers\Auth\EmailVerificationNotificationController;
+use App\Http\Controllers\ChatController;
+use App\Http\Controllers\FeedbackController;
+use App\Http\Controllers\MediaController;
+use App\Http\Controllers\PostController;
+use App\Http\Controllers\PostImageController;
+use App\Http\Controllers\RadioController;
+use App\Http\Controllers\SiteSettingController;
+use App\Http\Controllers\UserBlockController;
+use App\Http\Controllers\UserController;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
-
-/*
-|--------------------------------------------------------------------------
-| API Routes
-|--------------------------------------------------------------------------
-|
-| Here is where you can register API routes for your application. These
-| routes are loaded by the RouteServiceProvider within a group which
-| is assigned the "api" middleware group. Enjoy building your API!
-|
-*/
 
 Route::middleware('auth:sanctum')->get('/user', function (Request $request) {
     return $request->user();
 });
 
-Route::group(['middleware' => 'auth:sanctum'], function () {
-    Route::get('/users', [\App\Http\Controllers\UserController::class, 'index']);
-    Route::get('/users/{user}/posts', [\App\Http\Controllers\UserController::class, 'post']);
-    Route::post('/users/{user}/toggle_following', [\App\Http\Controllers\UserController::class, 'toggleFollowing']);
-    Route::get('/users/following_posts', [\App\Http\Controllers\UserController::class, 'followingPost']);
-    Route::post('/users/stats', [\App\Http\Controllers\UserController::class, 'stat']);
+Route::post('/feedback', [FeedbackController::class, 'store']);
+Route::get('/site/home-content', [SiteSettingController::class, 'homeContent']);
 
-    Route::post('/posts', [\App\Http\Controllers\PostController::class, 'store']);
-    Route::get('/posts', [\App\Http\Controllers\PostController::class, 'index']);
-    Route::post('/post_images', [\App\Http\Controllers\PostImageController::class, 'store']);
-    Route::post('/posts/{post}/toggle_like', [\App\Http\Controllers\PostController::class, 'toggleLike']);
-    Route::post('/posts/{post}/repost', [\App\Http\Controllers\PostController::class, 'repost']);
-    Route::post('/posts/{post}/comment', [\App\Http\Controllers\PostController::class, 'comment']);
-    Route::get('/posts/{post}/comment', [\App\Http\Controllers\PostController::class, 'commentList']);
+Route::middleware(['auth:sanctum', 'throttle:6,1'])->post('/auth/email/verification-notification', EmailVerificationNotificationController::class);
+
+Route::middleware(['auth:sanctum', 'verified'])->group(function () {
+    Route::get('/feedback/my', [FeedbackController::class, 'my']);
+
+    Route::get('/users', [UserController::class, 'index']);
+    Route::get('/users/{user}/posts', [UserController::class, 'post']);
+    Route::post('/users/profile', [UserController::class, 'updateProfile']);
+    Route::post('/users/{user}/toggle_following', [UserController::class, 'toggleFollowing']);
+    Route::get('/users/blocks', [UserBlockController::class, 'index']);
+    Route::post('/users/{user}/block', [UserBlockController::class, 'store']);
+    Route::delete('/users/{user}/block', [UserBlockController::class, 'destroy']);
+    Route::get('/users/following_posts', [UserController::class, 'followingPost']);
+    Route::post('/users/stats', [UserController::class, 'stat']);
+
+    Route::post('/posts', [PostController::class, 'store']);
+    Route::get('/posts', [PostController::class, 'index']);
+    Route::get('/posts/discover', [PostController::class, 'discover']);
+    Route::get('/posts/carousel', [PostController::class, 'carousel']);
+    Route::post('/posts/{post}/view', [PostController::class, 'markViewed']);
+    Route::post('/posts/{post}/toggle_like', [PostController::class, 'toggleLike']);
+    Route::post('/posts/{post}/repost', [PostController::class, 'repost']);
+    Route::post('/posts/{post}/comment', [PostController::class, 'comment']);
+    Route::get('/posts/{post}/comment', [PostController::class, 'commentList']);
+
+    Route::post('/post_media', [PostImageController::class, 'store']);
+    Route::post('/post_images', [PostImageController::class, 'store']);
+    Route::get('/media/post-images/{postImage}', [MediaController::class, 'showPostImage'])->name('media.post-images.show');
+    Route::get('/media/chat-attachments/{attachment}', [MediaController::class, 'showChatAttachment'])->name('media.chat-attachments.show');
+
+    Route::get('/site/config', [SiteSettingController::class, 'publicConfig']);
+    Route::patch('/site/storage-preference', [SiteSettingController::class, 'updateUserStoragePreference']);
+
+    Route::get('/radio/stations', [RadioController::class, 'stations']);
+    Route::get('/radio/favorites', [RadioController::class, 'favorites']);
+    Route::post('/radio/favorites', [RadioController::class, 'storeFavorite']);
+    Route::delete('/radio/favorites/{stationUuid}', [RadioController::class, 'destroyFavorite']);
+
+    Route::get('/chats', [ChatController::class, 'index']);
+    Route::get('/chats/unread-summary', [ChatController::class, 'unreadSummary']);
+    Route::get('/chats/users', [ChatController::class, 'users']);
+    Route::post('/chats/direct/{user}', [ChatController::class, 'createOrGetDirect']);
+    Route::get('/chats/{conversation}', [ChatController::class, 'show']);
+    Route::post('/chats/{conversation}/read', [ChatController::class, 'markRead']);
+    Route::get('/chats/{conversation}/messages', [ChatController::class, 'messages']);
+    Route::post('/chats/{conversation}/messages', [ChatController::class, 'storeMessage']);
+
+    Route::prefix('admin')->middleware('admin')->group(function () {
+        Route::get('/summary', [AdminController::class, 'summary']);
+
+        Route::get('/users', [AdminController::class, 'users']);
+        Route::patch('/users/{user}', [AdminController::class, 'updateUser']);
+        Route::delete('/users/{user}', [AdminController::class, 'destroyUser']);
+
+        Route::get('/posts', [AdminController::class, 'posts']);
+        Route::post('/posts', [AdminController::class, 'storePost']);
+        Route::patch('/posts/{post}', [AdminController::class, 'updatePost']);
+        Route::delete('/posts/{post}', [AdminController::class, 'destroyPost']);
+
+        Route::get('/comments', [AdminController::class, 'comments']);
+        Route::delete('/comments/{comment}', [AdminController::class, 'destroyComment']);
+
+        Route::get('/feedback', [AdminController::class, 'feedback']);
+        Route::patch('/feedback/{feedback}', [AdminController::class, 'updateFeedback']);
+        Route::delete('/feedback/{feedback}', [AdminController::class, 'destroyFeedback']);
+
+        Route::get('/conversations', [AdminController::class, 'conversations']);
+        Route::get('/messages', [AdminController::class, 'messages']);
+        Route::delete('/messages/{message}', [AdminController::class, 'destroyMessage']);
+
+        Route::get('/blocks', [AdminController::class, 'blocks']);
+        Route::patch('/blocks/{userBlock}', [AdminController::class, 'updateBlock']);
+        Route::delete('/blocks/{userBlock}', [AdminController::class, 'destroyBlock']);
+
+        Route::get('/settings', [SiteSettingController::class, 'index']);
+        Route::post('/settings', [SiteSettingController::class, 'store']);
+        Route::patch('/settings/storage', [SiteSettingController::class, 'updateStorage']);
+        Route::patch('/settings/home-content', [SiteSettingController::class, 'updateHomeContent']);
+        Route::delete('/settings/home-content', [SiteSettingController::class, 'resetHomeContent']);
+        Route::patch('/settings/{siteSetting}', [SiteSettingController::class, 'update']);
+        Route::delete('/settings/{siteSetting}', [SiteSettingController::class, 'destroy']);
+    });
 });

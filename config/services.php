@@ -31,4 +31,8 @@ return [
         'region' => env('AWS_DEFAULT_REGION', 'us-east-1'),
     ],
 
+    'radio_browser' => [
+        'base_url' => env('RADIO_BROWSER_BASE_URL', 'https://all.api.radio-browser.info'),
+    ],
+
 ];

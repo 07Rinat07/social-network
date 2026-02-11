@@ -1,175 +1,324 @@
 <template>
-    <div class="mb-8 pb-8 border-b border-gray-400">
-        <h1 class="text-xl">{{ post.title }}</h1>
-        <router-link class="text-sm text-gray-800" :to="{name: 'user.show', params: {id: post.user.id}} ">{{ post.user.name }}</router-link>
-        <img class="my-3 mx-auto" v-if="post.image_url" :src="post.image_url" :alt="post.title"/>
-        <p>{{ post.content }}</p>
+    <article class="post-card">
+        <header class="post-head">
+            <div class="post-author-row">
+                <router-link class="post-avatar-link" :to="{name: 'user.show', params: {id: post.user.id}}">
+                    <img v-if="avatarUrl(post.user)" class="avatar post-avatar" :src="avatarUrl(post.user)" :alt="displayName(post.user)">
+                    <span v-else class="avatar post-avatar avatar-placeholder">{{ initials(post.user) }}</span>
+                </router-link>
 
-        <div v-if="post.reposted_post" class="bg-gray-100 p-4 my-4 border border-gray-200">
-            <h1 class="text-xl">{{ post.reposted_post.title }}</h1>
-            <router-link class="text-sm text-gray-800" :to="{name: 'user.show', params: {id: post.reposted_post.user.id}} ">{{ post.reposted_post.user.name }}</router-link>
-
-            <img class="my-3 mx-auto" v-if="post.reposted_post.image_url" :src="post.reposted_post.image_url"
-                 :alt="post.reposted_post.title"/>
-            <p>{{ post.reposted_post.content }}</p>
-        </div>
-
-        <div class="flex justify-between mt-2 items-center">
-            <div class="flex">
-
-                <div class="flex">
-                    <svg @click.prevent="toggleLike(post)" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"
-                         stroke-width="1.5"
-                         stroke="currentColor"
-                         :class="['mr-2 stroke-sky-500 cursor-pointer hover:fill-sky-500 w-6 h-6', post.is_liked ? 'fill-sky-500' : 'fill-white']">
-                        <path stroke-linecap="round" stroke-linejoin="round"
-                              d="M21 8.25c0-2.485-2.099-4.5-4.688-4.5-1.935 0-3.597 1.126-4.312 2.733-.715-1.607-2.377-2.733-4.313-2.733C5.1 3.75 3 5.765 3 8.25c0 7.22 9 12 9 12s9-4.78 9-12z"/>
-                    </svg>
-                    <p>{{ post.likes_count }}</p>
-                </div>
-                <div class="flex">
-                    <svg @click.prevent="openRepost()" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"
-                         stroke-width="1.5" stroke="currentColor"
-                         :class="['mx-2 stroke-sky-500 cursor-pointer hover:fill-sky-500 w-6 h-6 fill-white']">
-                        <path stroke-linecap="round" stroke-linejoin="round"
-                              d="M7.217 10.907a2.25 2.25 0 100 2.186m0-2.186c.18.324.283.696.283 1.093s-.103.77-.283 1.093m0-2.186l9.566-5.314m-9.566 7.5l9.566 5.314m0 0a2.25 2.25 0 103.935 2.186 2.25 2.25 0 00-3.935-2.186zm0-12.814a2.25 2.25 0 103.933-2.185 2.25 2.25 0 00-3.933 2.185z"/>
-                    </svg>
-                    <p>{{ post.reposted_by_posts_count }}</p>
+                <div>
+                <h3 class="post-title">{{ post.title }}</h3>
+                <router-link class="post-author" :to="{name: 'user.show', params: {id: post.user.id}}">
+                    {{ displayName(post.user) }}
+                </router-link>
                 </div>
             </div>
+            <span class="post-date">{{ post.date }}</span>
+        </header>
 
-            <p class="text-right text-slate-500 text-sm">{{ post.date }}</p>
+        <p class="muted" style="margin: -0.35rem 0 0; font-size: 0.8rem;">
+            👁 {{ post.views_count ?? 0 }} просмотров
+        </p>
 
+        <p class="post-content">{{ post.content }}</p>
+
+        <div class="media-grid" v-if="normalizedMedia.length > 0">
+            <template v-for="media in normalizedMedia" :key="`post-media-${post.id}-${media.id ?? media.url}`">
+                <button
+                    v-if="media.type === 'image'"
+                    type="button"
+                    class="media-open-btn"
+                    @click="openMedia(media.url, post.title)"
+                >
+                    <img
+                        class="media-preview"
+                        :src="media.url"
+                        :alt="post.title"
+                        @error="handlePreviewError($event, post.title || 'media')"
+                        @load="handlePreviewLoad"
+                    >
+                </button>
+                <MediaPlayer v-else type="video" :src="media.url" player-class="media-video"></MediaPlayer>
+            </template>
         </div>
 
+        <section v-if="post.reposted_post" class="repost-box">
+            <strong>Репост оригинала</strong>
+            <p style="margin: 0;"><strong>{{ post.reposted_post.title }}</strong></p>
+            <router-link class="post-author" :to="{name: 'user.show', params: {id: post.reposted_post.user.id}}">
+                {{ displayName(post.reposted_post.user) }}
+            </router-link>
+            <p style="margin: 0;">{{ post.reposted_post.content }}</p>
 
-        <div v-if="is_repost" class="mt-4">
-            <div>
-                <input v-model="title" class="w-96 mb-3 rounded-3xl border p-2 border-slate-300" type="text"
-                       placeholder="title">
+            <div class="media-grid" v-if="normalizedRepostMedia.length > 0">
+                <template v-for="media in normalizedRepostMedia" :key="`repost-media-${post.id}-${media.id ?? media.url}`">
+                    <button
+                        v-if="media.type === 'image'"
+                        type="button"
+                        class="media-open-btn"
+                        @click="openMedia(media.url, post.reposted_post.title)"
+                    >
+                        <img
+                            class="media-preview"
+                            :src="media.url"
+                            :alt="post.reposted_post.title"
+                            @error="handlePreviewError($event, post.reposted_post.title || 'media')"
+                            @load="handlePreviewLoad"
+                        >
+                    </button>
+                    <MediaPlayer v-else type="video" :src="media.url" player-class="media-video"></MediaPlayer>
+                </template>
             </div>
-            <div>
-              <textarea v-model="content" class="w-96 mb-3 rounded-3xl border p-2 border-slate-300"
-                        placeholder="content"></textarea>
-            </div>
-            <div>
-                <a @click.prevent="repost(post)" href="#" class="block p-2 w-32 text-center rounded-3xl bg-green-600 text-white
-                hover:bg-white hover:border hover:border-green-600 hover:text-green-600 box-border ml-auto">Publish</a>
-            </div>
+        </section>
+
+        <div class="post-actions">
+            <button class="icon-btn" :class="{'active': post.is_liked}" @click.prevent="toggleLike(post)">
+                ❤️ {{ post.likes_count }}
+            </button>
+            <button class="icon-btn" :disabled="isPersonal()" @click.prevent="toggleRepostForm">
+                🔁 {{ post.reposted_by_posts_count }}
+            </button>
+            <button class="icon-btn" :class="{'active': isCommentsOpened}" @click.prevent="toggleComments(post)">
+                💬 {{ post.comments_count }}
+            </button>
         </div>
 
-        <div v-if="post.comments_count > 0" class="mt-4">
+        <div v-if="isRepostOpened" class="repost-box">
+            <input v-model.trim="title" class="input-field" type="text" placeholder="Заголовок репоста">
+            <textarea v-model.trim="content" class="textarea-field" placeholder="Комментарий к репосту"></textarea>
+            <button class="btn btn-primary" @click.prevent="repost(post)">Опубликовать репост</button>
+        </div>
 
-            <p class="cursor-pointer" v-if="!isShowed" @click="getComments(post)">Show {{ post.comments_count }} comments</p>
-            <p class="cursor-pointer" v-if="isShowed" @click="isShowed = false">Close</p>
+        <div class="comments-box">
+            <div class="form-grid">
+                <div v-if="comment" class="muted" style="font-size: 0.82rem;">
+                    Ответ пользователю {{ displayName(comment.user) }}
+                    <button class="btn btn-outline btn-sm" style="margin-left: 0.5rem;" @click.prevent="comment = null">Отменить</button>
+                </div>
 
-            <div v-if="comments && isShowed">
-                <div v-for="comment in comments" class="mt-4 pt-4 border-t border-gray-300">
+                <input
+                    v-model.trim="body"
+                    class="input-field"
+                    type="text"
+                    placeholder="Ваш комментарий..."
+                >
 
-                    <div class="flex mb-2">
-                        <p class="text-sm mr-2">{{ comment.user.name }}</p>
-                        <p @click="setParentId(comment)" class="text-sm text-sky-500 cursor-pointer">Answer</p>
+                <div class="emoji-row">
+                    <button v-for="emoji in emojis" :key="emoji" type="button" class="emoji-btn" @click="appendEmoji(emoji)">
+                        {{ emoji }}
+                    </button>
+                </div>
+
+                <button class="btn btn-sun" @click.prevent="storeComment(post)">Отправить комментарий</button>
+            </div>
+
+            <div v-if="isCommentsOpened">
+                <div v-if="comments.length === 0" class="muted">Комментариев пока нет.</div>
+
+                <div v-for="commentItem in comments" :key="commentItem.id" class="comment-item">
+                    <div class="comment-head">
+                        <span>{{ displayName(commentItem.user) }}</span>
+                        <span>{{ commentItem.date }}</span>
                     </div>
-                    <p><span v-if="comment.answered_for_user" class="text-sky-400">{{ comment.answered_for_user}},</span> {{ comment.body }}</p>
-                    <p class="mt-2 text-right text-sm">{{ comment.date }}</p>
+                    <p class="comment-body">
+                        <strong v-if="commentItem.answered_for_user" style="color: var(--accent-strong);">@{{ commentItem.answered_for_user }} </strong>
+                        {{ commentItem.body }}
+                    </p>
+                    <button class="btn btn-outline btn-sm" @click="setParentId(commentItem)">Ответить</button>
                 </div>
             </div>
         </div>
 
-        <div class="mt-4">
-            <div class=" mb-3">
-                <div class="flex items-center">
-                <p v-if="comment" class="mr-2">Answered for {{ comment.user.name }}</p>
-                <p v-if="comment" @click="comment = null" class="cursor-pointer text-sky-400 text-sm">Cancel</p>
-                </div>
-                <input v-model="body" class="w-96 rounded-3xl border p-2 border-slate-300" type="text"
-                       placeholder="Your comment here...">
-            </div>
-            <div>
-                <a @click.prevent="storeComment(post)" href="#" class="block p-2 w-32 text-center rounded-3xl bg-green-600 text-white
-                hover:bg-white hover:border hover:border-green-600 hover:text-green-600 box-border ml-auto">Comment</a>
-            </div>
-        </div>
-    </div>
+        <MediaLightbox ref="mediaLightbox"></MediaLightbox>
+    </article>
 </template>
 
 <script>
-export default {
-    name: "Post",
+import MediaLightbox from './MediaLightbox.vue'
+import MediaPlayer from './MediaPlayer.vue'
+import { applyImagePreviewFallback, resetImagePreviewFallback } from '../utils/mediaPreview'
 
-    props: [
-        'post'
-    ],
+export default {
+    name: 'Post',
+
+    props: ['post'],
+
+    components: {
+        MediaLightbox,
+        MediaPlayer,
+    },
 
     data() {
         return {
             title: '',
             content: '',
             body: '',
-            is_repost: false,
-            repostedId: null,
+            isRepostOpened: false,
             comments: [],
-            isShowed: false,
-            comment: null
+            isCommentsOpened: false,
+            commentsLoaded: false,
+            comment: null,
+            emojis: ['🔥', '👍', '❤️', '👏', '😂', '😎']
         }
     },
 
+    computed: {
+        normalizedMedia() {
+            if (Array.isArray(this.post.media) && this.post.media.length > 0) {
+                return this.post.media
+            }
+
+            if (this.post.image_url) {
+                return [{id: `legacy-${this.post.id}`, type: 'image', url: this.post.image_url}]
+            }
+
+            return []
+        },
+
+        normalizedRepostMedia() {
+            if (!this.post.reposted_post) {
+                return []
+            }
+
+            if (Array.isArray(this.post.reposted_post.media) && this.post.reposted_post.media.length > 0) {
+                return this.post.reposted_post.media
+            }
+
+            if (this.post.reposted_post.image_url) {
+                return [{id: `legacy-repost-${this.post.id}`, type: 'image', url: this.post.reposted_post.image_url}]
+            }
+
+            return []
+        },
+    },
+
+    mounted() {
+        this.markViewed()
+    },
+
     methods: {
+        handlePreviewError(event, label = 'Preview unavailable') {
+            applyImagePreviewFallback(event, label)
+        },
+
+        handlePreviewLoad(event) {
+            resetImagePreviewFallback(event)
+        },
+
+        displayName(user) {
+            return user?.display_name || user?.name || 'Пользователь'
+        },
+
+        openMedia(url, alt = 'Фото') {
+            this.$refs.mediaLightbox?.open(url, alt)
+        },
+
+        avatarUrl(user) {
+            return user?.avatar_url || null
+        },
+
+        initials(user) {
+            const source = this.displayName(user).trim()
+            return source ? source.slice(0, 1).toUpperCase() : 'U'
+        },
+
+        async markViewed() {
+            if (!this.post || !this.post.id || !this.post.is_public) {
+                return
+            }
+
+            if (this.isPersonal()) {
+                return
+            }
+
+            try {
+                const response = await axios.post(`/api/posts/${this.post.id}/view`)
+                const viewsCount = response.data?.data?.views_count
+                if (Number.isFinite(viewsCount)) {
+                    this.post.views_count = viewsCount
+                }
+            } catch (error) {
+                // Ignore view tracking errors for user flow.
+            }
+        },
+
         toggleLike(post) {
             axios.post(`/api/posts/${post.id}/toggle_like`)
-                .then(res => {
-                    post.is_liked = res.data.is_liked
-                    post.likes_count = res.data.likes_count
+                .then((response) => {
+                    post.is_liked = response.data.is_liked
+                    post.likes_count = response.data.likes_count
                 })
         },
 
-        setParentId(comment){
+        setParentId(comment) {
             this.comment = comment
         },
 
+        appendEmoji(emoji) {
+            this.body = `${this.body}${emoji}`
+        },
+
         storeComment(post) {
+            if (!this.body) {
+                return
+            }
+
             const commentId = this.comment ? this.comment.id : null
             axios.post(`/api/posts/${post.id}/comment`, {body: this.body, parent_id: commentId})
-                .then(res => {
+                .then((response) => {
                     this.body = ''
-                    this.comments.unshift(res.data.data)
+                    this.comments.unshift(response.data.data)
                     this.comment = null
-                    post.comments_count++
-                    this.isShowed = true
+                    post.comments_count += 1
+                    this.isCommentsOpened = true
+                    this.commentsLoaded = true
                 })
         },
 
-        getComments(post) {
-            axios.get(`/api/posts/${post.id}/comment`)
-                .then(res => {
-                    this.comments = res.data.data
-                    this.isShowed = true
+        toggleComments(post) {
+            if (this.isCommentsOpened) {
+                this.isCommentsOpened = false
+                return
+            }
+
+            if (this.commentsLoaded) {
+                this.isCommentsOpened = true
+                return
+            }
+
+            axios.get(`/api/posts/${post.id}/comment`, {params: {per_page: 100}})
+                .then((response) => {
+                    this.comments = response.data.data ?? []
+                    this.commentsLoaded = true
+                    this.isCommentsOpened = true
                 })
         },
 
-
-        openRepost() {
-            if (this.isPersonal()) return
-            this.is_repost = !this.is_repost
+        toggleRepostForm() {
+            if (this.isPersonal()) {
+                return
+            }
+            this.isRepostOpened = !this.isRepostOpened
         },
 
         repost(post) {
-            if (this.isPersonal()) return
+            if (this.isPersonal() || !this.title || !this.content) {
+                return
+            }
+
             axios.post(`/api/posts/${post.id}/repost`, {title: this.title, content: this.content})
-                .then(res => {
+                .then(() => {
                     this.title = ''
                     this.content = ''
+                    this.isRepostOpened = false
+                    post.reposted_by_posts_count += 1
                 })
         },
 
         isPersonal() {
-            return this.$route.name === 'user.personal';
+            return this.$route.name === 'user.personal'
         }
     }
-
 }
 </script>
-
-<style scoped>
-
-</style>

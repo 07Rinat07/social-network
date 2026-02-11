@@ -26,7 +26,7 @@ return new class extends Migration
     public function down()
     {
         Schema::table('comments', function (Blueprint $table) {
-            //
+            $table->dropConstrainedForeignId('parent_id');
         });
     }
 };

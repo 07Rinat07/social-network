@@ -1,5 +1,7 @@
 <?php
 
+use App\Models\Conversation;
+use App\Models\UserBlock;
 use Illuminate\Support\Facades\Broadcast;
 
 /*
@@ -15,4 +17,26 @@ use Illuminate\Support\Facades\Broadcast;
 
 Broadcast::channel('App.Models.User.{id}', function ($user, $id) {
     return (int) $user->id === (int) $id;
+});
+
+Broadcast::channel('chat.conversation.{conversationId}', function ($user, int $conversationId) {
+    $conversation = Conversation::query()->find($conversationId);
+
+    if (!$conversation) {
+        return false;
+    }
+
+    if ($conversation->type === Conversation::TYPE_DIRECT) {
+        $participantIds = $conversation->participants()->pluck('users.id')->values()->all();
+
+        if (count($participantIds) === 2 && UserBlock::isBlockedBetween($participantIds[0], $participantIds[1])) {
+            return false;
+        }
+    }
+
+    return $conversation->isAccessibleBy($user->id);
+});
+
+Broadcast::channel('feedback.user.{userId}', function ($user, int $userId) {
+    return (int) $user->id === $userId;
 });

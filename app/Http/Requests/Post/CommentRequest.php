@@ -2,7 +2,9 @@
 
 namespace App\Http\Requests\Post;
 
+use App\Rules\NoUnsafeMarkup;
 use Illuminate\Foundation\Http\FormRequest;
+use Illuminate\Validation\Rule;
 
 class CommentRequest extends FormRequest
 {
@@ -13,7 +15,7 @@ class CommentRequest extends FormRequest
      */
     public function authorize()
     {
-        return true;
+        return $this->user() !== null;
     }
 
     /**
@@ -23,9 +25,30 @@ class CommentRequest extends FormRequest
      */
     public function rules()
     {
+        $postId = $this->route('post')?->id;
+
         return [
-            'body' => 'required|string',
-            'parent_id' => 'nullable|integer|exists:comments,id'
+            'body' => ['required', 'string', 'min:1', 'max:2000', new NoUnsafeMarkup()],
+            'parent_id' => [
+                'nullable',
+                'integer',
+                Rule::exists('comments', 'id')
+                    ->where(fn ($query) => $query->where('post_id', $postId)),
+            ],
         ];
+    }
+
+    protected function prepareForValidation(): void
+    {
+        $this->merge([
+            'body' => $this->normalizeMultiLine($this->input('body')),
+        ]);
+    }
+
+    private function normalizeMultiLine(mixed $value): string
+    {
+        $text = str_replace(["\r\n", "\r"], "\n", (string) $value);
+
+        return trim($text);
     }
 }

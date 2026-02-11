@@ -1,62 +1,71 @@
 <template>
-    <div>
-        <div class="w-96 mx-auto">
+    <div class="page-wrap grid-layout" style="max-width: 620px; margin: 0 auto;">
+        <section class="section-card">
+            <h1 class="section-title">Регистрация</h1>
+            <p class="section-subtitle">Создайте аккаунт для публикаций, лайков, чатов и доступа к сообществу.</p>
 
-            <div>
-                <input v-model="name" type="name" placeholder="name"
-                       class="w-96 p-1 mb-2 border border-inherit rounded-lg">
-            </div>
-            <div>
-                <input v-model="email" type="email" placeholder="email"
-                       class="w-96 p-1 mb-2 border border-inherit rounded-lg">
-            </div>
-            <div>
-                <input v-model="password" type="password" placeholder="password"
-                       class="w-96 p-1 mb-2 border border-inherit rounded-lg">
-            </div>
-            <div>
-                <input v-model="password_confirmation" type="password" placeholder="password_confirmation"
-                       class="w-96 p-1 mb-2 border border-inherit rounded-lg">
-            </div>
-            <input @click.prevent="register" type="submit" value="register"
-                   class="block float-right mx-auto w-32 p-1 bg-sky-400 text-white rounded-lg">
-        </div>
+            <form class="form-grid" @submit.prevent="register">
+                <input v-model.trim="name" type="text" placeholder="Имя" class="input-field">
+                <input v-model.trim="email" type="email" placeholder="Email" class="input-field">
+                <input v-model="password" type="password" placeholder="Пароль" class="input-field">
+                <input v-model="password_confirmation" type="password" placeholder="Подтверждение пароля" class="input-field">
+
+                <div v-if="flatErrors.length > 0">
+                    <p v-for="error in flatErrors" :key="error" class="error-text">{{ error }}</p>
+                </div>
+
+                <button class="btn btn-primary" type="submit" :disabled="isLoading">
+                    {{ isLoading ? 'Создание...' : 'Создать аккаунт' }}
+                </button>
+            </form>
+        </section>
     </div>
 </template>
 
 <script>
 export default {
-    name: "Registration",
+    name: 'Registration',
+    emits: ['auth-changed'],
 
     data() {
         return {
-            name: null,
-            email: null,
-            password: null,
-            password_confirmation: null,
+            name: '',
+            email: '',
+            password: '',
+            password_confirmation: '',
+            errors: {},
+            isLoading: false,
+        }
+    },
+
+    computed: {
+        flatErrors() {
+            return Object.values(this.errors || {}).flat()
         }
     },
 
     methods: {
-        register() {
-            axios.get('/sanctum/csrf-cookie')
-                .then(response => {
-                    axios.post('/register', {
-                        name: this.name,
-                        email: this.email,
-                        password: this.password,
-                        password_confirmation: this.password_confirmation
-                    })
-                    .then( res => {
-                        localStorage.setItem('x_xsrf_token', res.config.headers['X-XSRF-TOKEN'])
-                        this.$router.push({name: 'user.personal'})
-                    })
+        async register() {
+            this.errors = {}
+            this.isLoading = true
+
+            try {
+                await axios.get('/sanctum/csrf-cookie')
+                await axios.post('/register', {
+                    name: this.name,
+                    email: this.email,
+                    password: this.password,
+                    password_confirmation: this.password_confirmation,
                 })
+
+                this.$emit('auth-changed')
+                await this.$router.push({name: 'auth.verify', query: {registered: '1'}})
+            } catch (error) {
+                this.errors = error.response?.data?.errors ?? {registration: ['Регистрация не выполнена.']}
+            } finally {
+                this.isLoading = false
+            }
         }
     }
 }
 </script>
-
-<style scoped>
-
-</style>
