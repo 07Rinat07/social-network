@@ -23,6 +23,9 @@ class PostImageResource extends JsonResource
             'size' => (int) ($this->size ?? 0),
             'original_name' => $this->original_name,
             'url' => $this->url,
+            'can_delete' => $request->user()
+                ? ((int) $request->user()->id === (int) $this->user_id)
+                : false,
         ];
     }
 }

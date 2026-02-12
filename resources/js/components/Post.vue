@@ -25,21 +25,31 @@
 
         <div class="media-grid" v-if="normalizedMedia.length > 0">
             <template v-for="media in normalizedMedia" :key="`post-media-${post.id}-${media.id ?? media.url}`">
-                <button
-                    v-if="media.type === 'image'"
-                    type="button"
-                    class="media-open-btn"
-                    @click="openMedia(media.url, post.title)"
-                >
-                    <img
-                        class="media-preview"
-                        :src="media.url"
-                        :alt="post.title"
-                        @error="handlePreviewError($event, post.title || 'media')"
-                        @load="handlePreviewLoad"
+                <div class="post-media-item">
+                    <button
+                        v-if="media.type === 'image'"
+                        type="button"
+                        class="media-open-btn"
+                        @click="openMedia(media.url, post.title)"
                     >
-                </button>
-                <MediaPlayer v-else type="video" :src="media.url" player-class="media-video"></MediaPlayer>
+                        <img
+                            class="media-preview"
+                            :src="media.url"
+                            :alt="post.title"
+                            @error="handlePreviewError($event, post.title || 'media')"
+                            @load="handlePreviewLoad"
+                        >
+                    </button>
+                    <MediaPlayer v-else type="video" :src="media.url" player-class="media-video"></MediaPlayer>
+                    <button
+                        v-if="media.can_delete"
+                        type="button"
+                        class="btn btn-danger btn-sm post-media-remove-btn"
+                        @click.prevent="removeMedia(post, media)"
+                    >
+                        Удалить файл
+                    </button>
+                </div>
             </template>
         </div>
 
@@ -75,6 +85,9 @@
         <div class="post-actions">
             <button class="icon-btn" :class="{'active': post.is_liked}" @click.prevent="toggleLike(post)">
                 ❤️ {{ post.likes_count }}
+            </button>
+            <button v-if="post.is_liked" class="icon-btn" @click.prevent="removeLike(post)">
+                ❌ Убрать лайк
             </button>
             <button class="icon-btn" :disabled="isPersonal()" @click.prevent="toggleRepostForm">
                 🔁 {{ post.reposted_by_posts_count }}
@@ -125,7 +138,16 @@
                         <strong v-if="commentItem.answered_for_user" style="color: var(--accent-strong);">@{{ commentItem.answered_for_user }} </strong>
                         {{ commentItem.body }}
                     </p>
-                    <button class="btn btn-outline btn-sm" @click="setParentId(commentItem)">Ответить</button>
+                    <div style="display: flex; gap: 0.35rem; flex-wrap: wrap;">
+                        <button class="btn btn-outline btn-sm" @click="setParentId(commentItem)">Ответить</button>
+                        <button
+                            v-if="commentItem.can_delete"
+                            class="btn btn-danger btn-sm"
+                            @click.prevent="removeComment(post, commentItem)"
+                        >
+                            Удалить комментарий
+                        </button>
+                    </div>
                 </div>
             </div>
         </div>
@@ -251,6 +273,18 @@ export default {
                 })
         },
 
+        removeLike(post) {
+            if (!post?.is_liked) {
+                return
+            }
+
+            axios.delete(`/api/posts/${post.id}/like`)
+                .then((response) => {
+                    post.is_liked = response.data.is_liked
+                    post.likes_count = response.data.likes_count
+                })
+        },
+
         setParentId(comment) {
             this.comment = comment
         },
@@ -292,6 +326,39 @@ export default {
                     this.comments = response.data.data ?? []
                     this.commentsLoaded = true
                     this.isCommentsOpened = true
+                })
+        },
+
+        removeComment(post, commentItem) {
+            if (!commentItem?.id) {
+                return
+            }
+
+            axios.delete(`/api/posts/${post.id}/comments/${commentItem.id}`)
+                .then(() => {
+                    this.comments = this.comments.filter((item) => Number(item.id) !== Number(commentItem.id))
+                    if (this.comment && Number(this.comment.id) === Number(commentItem.id)) {
+                        this.comment = null
+                    }
+                    post.comments_count = Math.max(0, Number(post.comments_count || 0) - 1)
+                })
+        },
+
+        removeMedia(post, media) {
+            if (!media?.id) {
+                return
+            }
+
+            axios.delete(`/api/posts/${post.id}/media/${media.id}`)
+                .then(() => {
+                    const nextMedia = Array.isArray(post.media)
+                        ? post.media.filter((item) => Number(item.id) !== Number(media.id))
+                        : []
+
+                    post.media = nextMedia
+
+                    const firstImage = nextMedia.find((item) => item.type === 'image')
+                    post.image_url = firstImage?.url ?? null
                 })
         },
 

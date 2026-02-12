@@ -2,6 +2,7 @@
 
 namespace Tests\Feature;
 
+use App\Models\Comment;
 use App\Models\Post;
 use App\Models\PostImage;
 use App\Models\User;
@@ -14,6 +15,181 @@ use Tests\TestCase;
 class MediaPostFeatureTest extends TestCase
 {
     use RefreshDatabase;
+
+    public function test_user_can_remove_like_from_post_via_delete_endpoint(): void
+    {
+        $author = User::factory()->create();
+        $viewer = User::factory()->create();
+
+        $post = Post::query()->create([
+            'title' => 'Like removal target',
+            'content' => 'Detach like for current viewer.',
+            'user_id' => $author->id,
+        ]);
+
+        $viewer->likedPosts()->attach($post->id);
+        Sanctum::actingAs($viewer);
+
+        $response = $this->deleteJson("/api/posts/{$post->id}/like");
+
+        $response
+            ->assertOk()
+            ->assertJsonPath('is_liked', false)
+            ->assertJsonPath('likes_count', 0);
+
+        $this->assertDatabaseMissing('liked_posts', [
+            'post_id' => $post->id,
+            'user_id' => $viewer->id,
+        ]);
+    }
+
+    public function test_user_can_delete_own_comment_and_children_are_detached_from_parent(): void
+    {
+        $author = User::factory()->create();
+        $responder = User::factory()->create();
+
+        $post = Post::query()->create([
+            'title' => 'Comment delete post',
+            'content' => 'Parent comment should be deleted safely.',
+            'user_id' => $author->id,
+        ]);
+
+        $parent = Comment::query()->create([
+            'body' => 'Parent comment',
+            'user_id' => $author->id,
+            'post_id' => $post->id,
+            'parent_id' => null,
+        ]);
+
+        $child = Comment::query()->create([
+            'body' => 'Child comment',
+            'user_id' => $responder->id,
+            'post_id' => $post->id,
+            'parent_id' => $parent->id,
+        ]);
+
+        Sanctum::actingAs($author);
+
+        $response = $this->deleteJson("/api/posts/{$post->id}/comments/{$parent->id}");
+
+        $response
+            ->assertOk()
+            ->assertJsonPath('data.comment_id', $parent->id)
+            ->assertJsonPath('data.post_id', $post->id);
+
+        $this->assertDatabaseMissing('comments', [
+            'id' => $parent->id,
+        ]);
+
+        $this->assertDatabaseHas('comments', [
+            'id' => $child->id,
+            'parent_id' => null,
+        ]);
+    }
+
+    public function test_user_cannot_delete_foreign_comment(): void
+    {
+        $author = User::factory()->create();
+        $intruder = User::factory()->create();
+
+        $post = Post::query()->create([
+            'title' => 'Unauthorized comment delete',
+            'content' => 'Only owner/admin can delete.',
+            'user_id' => $author->id,
+        ]);
+
+        $comment = Comment::query()->create([
+            'body' => 'Author comment',
+            'user_id' => $author->id,
+            'post_id' => $post->id,
+        ]);
+
+        Sanctum::actingAs($intruder);
+
+        $response = $this->deleteJson("/api/posts/{$post->id}/comments/{$comment->id}");
+
+        $response
+            ->assertStatus(403)
+            ->assertJsonPath('message', 'Access denied to delete this comment.');
+
+        $this->assertDatabaseHas('comments', [
+            'id' => $comment->id,
+            'user_id' => $author->id,
+        ]);
+    }
+
+    public function test_admin_cannot_delete_foreign_comment_via_user_comment_delete_endpoint(): void
+    {
+        $author = User::factory()->create();
+        $admin = User::factory()->create(['is_admin' => true]);
+
+        $post = Post::query()->create([
+            'title' => 'Foreign comment for admin user endpoint',
+            'content' => 'Admin should use dedicated admin endpoints.',
+            'user_id' => $author->id,
+        ]);
+
+        $comment = Comment::query()->create([
+            'body' => 'Comment owned by author',
+            'user_id' => $author->id,
+            'post_id' => $post->id,
+        ]);
+
+        Sanctum::actingAs($admin);
+
+        $response = $this->deleteJson("/api/posts/{$post->id}/comments/{$comment->id}");
+
+        $response
+            ->assertStatus(403)
+            ->assertJsonPath('message', 'Access denied to delete this comment.');
+
+        $this->assertDatabaseHas('comments', [
+            'id' => $comment->id,
+            'user_id' => $author->id,
+        ]);
+    }
+
+    public function test_user_can_delete_own_post_media_and_file_is_removed_from_storage(): void
+    {
+        Storage::fake('public');
+
+        $author = User::factory()->create();
+        Sanctum::actingAs($author);
+
+        $post = Post::query()->create([
+            'title' => 'Media delete post',
+            'content' => 'Delete media endpoint coverage.',
+            'user_id' => $author->id,
+        ]);
+
+        $path = 'media/images/delete-me.jpg';
+        Storage::disk('public')->put($path, 'binary-content');
+
+        $media = PostImage::query()->create([
+            'path' => $path,
+            'storage_disk' => 'public',
+            'type' => PostImage::TYPE_IMAGE,
+            'mime_type' => 'image/jpeg',
+            'size' => 128,
+            'original_name' => 'delete-me.jpg',
+            'post_id' => $post->id,
+            'user_id' => $author->id,
+        ]);
+
+        $response = $this->deleteJson("/api/posts/{$post->id}/media/{$media->id}");
+
+        $response
+            ->assertOk()
+            ->assertJsonPath('data.media_id', $media->id)
+            ->assertJsonPath('data.post_id', $post->id)
+            ->assertJsonPath('data.remaining_media', 0);
+
+        $this->assertDatabaseMissing('post_images', [
+            'id' => $media->id,
+        ]);
+
+        Storage::disk('public')->assertMissing($path);
+    }
 
     public function test_authenticated_user_can_upload_image_media(): void
     {

@@ -4,6 +4,7 @@ namespace App\Events;
 
 use App\Models\ConversationMessage;
 use App\Models\ConversationMessageAttachment;
+use App\Models\ConversationMessageReaction;
 use Illuminate\Broadcasting\InteractsWithSockets;
 use Illuminate\Broadcasting\PrivateChannel;
 use Illuminate\Contracts\Broadcasting\ShouldBroadcastNow;
@@ -32,7 +33,7 @@ class ConversationMessageSent implements ShouldBroadcastNow
 
     public function broadcastWith(): array
     {
-        $this->message->loadMissing(['user:id,name,nickname,avatar_path,is_admin', 'attachments']);
+        $this->message->loadMissing(['user:id,name,nickname,avatar_path,is_admin', 'attachments', 'reactions']);
 
         return [
             'id' => $this->message->id,
@@ -55,7 +56,16 @@ class ConversationMessageSent implements ShouldBroadcastNow
                 'size' => (int) ($attachment->size ?? 0),
                 'original_name' => $attachment->original_name,
                 'url' => $attachment->url,
+                'download_url' => $attachment->download_url,
             ])->values(),
+            'reactions' => $this->message->reactions
+                ->groupBy(fn (ConversationMessageReaction $reaction) => (string) $reaction->emoji)
+                ->map(fn ($items, string $emoji) => [
+                    'emoji' => $emoji,
+                    'count' => $items->count(),
+                    'reacted_by_me' => false,
+                ])
+                ->values(),
         ];
     }
 }

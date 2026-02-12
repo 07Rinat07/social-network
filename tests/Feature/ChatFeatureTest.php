@@ -3,10 +3,13 @@
 namespace Tests\Feature;
 
 use App\Events\ConversationMessageSent;
+use App\Models\ChatArchive;
 use App\Models\Conversation;
 use App\Models\ConversationMessage;
 use App\Models\ConversationMessageAttachment;
+use App\Models\ConversationMessageReaction;
 use App\Models\User;
+use App\Models\UserChatSetting;
 use App\Models\UserBlock;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
@@ -173,6 +176,136 @@ class ChatFeatureTest extends TestCase
             ->assertOk()
             ->assertJsonPath('data.0.body', 'First')
             ->assertJsonPath('data.1.body', 'Second');
+    }
+
+    public function test_user_can_toggle_reaction_for_message_in_chat(): void
+    {
+        $firstUser = User::factory()->create();
+        $secondUser = User::factory()->create();
+
+        Sanctum::actingAs($firstUser);
+        $conversationId = (int) $this->postJson("/api/chats/direct/{$secondUser->id}")->json('data.id');
+
+        $message = ConversationMessage::query()->create([
+            'conversation_id' => $conversationId,
+            'user_id' => $secondUser->id,
+            'body' => 'Reactable message',
+        ]);
+
+        $firstToggle = $this->postJson("/api/chats/{$conversationId}/messages/{$message->id}/reactions", [
+            'emoji' => '👍',
+        ]);
+
+        $firstToggle
+            ->assertOk()
+            ->assertJsonPath('data.conversation_id', $conversationId)
+            ->assertJsonPath('data.message_id', $message->id)
+            ->assertJsonPath('data.emoji', '👍')
+            ->assertJsonPath('data.reacted', true)
+            ->assertJsonPath('data.message.reactions.0.emoji', '👍')
+            ->assertJsonPath('data.message.reactions.0.count', 1)
+            ->assertJsonPath('data.message.reactions.0.reacted_by_me', true);
+
+        $this->assertDatabaseHas('conversation_message_reactions', [
+            'conversation_message_id' => $message->id,
+            'user_id' => $firstUser->id,
+            'emoji' => '👍',
+        ]);
+
+        $secondToggle = $this->postJson("/api/chats/{$conversationId}/messages/{$message->id}/reactions", [
+            'emoji' => '👍',
+        ]);
+
+        $secondToggle
+            ->assertOk()
+            ->assertJsonPath('data.reacted', false);
+
+        $this->assertDatabaseMissing('conversation_message_reactions', [
+            'conversation_message_id' => $message->id,
+            'user_id' => $firstUser->id,
+            'emoji' => '👍',
+        ]);
+    }
+
+    public function test_non_participant_cannot_toggle_reaction_for_direct_chat_message(): void
+    {
+        $firstUser = User::factory()->create();
+        $secondUser = User::factory()->create();
+        $intruder = User::factory()->create();
+
+        Sanctum::actingAs($firstUser);
+        $conversationId = (int) $this->postJson("/api/chats/direct/{$secondUser->id}")->json('data.id');
+
+        $message = ConversationMessage::query()->create([
+            'conversation_id' => $conversationId,
+            'user_id' => $firstUser->id,
+            'body' => 'Protected reaction message',
+        ]);
+
+        Sanctum::actingAs($intruder);
+
+        $response = $this->postJson("/api/chats/{$conversationId}/messages/{$message->id}/reactions", [
+            'emoji' => '🔥',
+        ]);
+
+        $response->assertStatus(403);
+
+        $this->assertDatabaseMissing('conversation_message_reactions', [
+            'conversation_message_id' => $message->id,
+            'user_id' => $intruder->id,
+            'emoji' => '🔥',
+        ]);
+    }
+
+    public function test_messages_endpoint_returns_chat_reaction_summary_with_viewer_state(): void
+    {
+        $firstUser = User::factory()->create();
+        $secondUser = User::factory()->create();
+
+        Sanctum::actingAs($firstUser);
+        $conversationId = (int) $this->postJson("/api/chats/direct/{$secondUser->id}")->json('data.id');
+
+        $message = ConversationMessage::query()->create([
+            'conversation_id' => $conversationId,
+            'user_id' => $secondUser->id,
+            'body' => 'Reaction summary',
+        ]);
+
+        ConversationMessageReaction::query()->create([
+            'conversation_message_id' => $message->id,
+            'user_id' => $firstUser->id,
+            'emoji' => '❤️',
+        ]);
+
+        ConversationMessageReaction::query()->create([
+            'conversation_message_id' => $message->id,
+            'user_id' => $secondUser->id,
+            'emoji' => '❤️',
+        ]);
+
+        ConversationMessageReaction::query()->create([
+            'conversation_message_id' => $message->id,
+            'user_id' => $secondUser->id,
+            'emoji' => '😂',
+        ]);
+
+        $response = $this->getJson("/api/chats/{$conversationId}/messages?per_page=20");
+        $response->assertOk();
+
+        $messageData = collect($response->json('data'))->firstWhere('id', $message->id);
+        $this->assertNotNull($messageData);
+
+        $reactions = collect($messageData['reactions'] ?? []);
+
+        $heart = $reactions->firstWhere('emoji', '❤️');
+        $laugh = $reactions->firstWhere('emoji', '😂');
+
+        $this->assertNotNull($heart);
+        $this->assertNotNull($laugh);
+        $this->assertSame(2, (int) ($heart['count'] ?? 0));
+        $this->assertTrue((bool) ($heart['reacted_by_me'] ?? false));
+        $this->assertSame(1, (int) ($laugh['count'] ?? 0));
+        $this->assertFalse((bool) ($laugh['reacted_by_me'] ?? true));
     }
 
     public function test_offline_recipient_gets_unread_badges_and_messages_persisted_until_login(): void
@@ -516,6 +649,44 @@ class ChatFeatureTest extends TestCase
         Storage::disk($attachment->storage_disk ?: 'public')->assertExists($attachment->path);
     }
 
+    public function test_user_can_send_document_attachment_and_get_download_url(): void
+    {
+        Storage::fake('public');
+        Storage::fake('s3');
+
+        $firstUser = User::factory()->create();
+        $secondUser = User::factory()->create();
+
+        Sanctum::actingAs($firstUser);
+        $conversationId = (int) $this->postJson("/api/chats/direct/{$secondUser->id}")->json('data.id');
+
+        $response = $this->post("/api/chats/{$conversationId}/messages", [
+            'files' => [
+                UploadedFile::fake()->create('contract.pdf', 512, 'application/pdf'),
+            ],
+        ], [
+            'Accept' => 'application/json',
+        ]);
+
+        $response
+            ->assertStatus(201)
+            ->assertJsonPath('data.body', '')
+            ->assertJsonPath('data.attachments.0.type', ConversationMessageAttachment::TYPE_FILE);
+
+        $attachmentId = (int) $response->json('data.attachments.0.id');
+        $downloadUrl = $response->json('data.attachments.0.download_url');
+
+        $this->assertSame(
+            route('media.chat-attachments.download', ['attachment' => $attachmentId]),
+            (string) $downloadUrl
+        );
+
+        $this->assertDatabaseHas('conversation_message_attachments', [
+            'id' => $attachmentId,
+            'type' => ConversationMessageAttachment::TYPE_FILE,
+        ]);
+    }
+
     public function test_chat_attachment_from_local_disk_is_exposed_via_api_media_endpoint_for_participant(): void
     {
         Storage::fake('local');
@@ -558,6 +729,284 @@ class ChatFeatureTest extends TestCase
 
         $this->get(route('media.chat-attachments.show', ['attachment' => $attachment->id]))
             ->assertOk();
+    }
+
+    public function test_chat_attachment_download_endpoint_is_available_for_participant(): void
+    {
+        Storage::fake('public');
+
+        $sender = User::factory()->create();
+        $recipient = User::factory()->create();
+
+        Sanctum::actingAs($sender);
+        $conversationId = (int) $this->postJson("/api/chats/direct/{$recipient->id}")->json('data.id');
+
+        $message = ConversationMessage::query()->create([
+            'conversation_id' => $conversationId,
+            'user_id' => $sender->id,
+            'body' => null,
+        ]);
+
+        $path = 'chat/files/export.zip';
+        Storage::disk('public')->put($path, 'zip-content');
+
+        $attachment = ConversationMessageAttachment::query()->create([
+            'conversation_message_id' => $message->id,
+            'path' => $path,
+            'storage_disk' => 'public',
+            'type' => ConversationMessageAttachment::TYPE_FILE,
+            'mime_type' => 'application/zip',
+            'size' => 200,
+            'original_name' => 'export.zip',
+        ]);
+
+        Sanctum::actingAs($recipient);
+
+        $downloadResponse = $this->get(route('media.chat-attachments.download', ['attachment' => $attachment->id]));
+        $downloadResponse->assertOk();
+        $this->assertStringContainsString(
+            'attachment;',
+            strtolower((string) $downloadResponse->headers->get('content-disposition'))
+        );
+    }
+
+    public function test_non_participant_cannot_download_chat_attachment(): void
+    {
+        Storage::fake('public');
+
+        $sender = User::factory()->create();
+        $recipient = User::factory()->create();
+        $intruder = User::factory()->create();
+
+        Sanctum::actingAs($sender);
+        $conversationId = (int) $this->postJson("/api/chats/direct/{$recipient->id}")->json('data.id');
+
+        $message = ConversationMessage::query()->create([
+            'conversation_id' => $conversationId,
+            'user_id' => $sender->id,
+            'body' => null,
+        ]);
+
+        $attachment = ConversationMessageAttachment::query()->create([
+            'conversation_message_id' => $message->id,
+            'path' => 'chat/files/private.pdf',
+            'storage_disk' => 'public',
+            'type' => ConversationMessageAttachment::TYPE_FILE,
+            'mime_type' => 'application/pdf',
+            'size' => 120,
+            'original_name' => 'private.pdf',
+        ]);
+
+        Storage::disk('public')->put('chat/files/private.pdf', 'secret-content');
+
+        Sanctum::actingAs($intruder);
+
+        $this->get(route('media.chat-attachments.download', ['attachment' => $attachment->id]))
+            ->assertStatus(403);
+    }
+
+    public function test_user_can_delete_own_message_with_attachments_and_storage_is_cleaned(): void
+    {
+        Storage::fake('public');
+
+        $firstUser = User::factory()->create();
+        $secondUser = User::factory()->create();
+
+        Sanctum::actingAs($firstUser);
+        $conversationId = (int) $this->postJson("/api/chats/direct/{$secondUser->id}")->json('data.id');
+
+        $message = ConversationMessage::query()->create([
+            'conversation_id' => $conversationId,
+            'user_id' => $firstUser->id,
+            'body' => 'Message to remove',
+        ]);
+
+        $path = 'chat/images/delete-message.jpg';
+        Storage::disk('public')->put($path, 'attachment-content');
+
+        $attachment = ConversationMessageAttachment::query()->create([
+            'conversation_message_id' => $message->id,
+            'path' => $path,
+            'storage_disk' => 'public',
+            'type' => ConversationMessageAttachment::TYPE_IMAGE,
+            'mime_type' => 'image/jpeg',
+            'size' => 120,
+            'original_name' => 'delete-message.jpg',
+        ]);
+
+        $response = $this->deleteJson("/api/chats/{$conversationId}/messages/{$message->id}");
+
+        $response
+            ->assertOk()
+            ->assertJsonPath('data.conversation_id', $conversationId)
+            ->assertJsonPath('data.message_id', $message->id)
+            ->assertJsonPath('data.message_deleted', true);
+
+        $this->assertDatabaseMissing('conversation_messages', [
+            'id' => $message->id,
+        ]);
+
+        $this->assertDatabaseMissing('conversation_message_attachments', [
+            'id' => $attachment->id,
+        ]);
+
+        Storage::disk('public')->assertMissing($path);
+    }
+
+    public function test_user_cannot_delete_message_created_by_another_participant(): void
+    {
+        $firstUser = User::factory()->create();
+        $secondUser = User::factory()->create();
+
+        Sanctum::actingAs($firstUser);
+        $conversationId = (int) $this->postJson("/api/chats/direct/{$secondUser->id}")->json('data.id');
+
+        $message = ConversationMessage::query()->create([
+            'conversation_id' => $conversationId,
+            'user_id' => $secondUser->id,
+            'body' => 'Protected message',
+        ]);
+
+        $response = $this->deleteJson("/api/chats/{$conversationId}/messages/{$message->id}");
+
+        $response
+            ->assertStatus(403)
+            ->assertJsonPath('message', 'Access denied to delete this message.');
+
+        $this->assertDatabaseHas('conversation_messages', [
+            'id' => $message->id,
+        ]);
+    }
+
+    public function test_admin_cannot_delete_foreign_message_via_user_message_delete_endpoint(): void
+    {
+        $author = User::factory()->create();
+        $admin = User::factory()->create(['is_admin' => true]);
+
+        Sanctum::actingAs($author);
+        $conversationId = (int) $this->postJson("/api/chats/direct/{$admin->id}")->json('data.id');
+
+        $message = ConversationMessage::query()->create([
+            'conversation_id' => $conversationId,
+            'user_id' => $author->id,
+            'body' => 'Owned by author',
+        ]);
+
+        Sanctum::actingAs($admin);
+
+        $response = $this->deleteJson("/api/chats/{$conversationId}/messages/{$message->id}");
+
+        $response
+            ->assertStatus(403)
+            ->assertJsonPath('message', 'Access denied to delete this message.');
+
+        $this->assertDatabaseHas('conversation_messages', [
+            'id' => $message->id,
+            'user_id' => $author->id,
+        ]);
+    }
+
+    public function test_user_can_delete_attachment_without_removing_message_when_text_exists(): void
+    {
+        Storage::fake('public');
+
+        $firstUser = User::factory()->create();
+        $secondUser = User::factory()->create();
+
+        Sanctum::actingAs($firstUser);
+        $conversationId = (int) $this->postJson("/api/chats/direct/{$secondUser->id}")->json('data.id');
+
+        $message = ConversationMessage::query()->create([
+            'conversation_id' => $conversationId,
+            'user_id' => $firstUser->id,
+            'body' => 'Text should keep message alive',
+        ]);
+
+        $path = 'chat/audio/delete-attachment.ogg';
+        Storage::disk('public')->put($path, 'audio-content');
+
+        $attachment = ConversationMessageAttachment::query()->create([
+            'conversation_message_id' => $message->id,
+            'path' => $path,
+            'storage_disk' => 'public',
+            'type' => ConversationMessageAttachment::TYPE_AUDIO,
+            'mime_type' => 'audio/ogg',
+            'size' => 220,
+            'original_name' => 'delete-attachment.ogg',
+        ]);
+
+        $response = $this->deleteJson(
+            "/api/chats/{$conversationId}/messages/{$message->id}/attachments/{$attachment->id}"
+        );
+
+        $response
+            ->assertOk()
+            ->assertJsonPath('data.message_id', $message->id)
+            ->assertJsonPath('data.attachment_id', $attachment->id)
+            ->assertJsonPath('data.message_deleted', false)
+            ->assertJsonPath('data.remaining_attachments', 0);
+
+        $this->assertDatabaseHas('conversation_messages', [
+            'id' => $message->id,
+            'body' => 'Text should keep message alive',
+        ]);
+
+        $this->assertDatabaseMissing('conversation_message_attachments', [
+            'id' => $attachment->id,
+        ]);
+
+        Storage::disk('public')->assertMissing($path);
+    }
+
+    public function test_user_can_delete_last_attachment_and_empty_message_is_removed(): void
+    {
+        Storage::fake('public');
+
+        $firstUser = User::factory()->create();
+        $secondUser = User::factory()->create();
+
+        Sanctum::actingAs($firstUser);
+        $conversationId = (int) $this->postJson("/api/chats/direct/{$secondUser->id}")->json('data.id');
+
+        $message = ConversationMessage::query()->create([
+            'conversation_id' => $conversationId,
+            'user_id' => $firstUser->id,
+            'body' => null,
+        ]);
+
+        $path = 'chat/videos/empty-message.mp4';
+        Storage::disk('public')->put($path, 'video-content');
+
+        $attachment = ConversationMessageAttachment::query()->create([
+            'conversation_message_id' => $message->id,
+            'path' => $path,
+            'storage_disk' => 'public',
+            'type' => ConversationMessageAttachment::TYPE_VIDEO,
+            'mime_type' => 'video/mp4',
+            'size' => 480,
+            'original_name' => 'empty-message.mp4',
+        ]);
+
+        $response = $this->deleteJson(
+            "/api/chats/{$conversationId}/messages/{$message->id}/attachments/{$attachment->id}"
+        );
+
+        $response
+            ->assertOk()
+            ->assertJsonPath('data.message_id', $message->id)
+            ->assertJsonPath('data.attachment_id', $attachment->id)
+            ->assertJsonPath('data.message_deleted', true)
+            ->assertJsonPath('data.remaining_attachments', 0);
+
+        $this->assertDatabaseMissing('conversation_messages', [
+            'id' => $message->id,
+        ]);
+
+        $this->assertDatabaseMissing('conversation_message_attachments', [
+            'id' => $attachment->id,
+        ]);
+
+        Storage::disk('public')->assertMissing($path);
     }
 
     public function test_user_cannot_send_empty_attachment_file(): void
@@ -618,6 +1067,140 @@ class ChatFeatureTest extends TestCase
         $this->assertFalse((bool) $first['has_blocked_me']);
         $this->assertFalse((bool) $second['is_blocked_by_me']);
         $this->assertTrue((bool) $second['has_blocked_me']);
+    }
+
+    public function test_user_can_read_and_update_chat_storage_settings(): void
+    {
+        $user = User::factory()->create();
+        Sanctum::actingAs($user);
+
+        $getResponse = $this->getJson('/api/chats/settings');
+        $getResponse
+            ->assertOk()
+            ->assertJsonPath('data.save_text_messages', true)
+            ->assertJsonPath('data.save_media_attachments', true)
+            ->assertJsonPath('data.save_file_attachments', true)
+            ->assertJsonPath('data.retention_days', null)
+            ->assertJsonPath('data.auto_archive_enabled', true);
+
+        $updateResponse = $this->patchJson('/api/chats/settings', [
+            'save_text_messages' => false,
+            'save_media_attachments' => true,
+            'save_file_attachments' => false,
+            'retention_days' => 90,
+            'auto_archive_enabled' => false,
+        ]);
+
+        $updateResponse
+            ->assertOk()
+            ->assertJsonPath('data.save_text_messages', false)
+            ->assertJsonPath('data.save_media_attachments', true)
+            ->assertJsonPath('data.save_file_attachments', false)
+            ->assertJsonPath('data.retention_days', 90)
+            ->assertJsonPath('data.auto_archive_enabled', false);
+
+        $this->assertDatabaseHas('user_chat_settings', [
+            'user_id' => $user->id,
+            'save_text_messages' => false,
+            'save_media_attachments' => true,
+            'save_file_attachments' => false,
+            'retention_days' => 90,
+            'auto_archive_enabled' => false,
+        ]);
+    }
+
+    public function test_user_can_create_download_and_restore_chat_archive(): void
+    {
+        Storage::fake('public');
+
+        $author = User::factory()->create();
+        $peer = User::factory()->create();
+
+        Sanctum::actingAs($author);
+        $conversationId = (int) $this->postJson("/api/chats/direct/{$peer->id}")->json('data.id');
+
+        $this->postJson("/api/chats/{$conversationId}/messages", [
+            'body' => 'Archive me',
+        ])->assertStatus(201);
+
+        $createArchiveResponse = $this->postJson('/api/chats/archives', [
+            'scope' => 'all',
+        ]);
+
+        $createArchiveResponse
+            ->assertStatus(201)
+            ->assertJsonPath('data.scope', 'all');
+
+        $archiveId = (int) $createArchiveResponse->json('data.id');
+        $this->assertDatabaseHas('chat_archives', [
+            'id' => $archiveId,
+            'user_id' => $author->id,
+            'scope' => 'all',
+        ]);
+
+        $downloadResponse = $this->get("/api/chats/archives/{$archiveId}/download");
+        $downloadResponse->assertOk();
+        $this->assertStringContainsString(
+            'attachment;',
+            strtolower((string) $downloadResponse->headers->get('content-disposition'))
+        );
+
+        $restoreResponse = $this->postJson("/api/chats/archives/{$archiveId}/restore");
+        $restoreResponse
+            ->assertOk()
+            ->assertJsonPath('data.archive.id', $archiveId)
+            ->assertJsonPath('data.conversation.type', Conversation::TYPE_ARCHIVE);
+
+        $restoredConversationId = (int) $restoreResponse->json('data.conversation.id');
+        $this->assertDatabaseHas('conversations', [
+            'id' => $restoredConversationId,
+            'type' => Conversation::TYPE_ARCHIVE,
+        ]);
+
+        $this->assertDatabaseHas('chat_archives', [
+            'id' => $archiveId,
+            'restored_conversation_id' => $restoredConversationId,
+        ]);
+
+        $this->assertDatabaseHas('conversation_messages', [
+            'conversation_id' => $restoredConversationId,
+        ]);
+    }
+
+    public function test_user_cannot_access_archive_of_another_user(): void
+    {
+        $author = User::factory()->create();
+        $intruder = User::factory()->create();
+
+        UserChatSetting::query()->create([
+            'user_id' => $author->id,
+            'save_text_messages' => true,
+            'save_media_attachments' => true,
+            'save_file_attachments' => true,
+            'retention_days' => null,
+            'auto_archive_enabled' => true,
+        ]);
+
+        $archive = ChatArchive::query()->create([
+            'user_id' => $author->id,
+            'scope' => 'all',
+            'title' => 'Private archive',
+            'payload' => [
+                'generated_at' => now()->toIso8601String(),
+                'scope' => 'all',
+                'settings' => [],
+                'conversations' => [],
+            ],
+            'messages_count' => 0,
+        ]);
+
+        Sanctum::actingAs($intruder);
+
+        $this->get("/api/chats/archives/{$archive->id}/download")
+            ->assertStatus(403);
+
+        $this->postJson("/api/chats/archives/{$archive->id}/restore")
+            ->assertStatus(403);
     }
 
     public function test_sending_message_broadcasts_realtime_event(): void

@@ -7,12 +7,15 @@ use App\Http\Requests\Post\RepostRequest;
 use App\Http\Requests\Post\StoreRequest;
 use App\Http\Resources\Comment\CommentResource;
 use App\Http\Resources\Post\PostResource;
+use App\Models\Comment;
 use App\Models\Post;
+use App\Models\PostImage;
 use App\Models\PostView;
 use App\Services\PostService;
 use Illuminate\Database\QueryException;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Storage;
 use Illuminate\Validation\ValidationException;
 use Throwable;
 
@@ -101,6 +104,16 @@ class PostController extends Controller
         ];
     }
 
+    public function removeLike(Post $post, Request $request): array
+    {
+        $request->user()->likedPosts()->detach($post->id);
+
+        return [
+            'is_liked' => false,
+            'likes_count' => $post->likedUsers()->count(),
+        ];
+    }
+
     public function comment(Post $post, CommentRequest $request): CommentResource
     {
         $comment = $this->postService->createComment($post, $request->validated(), $request->user());
@@ -120,6 +133,67 @@ class PostController extends Controller
             ->paginate($perPage);
 
         return CommentResource::collection($comments);
+    }
+
+    public function destroyComment(Post $post, Comment $comment, Request $request): JsonResponse
+    {
+        if ((int) $comment->post_id !== (int) $post->id) {
+            abort(404);
+        }
+
+        $viewer = $request->user();
+        $canDelete = (int) $comment->user_id === (int) $viewer->id;
+
+        if (!$canDelete) {
+            return response()->json([
+                'message' => 'Access denied to delete this comment.',
+            ], 403);
+        }
+
+        Comment::query()
+            ->where('parent_id', $comment->id)
+            ->update(['parent_id' => null]);
+
+        $comment->delete();
+
+        return response()->json([
+            'data' => [
+                'comment_id' => (int) $comment->id,
+                'post_id' => (int) $post->id,
+            ],
+        ]);
+    }
+
+    public function destroyMedia(Post $post, PostImage $postImage, Request $request): JsonResponse
+    {
+        if ((int) $postImage->post_id !== (int) $post->id) {
+            abort(404);
+        }
+
+        $viewer = $request->user();
+        $canDelete = (int) $postImage->user_id === (int) $viewer->id;
+
+        if (!$canDelete) {
+            return response()->json([
+                'message' => 'Access denied to delete this media.',
+            ], 403);
+        }
+
+        Storage::disk($postImage->storage_disk ?: 'public')->delete($postImage->path);
+        $mediaId = (int) $postImage->id;
+        $postImage->delete();
+
+        $remainingMedia = PostImage::query()
+            ->where('post_id', $post->id)
+            ->count();
+
+        return response()->json([
+            'data' => [
+                'media_id' => $mediaId,
+                'post_id' => (int) $post->id,
+                'remaining_media' => (int) $remainingMedia,
+            ],
+        ]);
     }
 
     public function carousel(Request $request): JsonResponse

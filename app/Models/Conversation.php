@@ -16,6 +16,7 @@ class Conversation extends Model
 
     public const TYPE_GLOBAL = 'global';
     public const TYPE_DIRECT = 'direct';
+    public const TYPE_ARCHIVE = 'archive';
 
     protected $fillable = [
         'type',

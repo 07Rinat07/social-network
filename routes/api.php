@@ -42,14 +42,18 @@ Route::middleware(['auth:sanctum', 'verified'])->group(function () {
     Route::get('/posts/carousel', [PostController::class, 'carousel']);
     Route::post('/posts/{post}/view', [PostController::class, 'markViewed']);
     Route::post('/posts/{post}/toggle_like', [PostController::class, 'toggleLike']);
+    Route::delete('/posts/{post}/like', [PostController::class, 'removeLike']);
     Route::post('/posts/{post}/repost', [PostController::class, 'repost']);
     Route::post('/posts/{post}/comment', [PostController::class, 'comment']);
     Route::get('/posts/{post}/comment', [PostController::class, 'commentList']);
+    Route::delete('/posts/{post}/comments/{comment}', [PostController::class, 'destroyComment']);
+    Route::delete('/posts/{post}/media/{postImage}', [PostController::class, 'destroyMedia']);
 
     Route::post('/post_media', [PostImageController::class, 'store']);
     Route::post('/post_images', [PostImageController::class, 'store']);
     Route::get('/media/post-images/{postImage}', [MediaController::class, 'showPostImage'])->name('media.post-images.show');
     Route::get('/media/chat-attachments/{attachment}', [MediaController::class, 'showChatAttachment'])->name('media.chat-attachments.show');
+    Route::get('/media/chat-attachments/{attachment}/download', [MediaController::class, 'downloadChatAttachment'])->name('media.chat-attachments.download');
 
     Route::get('/site/config', [SiteSettingController::class, 'publicConfig']);
     Route::patch('/site/storage-preference', [SiteSettingController::class, 'updateUserStoragePreference']);
@@ -62,11 +66,20 @@ Route::middleware(['auth:sanctum', 'verified'])->group(function () {
     Route::get('/chats', [ChatController::class, 'index']);
     Route::get('/chats/unread-summary', [ChatController::class, 'unreadSummary']);
     Route::get('/chats/users', [ChatController::class, 'users']);
+    Route::get('/chats/settings', [ChatController::class, 'settings']);
+    Route::patch('/chats/settings', [ChatController::class, 'updateSettings']);
+    Route::get('/chats/archives', [ChatController::class, 'archives']);
+    Route::post('/chats/archives', [ChatController::class, 'createArchive']);
+    Route::get('/chats/archives/{archive}/download', [ChatController::class, 'downloadArchive']);
+    Route::post('/chats/archives/{archive}/restore', [ChatController::class, 'restoreArchive']);
     Route::post('/chats/direct/{user}', [ChatController::class, 'createOrGetDirect']);
     Route::get('/chats/{conversation}', [ChatController::class, 'show']);
     Route::post('/chats/{conversation}/read', [ChatController::class, 'markRead']);
     Route::get('/chats/{conversation}/messages', [ChatController::class, 'messages']);
     Route::post('/chats/{conversation}/messages', [ChatController::class, 'storeMessage']);
+    Route::post('/chats/{conversation}/messages/{message}/reactions', [ChatController::class, 'toggleMessageReaction']);
+    Route::delete('/chats/{conversation}/messages/{message}', [ChatController::class, 'destroyMessage']);
+    Route::delete('/chats/{conversation}/messages/{message}/attachments/{attachment}', [ChatController::class, 'destroyMessageAttachment']);
 
     Route::prefix('admin')->middleware('admin')->group(function () {
         Route::get('/summary', [AdminController::class, 'summary']);
@@ -79,6 +92,8 @@ Route::middleware(['auth:sanctum', 'verified'])->group(function () {
         Route::post('/posts', [AdminController::class, 'storePost']);
         Route::patch('/posts/{post}', [AdminController::class, 'updatePost']);
         Route::delete('/posts/{post}', [AdminController::class, 'destroyPost']);
+        Route::delete('/posts/{post}/likes', [AdminController::class, 'clearPostLikes']);
+        Route::delete('/likes', [AdminController::class, 'clearAllLikes']);
 
         Route::get('/comments', [AdminController::class, 'comments']);
         Route::delete('/comments/{comment}', [AdminController::class, 'destroyComment']);
@@ -88,6 +103,10 @@ Route::middleware(['auth:sanctum', 'verified'])->group(function () {
         Route::delete('/feedback/{feedback}', [AdminController::class, 'destroyFeedback']);
 
         Route::get('/conversations', [AdminController::class, 'conversations']);
+        Route::delete('/conversations/messages', [AdminController::class, 'clearAllConversationMessages']);
+        Route::delete('/conversations', [AdminController::class, 'clearAllConversations']);
+        Route::delete('/conversations/{conversation}/messages', [AdminController::class, 'clearConversationMessages']);
+        Route::delete('/conversations/{conversation}', [AdminController::class, 'destroyConversation']);
         Route::get('/messages', [AdminController::class, 'messages']);
         Route::delete('/messages/{message}', [AdminController::class, 'destroyMessage']);
 

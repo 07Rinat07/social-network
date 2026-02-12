@@ -36,6 +36,7 @@ class AdminController extends Controller
                 'carousel_posts' => Post::query()->where('is_public', true)->where('show_in_carousel', true)->count(),
                 'comments' => Comment::query()->count(),
                 'media' => PostImage::query()->count(),
+                'likes' => LikedPost::query()->count(),
                 'feedback_new' => FeedbackMessage::query()->where('status', FeedbackMessage::STATUS_NEW)->count(),
                 'feedback_in_progress' => FeedbackMessage::query()->where('status', FeedbackMessage::STATUS_IN_PROGRESS)->count(),
                 'feedback_resolved' => FeedbackMessage::query()->where('status', FeedbackMessage::STATUS_RESOLVED)->count(),
@@ -279,6 +280,33 @@ class AdminController extends Controller
         ]);
     }
 
+    public function clearPostLikes(Post $post): JsonResponse
+    {
+        $removedLikes = LikedPost::query()
+            ->where('post_id', $post->id)
+            ->delete();
+
+        return response()->json([
+            'message' => 'Post likes cleared successfully.',
+            'data' => [
+                'post_id' => (int) $post->id,
+                'removed_likes' => (int) $removedLikes,
+            ],
+        ]);
+    }
+
+    public function clearAllLikes(): JsonResponse
+    {
+        $removedLikes = LikedPost::query()->delete();
+
+        return response()->json([
+            'message' => 'All likes cleared successfully.',
+            'data' => [
+                'removed_likes' => (int) $removedLikes,
+            ],
+        ]);
+    }
+
     public function comments(Request $request): JsonResponse
     {
         $comments = Comment::query()
@@ -363,6 +391,100 @@ class AdminController extends Controller
         return response()->json($conversations);
     }
 
+    public function clearConversationMessages(Conversation $conversation): JsonResponse
+    {
+        $conversationId = (int) $conversation->id;
+        $removedAttachments = $this->cleanupConversationAttachmentFiles($conversationId);
+        $removedMessages = ConversationMessage::query()
+            ->where('conversation_id', $conversationId)
+            ->delete();
+
+        $conversation->forceFill([
+            'updated_at' => $conversation->created_at ?? now(),
+        ])->saveQuietly();
+
+        return response()->json([
+            'message' => 'Conversation messages cleared successfully.',
+            'data' => [
+                'conversation_id' => $conversationId,
+                'removed_messages' => (int) $removedMessages,
+                'removed_attachments' => (int) $removedAttachments,
+            ],
+        ]);
+    }
+
+    public function destroyConversation(Conversation $conversation): JsonResponse
+    {
+        $conversationId = (int) $conversation->id;
+        $removedAttachments = $this->cleanupConversationAttachmentFiles($conversationId);
+
+        $conversation->delete();
+
+        return response()->json([
+            'message' => 'Conversation deleted successfully.',
+            'data' => [
+                'conversation_id' => $conversationId,
+                'removed_attachments' => (int) $removedAttachments,
+            ],
+        ]);
+    }
+
+    public function clearAllConversationMessages(): JsonResponse
+    {
+        $removedAttachments = ConversationMessageAttachment::query()->count();
+
+        ConversationMessageAttachment::query()
+            ->orderBy('id')
+            ->chunkById(200, function ($attachments): void {
+                foreach ($attachments as $attachment) {
+                    Storage::disk($attachment->storage_disk ?: 'public')->delete($attachment->path);
+                }
+            });
+
+        $removedMessages = ConversationMessage::query()->delete();
+
+        Conversation::query()
+            ->select(['id', 'created_at'])
+            ->get()
+            ->each(function (Conversation $conversation): void {
+                $conversation->forceFill([
+                    'updated_at' => $conversation->created_at ?? now(),
+                ])->saveQuietly();
+            });
+
+        return response()->json([
+            'message' => 'All conversation messages cleared successfully.',
+            'data' => [
+                'removed_messages' => (int) $removedMessages,
+                'removed_attachments' => (int) $removedAttachments,
+            ],
+        ]);
+    }
+
+    public function clearAllConversations(): JsonResponse
+    {
+        $removedAttachments = ConversationMessageAttachment::query()->count();
+
+        ConversationMessageAttachment::query()
+            ->orderBy('id')
+            ->chunkById(200, function ($attachments): void {
+                foreach ($attachments as $attachment) {
+                    Storage::disk($attachment->storage_disk ?: 'public')->delete($attachment->path);
+                }
+            });
+
+        $removedConversations = Conversation::query()->count();
+        Conversation::query()->delete();
+
+        return response()->json([
+            'message' => 'All conversations deleted successfully.',
+            'data' => [
+                'removed_conversations' => (int) $removedConversations,
+                'removed_attachments' => (int) $removedAttachments,
+            ],
+        ]);
+    }
+
     public function messages(Request $request): JsonResponse
     {
         $conversationId = $request->integer('conversation_id');
@@ -392,6 +514,23 @@ class AdminController extends Controller
         return response()->json([
             'message' => 'Message deleted successfully.',
         ]);
+    }
+
+    protected function cleanupConversationAttachmentFiles(int $conversationId): int
+    {
+        $deletedCount = 0;
+
+        ConversationMessageAttachment::query()
+            ->whereHas('message', fn ($query) => $query->where('conversation_id', $conversationId))
+            ->orderBy('id')
+            ->chunkById(200, function ($attachments) use (&$deletedCount): void {
+                foreach ($attachments as $attachment) {
+                    Storage::disk($attachment->storage_disk ?: 'public')->delete($attachment->path);
+                    $deletedCount++;
+                }
+            });
+
+        return $deletedCount;
     }
 
     public function blocks(Request $request): JsonResponse

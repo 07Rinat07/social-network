@@ -22,6 +22,9 @@ class CommentResource extends JsonResource
             'body' => $this->body,
             'date' => $this->date,
             'answered_for_user' => $name,
+            'can_delete' => $request->user()
+                ? ((int) $request->user()->id === (int) $this->user_id)
+                : false,
             'user' => new UserResource($this->whenLoaded('user')),
         ];
     }

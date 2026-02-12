@@ -383,6 +383,63 @@ class AdminPanelFeatureTest extends TestCase
             ->assertJsonMissingPath('links');
     }
 
+    public function test_admin_can_clear_post_likes_and_all_likes(): void
+    {
+        $admin = User::factory()->create(['is_admin' => true]);
+        $firstUser = User::factory()->create();
+        $secondUser = User::factory()->create();
+        $thirdUser = User::factory()->create();
+
+        $firstPost = Post::query()->create([
+            'title' => 'First like target',
+            'content' => 'First like target content',
+            'user_id' => $firstUser->id,
+        ]);
+
+        $secondPost = Post::query()->create([
+            'title' => 'Second like target',
+            'content' => 'Second like target content',
+            'user_id' => $secondUser->id,
+        ]);
+
+        LikedPost::query()->create([
+            'user_id' => $secondUser->id,
+            'post_id' => $firstPost->id,
+        ]);
+        LikedPost::query()->create([
+            'user_id' => $thirdUser->id,
+            'post_id' => $firstPost->id,
+        ]);
+        LikedPost::query()->create([
+            'user_id' => $firstUser->id,
+            'post_id' => $secondPost->id,
+        ]);
+
+        Sanctum::actingAs($admin);
+
+        $clearPostLikesResponse = $this->deleteJson("/api/admin/posts/{$firstPost->id}/likes");
+
+        $clearPostLikesResponse
+            ->assertOk()
+            ->assertJsonPath('data.post_id', $firstPost->id)
+            ->assertJsonPath('data.removed_likes', 2);
+
+        $this->assertDatabaseMissing('liked_posts', [
+            'post_id' => $firstPost->id,
+        ]);
+        $this->assertDatabaseHas('liked_posts', [
+            'post_id' => $secondPost->id,
+        ]);
+
+        $clearAllLikesResponse = $this->deleteJson('/api/admin/likes');
+
+        $clearAllLikesResponse
+            ->assertOk()
+            ->assertJsonPath('data.removed_likes', 1);
+
+        $this->assertDatabaseCount('liked_posts', 0);
+    }
+
     public function test_admin_can_list_conversations_filter_messages_and_delete_message(): void
     {
         Storage::fake('public');
@@ -442,6 +499,104 @@ class AdminPanelFeatureTest extends TestCase
             'conversation_message_id' => $firstMessage->id,
         ]);
         Storage::disk('public')->assertMissing($attachmentPath);
+    }
+
+    public function test_admin_can_clear_messages_and_delete_all_conversations_with_attachment_cleanup(): void
+    {
+        Storage::fake('public');
+
+        $admin = User::factory()->create(['is_admin' => true]);
+        $member = User::factory()->create();
+
+        $firstConversation = Conversation::query()->create([
+            'type' => Conversation::TYPE_DIRECT,
+            'created_by' => $admin->id,
+        ]);
+        $firstConversation->participants()->sync([$admin->id, $member->id]);
+
+        $secondConversation = Conversation::query()->create([
+            'type' => Conversation::TYPE_DIRECT,
+            'created_by' => $member->id,
+        ]);
+        $secondConversation->participants()->sync([$admin->id, $member->id]);
+
+        $firstConversationMessage = ConversationMessage::query()->create([
+            'conversation_id' => $firstConversation->id,
+            'user_id' => $admin->id,
+            'body' => 'First conversation message',
+        ]);
+
+        ConversationMessage::query()->create([
+            'conversation_id' => $firstConversation->id,
+            'user_id' => $member->id,
+            'body' => 'Second first-conversation message',
+        ]);
+
+        $secondConversationMessage = ConversationMessage::query()->create([
+            'conversation_id' => $secondConversation->id,
+            'user_id' => $member->id,
+            'body' => 'Second conversation message',
+        ]);
+
+        $firstAttachmentPath = 'chat/images/admin-clear-conversation.jpg';
+        $secondAttachmentPath = 'chat/images/admin-clear-all-conversations.jpg';
+        Storage::disk('public')->put($firstAttachmentPath, 'first-attachment');
+        Storage::disk('public')->put($secondAttachmentPath, 'second-attachment');
+
+        ConversationMessageAttachment::query()->create([
+            'conversation_message_id' => $firstConversationMessage->id,
+            'path' => $firstAttachmentPath,
+            'storage_disk' => 'public',
+            'type' => ConversationMessageAttachment::TYPE_IMAGE,
+            'mime_type' => 'image/jpeg',
+            'size' => 100,
+            'original_name' => 'admin-clear-conversation.jpg',
+        ]);
+
+        ConversationMessageAttachment::query()->create([
+            'conversation_message_id' => $secondConversationMessage->id,
+            'path' => $secondAttachmentPath,
+            'storage_disk' => 'public',
+            'type' => ConversationMessageAttachment::TYPE_IMAGE,
+            'mime_type' => 'image/jpeg',
+            'size' => 100,
+            'original_name' => 'admin-clear-all-conversations.jpg',
+        ]);
+
+        Sanctum::actingAs($admin);
+
+        $clearConversationResponse = $this->deleteJson("/api/admin/conversations/{$firstConversation->id}/messages");
+
+        $clearConversationResponse
+            ->assertOk()
+            ->assertJsonPath('data.conversation_id', $firstConversation->id)
+            ->assertJsonPath('data.removed_messages', 2)
+            ->assertJsonPath('data.removed_attachments', 1);
+
+        $this->assertDatabaseCount('conversation_messages', 1);
+        $this->assertDatabaseHas('conversations', ['id' => $firstConversation->id]);
+        Storage::disk('public')->assertMissing($firstAttachmentPath);
+        Storage::disk('public')->assertExists($secondAttachmentPath);
+
+        $clearAllMessagesResponse = $this->deleteJson('/api/admin/conversations/messages');
+
+        $clearAllMessagesResponse
+            ->assertOk()
+            ->assertJsonPath('data.removed_messages', 1)
+            ->assertJsonPath('data.removed_attachments', 1);
+
+        $this->assertDatabaseCount('conversation_messages', 0);
+        $this->assertDatabaseCount('conversations', 2);
+        Storage::disk('public')->assertMissing($secondAttachmentPath);
+
+        $deleteAllConversationsResponse = $this->deleteJson('/api/admin/conversations');
+
+        $deleteAllConversationsResponse
+            ->assertOk()
+            ->assertJsonPath('data.removed_conversations', 2)
+            ->assertJsonPath('data.removed_attachments', 0);
+
+        $this->assertDatabaseCount('conversations', 0);
     }
 
     public function test_admin_can_list_update_and_delete_user_blocks(): void

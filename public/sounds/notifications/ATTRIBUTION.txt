@@ -1,0 +1,19 @@
+Notification sounds in this folder were downloaded from:
+https://actions.google.com/sounds/
+
+Direct source files:
+- https://actions.google.com/sounds/v1/alarms/alarm_clock.ogg
+- https://actions.google.com/sounds/v1/alarms/beep_short.ogg
+- https://actions.google.com/sounds/v1/alarms/digital_watch_alarm_long.ogg
+- https://actions.google.com/sounds/v1/alarms/medium_bell_ringing_near.ogg
+- https://actions.google.com/sounds/v1/cartoon/cartoon_boing.ogg
+- https://actions.google.com/sounds/v1/cartoon/cartoon_cowbell.ogg
+- https://actions.google.com/sounds/v1/cartoon/clang_and_wobble.ogg
+- https://actions.google.com/sounds/v1/cartoon/concussive_hit_guitar_boing.ogg
+- https://actions.google.com/sounds/v1/cartoon/pop.ogg
+- https://actions.google.com/sounds/v1/cartoon/slide_whistle.ogg
+- https://actions.google.com/sounds/v1/cartoon/woodpecker.ogg
+- https://actions.google.com/sounds/v1/cartoon/wood_plank_flicks.ogg
+- https://actions.google.com/sounds/v1/foley/swoosh.ogg
+
+Please review license terms on the source website before redistribution.

@@ -1,6 +1,6 @@
 <template>
-    <div class="page-wrap grid-layout">
-        <section class="section-card hero-grid">
+    <div class="page-wrap grid-layout home-page-bg" :style="homePageStyle">
+        <section class="section-card hero-grid home-hero-card">
             <div>
                 <span class="badge">{{ homeContent.badge }}</span>
                 <h1 class="hero-heading">{{ homeContent.hero_title }}</h1>
@@ -111,7 +111,7 @@
             </div>
         </section>
 
-        <section class="section-card">
+        <section class="section-card home-feedback-card">
             <h2 class="section-title">{{ homeContent.feedback_title }}</h2>
             <p class="section-subtitle">{{ homeContent.feedback_subtitle }}</p>
             <form class="form-grid" @submit.prevent="submitFeedback">
@@ -162,6 +162,7 @@ import MediaLightbox from '../components/MediaLightbox.vue'
 import MediaPlayer from '../components/MediaPlayer.vue'
 import Post from '../components/Post.vue'
 import { applyImagePreviewFallback, resetImagePreviewFallback } from '../utils/mediaPreview'
+import homeSocialMapBackground from '../../images/home-social-map.jpg'
 
 const defaultHomeContent = () => ({
     badge: 'Социальная сеть SPA',
@@ -215,6 +216,12 @@ export default {
     computed: {
         isVerifiedUser() {
             return this.isAuthenticated && Boolean(this.user?.email_verified_at)
+        },
+
+        homePageStyle() {
+            return {
+                '--home-bg-image': `url(${homeSocialMapBackground})`
+            }
         },
 
         currentCarouselItem() {

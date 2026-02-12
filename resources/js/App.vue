@@ -1,7 +1,9 @@
 <template>
     <div class="app-shell">
         <header class="topbar glass-panel">
-            <router-link class="brand" :to="{ name: 'home' }">Solid Social</router-link>
+            <router-link class="brand" :to="{ name: 'home' }" aria-label="Solid Social">
+                <BrandLogo />
+            </router-link>
 
             <nav class="nav-links">
                 <router-link class="nav-link" :to="{ name: 'home' }">Главная</router-link>
@@ -52,8 +54,13 @@
 </template>
 
 <script>
+import BrandLogo from './components/BrandLogo.vue'
+
 export default {
     name: 'App',
+    components: {
+        BrandLogo
+    },
 
     data() {
         return {

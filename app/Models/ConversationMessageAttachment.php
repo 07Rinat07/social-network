@@ -16,6 +16,7 @@ class ConversationMessageAttachment extends Model
     public const TYPE_VIDEO = 'video';
     public const TYPE_GIF = 'gif';
     public const TYPE_AUDIO = 'audio';
+    public const TYPE_FILE = 'file';
 
     protected $fillable = [
         'conversation_message_id',
@@ -49,6 +50,11 @@ class ConversationMessageAttachment extends Model
         } catch (Throwable) {
             return route('media.chat-attachments.show', ['attachment' => $this->id]);
         }
+    }
+
+    public function getDownloadUrlAttribute(): string
+    {
+        return route('media.chat-attachments.download', ['attachment' => $this->id]);
     }
 
     protected function shouldServeThroughApi(string $disk): bool

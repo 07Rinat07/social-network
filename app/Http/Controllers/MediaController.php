@@ -44,17 +44,7 @@ class MediaController extends Controller
 
     public function showChatAttachment(ConversationMessageAttachment $attachment, Request $request): StreamedResponse
     {
-        $user = $request->user();
-
-        if (!$user->is_admin) {
-            $message = $attachment->message()
-                ->with('conversation')
-                ->first();
-
-            if (!$message || !$message->conversation || !$message->conversation->isAccessibleBy($user->id)) {
-                abort(403, 'Access denied to this chat attachment.');
-            }
-        }
+        $this->ensureChatAttachmentAccess($attachment, $request);
 
         return $this->streamFromDisk(
             (string) ($attachment->storage_disk ?: 'public'),
@@ -64,7 +54,43 @@ class MediaController extends Controller
         );
     }
 
-    protected function streamFromDisk(string $disk, string $path, ?string $mimeType = null, ?string $name = null): StreamedResponse
+    public function downloadChatAttachment(ConversationMessageAttachment $attachment, Request $request): StreamedResponse
+    {
+        $this->ensureChatAttachmentAccess($attachment, $request);
+
+        return $this->streamFromDisk(
+            (string) ($attachment->storage_disk ?: 'public'),
+            (string) $attachment->path,
+            $attachment->mime_type,
+            $attachment->original_name,
+            'attachment'
+        );
+    }
+
+    protected function ensureChatAttachmentAccess(ConversationMessageAttachment $attachment, Request $request): void
+    {
+        $user = $request->user();
+
+        if ($user->is_admin) {
+            return;
+        }
+
+        $message = $attachment->message()
+            ->with('conversation')
+            ->first();
+
+        if (!$message || !$message->conversation || !$message->conversation->isAccessibleBy($user->id)) {
+            abort(403, 'Access denied to this chat attachment.');
+        }
+    }
+
+    protected function streamFromDisk(
+        string $disk,
+        string $path,
+        ?string $mimeType = null,
+        ?string $name = null,
+        string $disposition = 'inline'
+    ): StreamedResponse
     {
         $path = trim($path);
 
@@ -87,6 +113,6 @@ class MediaController extends Controller
             $headers['Content-Type'] = $mimeType;
         }
 
-        return Storage::disk($targetDisk)->response($path, $name ?: basename($path), $headers);
+        return Storage::disk($targetDisk)->response($path, $name ?: basename($path), $headers, $disposition);
     }
 }

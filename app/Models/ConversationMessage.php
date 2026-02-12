@@ -33,6 +33,12 @@ class ConversationMessage extends Model
             ->orderBy('id');
     }
 
+    public function reactions(): HasMany
+    {
+        return $this->hasMany(ConversationMessageReaction::class, 'conversation_message_id', 'id')
+            ->orderBy('id');
+    }
+
     public function getDateAttribute(): string
     {
         return $this->created_at->diffForHumans();

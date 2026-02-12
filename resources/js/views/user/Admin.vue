@@ -18,6 +18,10 @@
                     <div class="stat-value">{{ summary.comments ?? 0 }}</div>
                 </div>
                 <div class="stat-card">
+                    <span class="stat-label">Лайки</span>
+                    <div class="stat-value">{{ summary.likes ?? 0 }}</div>
+                </div>
+                <div class="stat-card">
                     <span class="stat-label">Сообщения чатов</span>
                     <div class="stat-value">{{ summary.messages ?? 0 }}</div>
                 </div>
@@ -135,14 +139,20 @@
                             Показывать в карусели
                         </label>
 
-                        <button class="btn btn-primary btn-sm" @click="createPost">Создать пост</button>
+                        <div style="display: flex; gap: 0.45rem; flex-wrap: wrap;">
+                            <button class="btn btn-primary btn-sm" @click="createPost">Создать пост</button>
+                            <button class="btn btn-danger btn-sm" @click="clearAllLikes">Очистить все лайки</button>
+                        </div>
                     </div>
                 </div>
 
                 <div class="simple-item" v-for="post in posts" :key="`admin-post-${post.id}`" style="display: block;">
                     <div style="display: flex; justify-content: space-between; gap: 0.8rem; flex-wrap: wrap; align-items: center;">
-                        <strong>#{{ post.id }}</strong>
-                        <button class="btn btn-danger btn-sm" @click="removePost(post)">Удалить</button>
+                        <strong>#{{ post.id }} · Лайков: {{ post.likes_count ?? 0 }}</strong>
+                        <div style="display: flex; gap: 0.4rem; flex-wrap: wrap;">
+                            <button class="btn btn-outline btn-sm" @click="clearPostLikes(post)">Очистить лайки</button>
+                            <button class="btn btn-danger btn-sm" @click="removePost(post)">Удалить</button>
+                        </div>
                     </div>
 
                     <div class="form-grid" style="margin-top: 0.6rem;">
@@ -226,8 +236,22 @@
             </div>
 
             <div v-if="activeTab === 'conversations'" class="simple-list fade-in">
+                <div class="simple-item" style="display: block;">
+                    <strong style="display: block; margin-bottom: 0.45rem;">Массовые действия с чатами</strong>
+                    <div style="display: flex; gap: 0.45rem; flex-wrap: wrap;">
+                        <button class="btn btn-outline btn-sm" @click="clearAllConversations">Очистить все чаты</button>
+                        <button class="btn btn-danger btn-sm" @click="removeAllConversations">Удалить все чаты</button>
+                    </div>
+                </div>
+
                 <div class="simple-item" v-for="conversation in conversations" :key="`admin-conversation-${conversation.id}`" style="display: block;">
-                    <strong>#{{ conversation.id }} · {{ conversation.display_title || conversation.title }}</strong>
+                    <div style="display: flex; justify-content: space-between; gap: 0.8rem; flex-wrap: wrap; align-items: center;">
+                        <strong>#{{ conversation.id }} · {{ conversation.display_title || conversation.title }}</strong>
+                        <div style="display: flex; gap: 0.45rem; flex-wrap: wrap;">
+                            <button class="btn btn-outline btn-sm" @click="clearConversationMessages(conversation)">Очистить чат</button>
+                            <button class="btn btn-danger btn-sm" @click="removeConversation(conversation)">Удалить чат</button>
+                        </div>
+                    </div>
                     <p class="muted" style="margin: 0.25rem 0 0;">
                         Тип: {{ conversation.type }} · Участников: {{ conversation.participants?.length ?? 0 }} · Сообщений: {{ conversation.messages_count ?? 0 }}
                     </p>
@@ -623,6 +647,26 @@ export default {
             await this.loadSummary()
         },
 
+        async clearPostLikes(post) {
+            if (!confirm(`Очистить лайки у поста #${post.id}?`)) {
+                return
+            }
+
+            await axios.delete(`/api/admin/posts/${post.id}/likes`)
+            await this.loadPosts()
+            await this.loadSummary()
+        },
+
+        async clearAllLikes() {
+            if (!confirm('Очистить все лайки во всей системе?')) {
+                return
+            }
+
+            await axios.delete('/api/admin/likes')
+            await this.loadPosts()
+            await this.loadSummary()
+        },
+
         async loadComments() {
             const response = await axios.get('/api/admin/comments', { params: { per_page: 50 } })
             this.comments = response.data.data ?? []
@@ -664,6 +708,42 @@ export default {
         async loadConversations() {
             const response = await axios.get('/api/admin/conversations', { params: { per_page: 50 } })
             this.conversations = response.data.data ?? []
+        },
+
+        async clearConversationMessages(conversation) {
+            if (!confirm(`Очистить все сообщения чата #${conversation.id}?`)) {
+                return
+            }
+
+            await axios.delete(`/api/admin/conversations/${conversation.id}/messages`)
+            await Promise.all([this.loadConversations(), this.loadMessages(), this.loadSummary()])
+        },
+
+        async removeConversation(conversation) {
+            if (!confirm(`Удалить чат #${conversation.id} полностью?`)) {
+                return
+            }
+
+            await axios.delete(`/api/admin/conversations/${conversation.id}`)
+            await Promise.all([this.loadConversations(), this.loadMessages(), this.loadSummary()])
+        },
+
+        async clearAllConversations() {
+            if (!confirm('Очистить сообщения во всех чатах?')) {
+                return
+            }
+
+            await axios.delete('/api/admin/conversations/messages')
+            await Promise.all([this.loadConversations(), this.loadMessages(), this.loadSummary()])
+        },
+
+        async removeAllConversations() {
+            if (!confirm('Удалить все чаты полностью?')) {
+                return
+            }
+
+            await axios.delete('/api/admin/conversations')
+            await Promise.all([this.loadConversations(), this.loadMessages(), this.loadSummary()])
         },
 
         async loadMessages() {
