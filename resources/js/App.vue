@@ -14,6 +14,7 @@
                         <router-link class="nav-link" :to="{ name: 'user.feed' }">Лента</router-link>
                         <router-link class="nav-link" :to="{ name: 'user.personal' }">Кабинет</router-link>
                         <router-link class="nav-link" :to="{ name: 'radio.index' }">Радио</router-link>
+                        <router-link class="nav-link" :to="{ name: 'iptv.index' }">IPTV</router-link>
                         <router-link class="nav-link" :to="{ name: 'user.feedback' }">Мои обращения</router-link>
                         <router-link class="nav-link" :to="{ name: 'chat.index' }">
                             Чаты

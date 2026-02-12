@@ -51,6 +51,14 @@ SPA-социальная сеть на Laravel + Vue с чатами, realtime, 
   - поиск интернет-радиостанций через Radio Browser;
   - встроенный плеер для прослушивания на сайте;
   - избранные станции пользователя (добавление/удаление/список).
+- IPTV:
+  - загрузка плейлистов по URL и из файла (`.m3u/.m3u8`) + запуск прямого потока;
+  - встроенные сидеры (TV, CAMERA, ZARUB, Voxlist) и добавление своих сидеров;
+  - удобный список каналов: поиск, фильтры, группы, сортировка, избранные и недавние;
+  - полноценный плеер на сайте (HLS/DASH/MPEG-TS/FLV/native) с hotkeys, fullscreen, выбором качества и режима экрана;
+  - режимы буферизации (`auto/fast/balanced/stable`) и авто-стабилизация для слабой/нестабильной сети;
+  - совместимый режим FFmpeg для проблемных кодеков + авто-переключение при codec/decode-ошибках;
+  - расширенная диагностика потока и кодеков прямо в интерфейсе.
 - Обратная связь:
   - для зарегистрированных есть страница «Мои обращения»;
   - статус обращения (`новое / в обработке / решено`) обновляется в realtime без ручного refresh.
@@ -130,6 +138,7 @@ SPA-социальная сеть на Laravel + Vue с чатами, realtime, 
   - `BROADCAST_DRIVER=pusher`
   - `REVERB_APP_ID`, `REVERB_APP_KEY`, `REVERB_APP_SECRET`
   - `REVERB_HOST`, `REVERB_PORT`, `REVERB_SCHEME`
+  - при использовании внешнего Pusher также задайте `VITE_PUSHER_APP_CLUSTER` (иначе возможна ошибка `Options object must provide a cluster` в консоли).
 
 ### В Docker
 - WebSocket endpoint: `ws://localhost:6001`
@@ -176,6 +185,21 @@ SPA-социальная сеть на Laravel + Vue с чатами, realtime, 
   - `POST /api/radio/favorites` — добавить/обновить избранную станцию;
   - `DELETE /api/radio/favorites/{stationUuid}` — удалить из избранного.
 
+## IPTV и FFmpeg
+- Для режима совместимости IPTV (транскодирование проблемных кодеков в HLS) нужен установленный `ffmpeg`.
+- Локально установите `ffmpeg` в систему:
+  - Ubuntu/Debian: `sudo apt-get update && sudo apt-get install -y ffmpeg`
+  - macOS (Homebrew): `brew install ffmpeg`
+  - Windows (Chocolatey): `choco install ffmpeg`
+- В Docker `ffmpeg` ставится в `app`-образ. После обновления Dockerfile нужна пересборка:
+  - `docker compose build app websocket test`
+  - `docker compose up -d`
+- Переменная окружения:
+  - `IPTV_FFMPEG_BIN=ffmpeg`
+  - если `ffmpeg` не в `PATH`, укажите полный путь к бинарнику.
+  - пример Windows: `IPTV_FFMPEG_BIN=C:\ffmpeg\bin\ffmpeg.exe`
+- Если канал висит в `Буферизация потока...`, плеер автоматически делает восстановление и перезапуск; при длительном зависании покажет явную ошибку вместо бесконечного ожидания.
+
 ## Тестовые аккаунты (сидер)
 - Админ: `admin@example.com` / `password`
 - Пользователи:
@@ -212,6 +236,15 @@ SPA-социальная сеть на Laravel + Vue с чатами, realtime, 
 - Если после обновления появляются ошибки чатов или новых API:
   - применить миграции локально: `php artisan migrate`;
   - применить миграции в Docker: `docker compose exec app php artisan migrate`.
+- Если IPTV пишет `Совместимый режим недоступен: на сервере нет FFmpeg`:
+  - проверить бинарник: `ffmpeg -version`;
+  - проверить capability API: `GET /api/iptv/transcode/capabilities`;
+  - при необходимости задать `IPTV_FFMPEG_BIN` и перезапустить PHP/FPM.
+- Если канал работает в новой вкладке, но не во встроенном плеере:
+  - частая причина: ограничения источника (`CORS`, mixed content, недоступные сегменты, временно «мертвый» CDN);
+  - включить `Авто-совместимость (codec)` и/или `Включить совместимый режим (FFmpeg)`;
+  - попробовать профиль `FFmpeg: устойчивый`;
+  - помнить, что внешние логотипы каналов могут не загружаться (`ERR_NAME_NOT_RESOLVED`, `ERR_CERT_*`, `ERR_CONNECTION_*`) — это проблемы удаленного хоста, а не проекта.
 - Проверить контейнеры:
   - `docker compose ps`
   - `docker compose logs --tail=100 app`

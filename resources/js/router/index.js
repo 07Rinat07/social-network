@@ -87,6 +87,12 @@ const router = createRouter({
             meta: {requiresAuth: true}
         },
         {
+            path: '/iptv',
+            component: () => import('../views/user/Iptv.vue'),
+            name: 'iptv.index',
+            meta: {requiresAuth: true}
+        },
+        {
             path: '/admin',
             component: () => import('../views/user/Admin.vue'),
             name: 'admin.index',

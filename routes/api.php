@@ -4,6 +4,7 @@ use App\Http\Controllers\AdminController;
 use App\Http\Controllers\Auth\EmailVerificationNotificationController;
 use App\Http\Controllers\ChatController;
 use App\Http\Controllers\FeedbackController;
+use App\Http\Controllers\IptvController;
 use App\Http\Controllers\MediaController;
 use App\Http\Controllers\PostController;
 use App\Http\Controllers\PostImageController;
@@ -20,6 +21,10 @@ Route::middleware('auth:sanctum')->get('/user', function (Request $request) {
 
 Route::post('/feedback', [FeedbackController::class, 'store']);
 Route::get('/site/home-content', [SiteSettingController::class, 'homeContent']);
+Route::get('/iptv/transcode/{session}/playlist.m3u8', [IptvController::class, 'transcodePlaylist'])->name('api.iptv.transcode.playlist');
+Route::get('/iptv/transcode/{session}/{segment}', [IptvController::class, 'transcodeSegment'])
+    ->where('segment', 'segment_[0-9]{5}\.ts')
+    ->name('api.iptv.transcode.segment');
 
 Route::middleware(['auth:sanctum', 'throttle:6,1'])->post('/auth/email/verification-notification', EmailVerificationNotificationController::class);
 
@@ -62,6 +67,10 @@ Route::middleware(['auth:sanctum', 'verified'])->group(function () {
     Route::get('/radio/favorites', [RadioController::class, 'favorites']);
     Route::post('/radio/favorites', [RadioController::class, 'storeFavorite']);
     Route::delete('/radio/favorites/{stationUuid}', [RadioController::class, 'destroyFavorite']);
+    Route::post('/iptv/playlist/fetch', [IptvController::class, 'fetchPlaylist']);
+    Route::get('/iptv/transcode/capabilities', [IptvController::class, 'transcodeCapabilities'])->name('api.iptv.transcode.capabilities');
+    Route::post('/iptv/transcode/start', [IptvController::class, 'startTranscode'])->name('api.iptv.transcode.start');
+    Route::delete('/iptv/transcode/{session}', [IptvController::class, 'stopTranscode'])->name('api.iptv.transcode.stop');
 
     Route::get('/chats', [ChatController::class, 'index']);
     Route::get('/chats/unread-summary', [ChatController::class, 'unreadSummary']);

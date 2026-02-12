@@ -17,12 +17,14 @@ const reverbHost = import.meta.env.VITE_REVERB_HOST ?? import.meta.env.VITE_PUSH
 const reverbPort = Number(import.meta.env.VITE_REVERB_PORT ?? import.meta.env.VITE_PUSHER_PORT ?? 6001);
 const reverbScheme = import.meta.env.VITE_REVERB_SCHEME ?? import.meta.env.VITE_PUSHER_SCHEME ?? 'http';
 const reverbPath = import.meta.env.VITE_REVERB_PATH ?? import.meta.env.VITE_PUSHER_APP_PATH ?? '';
+const reverbCluster = import.meta.env.VITE_PUSHER_APP_CLUSTER ?? 'mt1';
 
 if (typeof reverbKey === 'string' && reverbKey.trim() !== '') {
     try {
         window.Echo = new Echo({
             broadcaster: 'pusher',
             key: reverbKey,
+            cluster: reverbCluster,
             wsHost: reverbHost,
             wsPort: reverbPort,
             wssPort: reverbPort,
