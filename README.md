@@ -1,259 +1,114 @@
-# Solid Social Network SPA
+#### Автор проекта: **Rinat Sarmuldin** Email: [ura07srr@gmail.com](mailto:ura07srr@gmail.com)
+# Solid Social Network SPA URALSK + IPTV/Radio
 
-SPA-социальная сеть на Laravel + Vue с чатами, realtime, медиа-контентом и админ-панелью.
+SPA-социальная сеть на `Laravel + Vue` с чатами, realtime, медиа, IPTV/радио и админ-панелью.
 
-## Что реализовано
-- Современный SPA-интерфейс (главная, лента, профили, кабинет, чаты, админка).
-- Пользовательский кабинет:
-  - создание постов;
-  - загрузка фото/видео;
-  - лайки, комментарии, репосты, эмодзи;
-  - настройка никнейма для отображения в постах/чатах;
-  - загрузка и удаление личной аватарки;
-  - страница «Мои обращения» со статусами feedback (`новое / в обработке / решено`).
-  - регистрация с подтверждением email (до подтверждения доступен только экран верификации).
-- Главная страница:
-  - публичная медиа-карусель;
-  - блоки популярных, самых просматриваемых и новых постов;
-  - форма обратной связи в администрацию.
-- Админ-панель:
-  - управление пользователями и правами;
-  - модерация постов, комментариев, feedback;
-  - полный CRUD постов для администраторов: создание, редактирование и удаление любого поста (независимо от автора);
-  - загрузка полного списка постов в админке без ограничения первой страницей;
-  - контроль чатов и сообщений (удаление отдельных сообщений, очистка чатов, полная очистка всех чатов);
-  - массовая очистка лайков (глобально и по конкретному посту);
-  - управление настройками сайта;
-  - редактирование контента главной страницы (hero-блок и блок обратной связи);
-  - выбор политики хранения медиа (локально/облако/выбор пользователя).
-- Чаты:
-  - общий чат;
-  - личные диалоги;
-  - отправка текста, голосовых, фото, видео, GIF и файлов (документы/архивы);
-  - скачивание вложений из чата (отдельные media/download URL);
-  - реакции на сообщения (emoji);
-  - удаление пользователем только своих сообщений и вложений (чужие удалить нельзя);
-  - фильтрация сообщений, включая режим `Только файлы` (без медиа);
-  - отправка сообщения по `Ctrl+Enter` в поле ввода;
-  - запись голосовых с индикатором уровня микрофона;
-  - кнопка отмены записи до отправки;
-  - лимит записи голосового: 5 минут (автостоп с добавлением в сообщение);
-  - запись голосовых через `MediaRecorder` с приоритетом кодеков браузера + fallback в `wav`;
-  - улучшенный захват микрофона (echo cancellation, noise suppression, auto gain control);
-  - настройка звука уведомлений: 13 встроенных сигналов + свой файл (до 15MB);
-  - настройки хранения переписки: что сохранять (текст/медиа/файлы), срок хранения и флаг автоархивирования;
-  - архивы чатов: создание (все чаты/текущий чат), скачивание JSON, восстановление в отдельный чат;
-  - сохранение сообщений для оффлайн-пользователей и доставка после входа;
-  - индикаторы непрочитанных сообщений (бейджи в чатах и в верхнем меню);
-  - блокировки пользователей (временные/постоянные);
-  - realtime через Reverb + Echo.
-- Радио:
-  - поиск интернет-радиостанций через Radio Browser;
-  - встроенный плеер для прослушивания на сайте;
-  - избранные станции пользователя (добавление/удаление/список).
-- IPTV:
-  - загрузка плейлистов по URL и из файла (`.m3u/.m3u8`) + запуск прямого потока;
-  - встроенные сидеры (TV, CAMERA, ZARUB, Voxlist) и добавление своих сидеров;
-  - удобный список каналов: поиск, фильтры, группы, сортировка, избранные и недавние;
-  - полноценный плеер на сайте (HLS/DASH/MPEG-TS/FLV/native) с hotkeys, fullscreen, выбором качества и режима экрана;
-  - режимы буферизации (`auto/fast/balanced/stable`) и авто-стабилизация для слабой/нестабильной сети;
-  - совместимый режим FFmpeg для проблемных кодеков + авто-переключение при codec/decode-ошибках;
-  - расширенная диагностика потока и кодеков прямо в интерфейсе.
-- Обратная связь:
-  - для зарегистрированных есть страница «Мои обращения»;
-  - статус обращения (`новое / в обработке / решено`) обновляется в realtime без ручного refresh.
+## Стек
+- PHP 8.2+ (Docker: PHP 8.3 FPM)
+- Laravel 10, Sanctum, Reverb
+- Vue 3, Vue Router, Vite, Tailwind CSS 4
+- MySQL (Docker: MySQL 8.4)
 
-## Технологии
-- PHP 8.2+ (в Docker используется PHP 8.3 FPM)
-- Laravel 10
-- Laravel Sanctum
-- Laravel Reverb
-- Vue 3
-- Vue Router
-- Vite
-- Tailwind CSS 4
-- Plyr (единый плеер для аудио/видео)
-- MySQL 8.4 (в Docker)
+## Главный принцип
+- Локальный режим: используйте только `.env` (из `.env.example`).
+- Docker-режим: запускается из `docker-compose.yml` без обязательного env-файла.
+- Не смешивайте команды и переменные двух режимов.
 
+---
 
 ## Локальный запуск (без Docker)
-1. Установить зависимости:
+
+1. Установите зависимости:
    - `composer install`
    - `npm install`
-2. Подготовить окружение:
+2. Создайте `.env`:
    - Linux/macOS: `cp .env.example .env`
-   - Windows PowerShell: `Copy-Item .env.example .env`
-   - Windows CMD: `copy .env.example .env`
-3. Сгенерировать ключ приложения:
+   - PowerShell: `Copy-Item .env.example .env`
+   - CMD: `copy .env.example .env`
+3. Запустите локальный сервер БД и создайте базу:
+   - имя базы = `DB_DATABASE` (по умолчанию `laravel`)
+4. Настройте БД в `.env`:
+   - `MySQL`: `DB_CONNECTION=mysql`
+   - `PostgreSQL`: `DB_CONNECTION=pgsql`
+5. Сгенерируйте ключ и выполните миграции:
    - `php artisan key:generate`
-4. Выполнить миграции и сиды:
    - `php artisan migrate --seed`
-5. Настроить почту для подтверждения email:
-   - для разработки можно оставить `MAIL_MAILER=log` (ссылка придёт в `storage/logs/laravel.log`);
-   - для реальной отправки укажите SMTP-параметры (`MAIL_HOST`, `MAIL_PORT`, `MAIL_USERNAME`, `MAIL_PASSWORD`, `MAIL_FROM_ADDRESS`).
-6. Создать storage-ссылку:
    - `php artisan storage:link`
-7. Запустить приложение (3 процесса):
+6. Запустите 3 процесса:
    - `php artisan serve`
    - `npm run dev`
    - `php artisan reverb:start --host=0.0.0.0 --port=6001`
+7. Откройте: `http://127.0.0.1:8000`
 
-## Docker (Windows / Linux / macOS)
-Конфигурация проверена: сборка, запуск, миграции и тесты выполняются успешно.
-`web` и `websocket` стартуют только после `app (php-fpm)` в состоянии `healthy`.
-`web` также ждёт `frontend-build` (Node), который собирает актуальные `public/build/*`.
-На первом запуске `app` может инициализироваться 30-90 секунд (composer/autoload).
+### Быстрая проверка БД (Windows)
+- MySQL порт: `Test-NetConnection 127.0.0.1 -Port 3306`
+- PostgreSQL порт: `Test-NetConnection 127.0.0.1 -Port 5432`
+- Если у вас нестандартный порт (например `3307`), укажите его в `DB_PORT`.
 
-### Быстрый старт
-1. Подготовить `.env`:
-   - Linux/macOS: `cp .env.docker.example .env`
-   - Windows PowerShell: `Copy-Item .env.docker.example .env`
-   - Windows CMD: `copy .env.docker.example .env`
-2. Запустить сервисы:
+---
+
+## Docker запуск
+
+1. Запустите:
    - `docker compose up -d --build`
-   - этап `frontend-build` может занять 1-3 минуты (установка npm-зависимостей + Vite build).
-3. Миграции применяются автоматически при старте `app`-контейнера.
-   - при необходимости вручную: `docker compose exec app php artisan migrate --seed`
-4. Открыть проект:
+2. Проверьте статус:
+   - `docker compose ps`
+3. Откройте:
    - `http://localhost:8080`
 
-### Дополнительно
-- Vite dev server в Docker:
-  - `docker compose --profile dev up -d node`
-- Тесты в Docker:
-  - `docker compose --profile test run --rm test`
-- Примечание по Docker Compose:
-  - предупреждение `No services to build` при `docker compose run ...` допустимо, если образы уже собраны.
-- Полный перезапуск с пересборкой:
-  - `docker compose down && docker compose up -d --build`
-- Остановка:
-  - `docker compose down`
-- Полный сброс с БД:
-  - `docker compose down -v`
+### Полезные Docker-команды
+- Миграции: `docker compose exec app php artisan migrate --seed`
+- Тесты: `docker compose --profile test run --rm test`
+- Логи: `docker compose logs --tail=100 app`
+- Остановка: `docker compose down`
 
-## Realtime (Reverb + Echo)
-### Локально
-- WebSocket: `ws://127.0.0.1:6001`
-- Нужны корректные переменные в `.env`:
-  - `BROADCAST_DRIVER=pusher`
-  - `REVERB_APP_ID`, `REVERB_APP_KEY`, `REVERB_APP_SECRET`
-  - `REVERB_HOST`, `REVERB_PORT`, `REVERB_SCHEME`
-  - при использовании внешнего Pusher также задайте `VITE_PUSHER_APP_CLUSTER` (иначе возможна ошибка `Options object must provide a cluster` в консоли).
+### Docker порты и БД по умолчанию
+- Приложение: `http://localhost:8080`
+- Vite dev server (профиль `dev`): `5173`
+- Reverb websocket: `6001`
+- MySQL с хоста: `127.0.0.1:3307`
+- MySQL внутри Docker-сети: `db:3306` (`social_network` / `social` / `social`)
 
-### В Docker
-- WebSocket endpoint: `ws://localhost:6001`
-- Сервис `websocket` поднимается автоматически в `docker compose up -d`.
+---
 
-## Chat API (ключевые эндпоинты)
-- Диалоги и сообщения:
-  - `GET /api/chats`
-  - `GET /api/chats/users`
-  - `POST /api/chats/direct/{user}`
-  - `GET /api/chats/{conversation}`
-  - `GET /api/chats/{conversation}/messages`
-  - `POST /api/chats/{conversation}/messages`
-  - `DELETE /api/chats/{conversation}/messages/{message}`
-  - `DELETE /api/chats/{conversation}/messages/{message}/attachments/{attachment}`
-  - `POST /api/chats/{conversation}/messages/{message}/reactions`
-- Непрочитанные:
-  - `GET /api/chats/unread-summary`
-  - `POST /api/chats/{conversation}/read`
-- Настройки хранения:
-  - `GET /api/chats/settings`
-  - `PATCH /api/chats/settings`
-- Архивы:
-  - `GET /api/chats/archives`
-  - `POST /api/chats/archives`
-  - `GET /api/chats/archives/{archive}/download`
-  - `POST /api/chats/archives/{archive}/restore`
+## Тесты
+- Все тесты: `php artisan test`
+- Feature: `php artisan test --testsuite=Feature`
+- Сборка фронта: `npm run build`
 
-## Тесты и контроль качества
-- Все тесты:
-  - `php artisan test`
-- Только feature:
-  - `php artisan test --testsuite=Feature`
-- Production build фронтенда:
-  - `npm run build`
-
-## Интеграция радио
-- По умолчанию используется каталог `https://all.api.radio-browser.info`.
-- Переменная окружения:
-  - `RADIO_BROWSER_BASE_URL=https://all.api.radio-browser.info`
-- Эндпоинты:
-  - `GET /api/radio/stations` — поиск станций;
-  - `GET /api/radio/favorites` — список избранных;
-  - `POST /api/radio/favorites` — добавить/обновить избранную станцию;
-  - `DELETE /api/radio/favorites/{stationUuid}` — удалить из избранного.
+---
 
 ## IPTV и FFmpeg
-- Для режима совместимости IPTV (транскодирование проблемных кодеков в HLS) нужен установленный `ffmpeg`.
-- Локально установите `ffmpeg` в систему:
-  - Ubuntu/Debian: `sudo apt-get update && sudo apt-get install -y ffmpeg`
-  - macOS (Homebrew): `brew install ffmpeg`
-  - Windows (Chocolatey): `choco install ffmpeg`
-- В Docker `ffmpeg` ставится в `app`-образ. После обновления Dockerfile нужна пересборка:
-  - `docker compose build app websocket test`
-  - `docker compose up -d`
-- Переменная окружения:
+- Для совместимого режима IPTV нужен `ffmpeg`.
+- Локально укажите путь при необходимости:
   - `IPTV_FFMPEG_BIN=ffmpeg`
-  - если `ffmpeg` не в `PATH`, укажите полный путь к бинарнику.
   - пример Windows: `IPTV_FFMPEG_BIN=C:\ffmpeg\bin\ffmpeg.exe`
-- Если канал висит в `Буферизация потока...`, плеер автоматически делает восстановление и перезапуск; при длительном зависании покажет явную ошибку вместо бесконечного ожидания.
+- Проверка capability API: `GET /api/iptv/transcode/capabilities`
 
-## Тестовые аккаунты (сидер)
-- Админ: `admin@example.com` / `password`
-- Пользователи:
-  - `user1@example.com` / `password`
-  - `user2@example.com` / `password`
-  - `user3@example.com` / `password`
-  - `user4@example.com` / `password`
-  - `user5@example.com` / `password`
+---
 
-## Лимиты загрузки медиа
-- API-валидация: до 200MB на файл.
-- Чат: до 6 вложений в одном сообщении.
-- Пользовательский звук уведомления в чате: до 15MB (`>2MB` работает до перезагрузки страницы, без сохранения в localStorage).
-- Docker настроен для больших файлов:
-  - Nginx `client_max_body_size=256m`
-  - PHP `upload_max_filesize=256M`
-  - PHP `post_max_size=256M`
-- Если запускаете без Docker, синхронизируйте лимиты в вашем `php.ini` и веб-сервере.
+## Тестовые аккаунты
+- `admin@example.com` / `password`
+- `user1@example.com` / `password`
+- `user2@example.com` / `password`
+- `user3@example.com` / `password`
+- `user4@example.com` / `password`
+- `user5@example.com` / `password`
 
-## Диагностика проблем
-- Очистить кеши Laravel:
-  - `php artisan optimize:clear`
-- Если фронт пустой после обновления:
-  - пересобрать docker-сборку фронта: `docker compose run --rm frontend-build`
-  - сделать hard refresh в браузере (`Ctrl+F5`)
-- Если запись голосового не стартует:
-  - проверить разрешение микрофона для `http://localhost:8080` в Chrome Site settings
-  - убедиться, что в системе не занят микрофон другим приложением
-- Если в голосовых слышны шумы/скрежет:
-  - проверить, что загружен свежий бандл фронта (`Ctrl+F5`, без старого `Chats-*.js` из кэша);
-  - выбрать корректный микрофон в настройках браузера/ОС;
-  - отключить внешние «улучшатели» звука драйвера, если они добавляют артефакты;
-  - при Docker-пересборке: `docker compose run --rm frontend-build && docker compose restart web`.
-- Если после обновления появляются ошибки чатов или новых API:
-  - применить миграции локально: `php artisan migrate`;
-  - применить миграции в Docker: `docker compose exec app php artisan migrate`.
-- Если IPTV пишет `Совместимый режим недоступен: на сервере нет FFmpeg`:
-  - проверить бинарник: `ffmpeg -version`;
-  - проверить capability API: `GET /api/iptv/transcode/capabilities`;
-  - при необходимости задать `IPTV_FFMPEG_BIN` и перезапустить PHP/FPM.
-- Если канал работает в новой вкладке, но не во встроенном плеере:
-  - частая причина: ограничения источника (`CORS`, mixed content, недоступные сегменты, временно «мертвый» CDN);
-  - включить `Авто-совместимость (codec)` и/или `Включить совместимый режим (FFmpeg)`;
-  - попробовать профиль `FFmpeg: устойчивый`;
-  - помнить, что внешние логотипы каналов могут не загружаться (`ERR_NAME_NOT_RESOLVED`, `ERR_CERT_*`, `ERR_CONNECTION_*`) — это проблемы удаленного хоста, а не проекта.
-- Проверить контейнеры:
-  - `docker compose ps`
-  - `docker compose logs --tail=100 app`
-  - `docker compose logs --tail=100 web`
-- Если видите `502 Bad Gateway`:
-  - дождаться статуса `healthy` у `app` в `docker compose ps`
-  - проверить, что `php-fpm` готов в логах `docker compose logs --tail=100 app`
-- Если в форме feedback кнопка зависает на "Отправка...":
-  - убедиться, что `DB_HOST` соответствует режиму запуска:
-    - локально обычно `127.0.0.1`
-    - в Docker обычно `db`
-  - проверить, что задан `DB_CONNECT_TIMEOUT=5` (или меньше) для быстрого fail-fast при недоступной БД
+---
+
+## Частые проблемы
+
+### `SQLSTATE[HY000] [2002] Connection refused`
+- Приложение не видит БД по `DB_HOST`/`DB_PORT`.
+- Убедитесь, что локальная служба БД запущена.
+- В локальном режиме проверьте реальный порт вашей локальной БД (`3306`/`5432`/другой).
+- В Docker режиме MySQL доступен на `127.0.0.1:3307`.
+
+### `Access denied`
+- Неверные `DB_USERNAME`/`DB_PASSWORD` в активном env-файле.
+
+### Пустая страница / сломанный фронт
+- Локально: `npm run dev` должен быть запущен.
+- Docker: пересоберите фронт `docker compose run --rm frontend-build`.
+- Сделайте hard refresh (`Ctrl+F5`).
