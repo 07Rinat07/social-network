@@ -1,7 +1,7 @@
 <template>
     <teleport to="body">
         <div v-if="isOpen && source" class="media-lightbox" @click.self="close">
-            <button class="btn btn-danger media-lightbox-close" type="button" @click="close">Закрыть</button>
+            <button class="btn btn-danger media-lightbox-close" type="button" @click="close">{{ $t('common.close') }}</button>
             <img class="media-lightbox-image" :src="source" :alt="altText">
         </div>
     </teleport>

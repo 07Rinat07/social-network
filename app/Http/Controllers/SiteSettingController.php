@@ -5,13 +5,17 @@ namespace App\Http\Controllers;
 use App\Models\SiteSetting;
 use App\Rules\NoUnsafeMarkup;
 use App\Services\SiteSettingService;
+use App\Services\WorldOverviewService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
 
 class SiteSettingController extends Controller
 {
-    public function __construct(private readonly SiteSettingService $siteSettingService)
+    public function __construct(
+        private readonly SiteSettingService $siteSettingService,
+        private readonly WorldOverviewService $worldOverviewService
+    )
     {
     }
 
@@ -125,15 +129,77 @@ class SiteSettingController extends Controller
         ]);
     }
 
-    public function homeContent(): JsonResponse
+    public function homeContent(Request $request): JsonResponse
     {
+        $locale = $this->resolveHomeContentLocale($request);
+
         return response()->json([
-            'data' => $this->siteSettingService->homePageContent(),
+            'data' => $this->siteSettingService->homePageContent($locale),
+        ]);
+    }
+
+    public function worldOverview(Request $request): JsonResponse
+    {
+        $locale = $this->resolveHomeContentLocale($request);
+
+        return response()->json([
+            'data' => $this->worldOverviewService->overview($locale),
         ]);
     }
 
     public function updateHomeContent(Request $request): JsonResponse
     {
+        $responseLocale = $this->resolveHomeContentLocale($request);
+
+        if ($request->has('locales')) {
+            $validated = $request->validate([
+                'locales' => ['required', 'array'],
+                'locales.ru' => ['required', 'array'],
+                'locales.en' => ['required', 'array'],
+                'locales.ru.badge' => ['required', 'string', 'max:80', new NoUnsafeMarkup(false)],
+                'locales.ru.hero_title' => ['required', 'string', 'max:300', new NoUnsafeMarkup(false)],
+                'locales.ru.hero_note' => ['required', 'string', 'max:3000', new NoUnsafeMarkup()],
+                'locales.ru.feature_items' => ['required', 'array', 'min:1', 'max:8'],
+                'locales.ru.feature_items.*' => ['required', 'string', 'max:220', new NoUnsafeMarkup(false)],
+                'locales.ru.feedback_title' => ['required', 'string', 'max:180', new NoUnsafeMarkup(false)],
+                'locales.ru.feedback_subtitle' => ['required', 'string', 'max:500', new NoUnsafeMarkup()],
+                'locales.en.badge' => ['required', 'string', 'max:80', new NoUnsafeMarkup(false)],
+                'locales.en.hero_title' => ['required', 'string', 'max:300', new NoUnsafeMarkup(false)],
+                'locales.en.hero_note' => ['required', 'string', 'max:3000', new NoUnsafeMarkup()],
+                'locales.en.feature_items' => ['required', 'array', 'min:1', 'max:8'],
+                'locales.en.feature_items.*' => ['required', 'string', 'max:220', new NoUnsafeMarkup(false)],
+                'locales.en.feedback_title' => ['required', 'string', 'max:180', new NoUnsafeMarkup(false)],
+                'locales.en.feedback_subtitle' => ['required', 'string', 'max:500', new NoUnsafeMarkup()],
+            ]);
+
+            $payload = [
+                'locales' => [
+                    SiteSettingService::HOME_CONTENT_LOCALE_RU => $this->normalizeHomeContentPayload(
+                        $validated['locales'][SiteSettingService::HOME_CONTENT_LOCALE_RU]
+                    ),
+                    SiteSettingService::HOME_CONTENT_LOCALE_EN => $this->normalizeHomeContentPayload(
+                        $validated['locales'][SiteSettingService::HOME_CONTENT_LOCALE_EN]
+                    ),
+                ],
+            ];
+
+            foreach ($payload['locales'] as $localeCode => $localePayload) {
+                if (($localePayload['feature_items'] ?? []) === []) {
+                    return response()->json([
+                        'message' => 'Validation failed.',
+                        'errors' => [
+                            "locales.{$localeCode}.feature_items" => ['At least one feature item is required.'],
+                        ],
+                    ], 422);
+                }
+            }
+
+            return response()->json([
+                'message' => 'Home page content updated successfully.',
+                'data' => $this->siteSettingService->setHomePageContent($payload, $responseLocale),
+            ]);
+        }
+
         $validated = $request->validate([
             'badge' => ['required', 'string', 'max:80', new NoUnsafeMarkup(false)],
             'hero_title' => ['required', 'string', 'max:300', new NoUnsafeMarkup(false)],
@@ -144,22 +210,7 @@ class SiteSettingController extends Controller
             'feedback_subtitle' => ['required', 'string', 'max:500', new NoUnsafeMarkup()],
         ]);
 
-        $normalizeSingleLine = function (string $value): string {
-            $normalized = preg_replace('/\s+/u', ' ', trim($value));
-
-            return $normalized === null ? '' : $normalized;
-        };
-
-        $normalizeMultiLine = fn (string $value): string => trim(str_replace(["\r\n", "\r"], "\n", $value));
-
-        $payload = [
-            'badge' => $normalizeSingleLine($validated['badge']),
-            'hero_title' => $normalizeSingleLine($validated['hero_title']),
-            'hero_note' => $normalizeMultiLine($validated['hero_note']),
-            'feature_items' => array_values(array_filter(array_map($normalizeSingleLine, $validated['feature_items']), fn ($item) => $item !== '')),
-            'feedback_title' => $normalizeSingleLine($validated['feedback_title']),
-            'feedback_subtitle' => $normalizeMultiLine($validated['feedback_subtitle']),
-        ];
+        $payload = $this->normalizeHomeContentPayload($validated);
 
         if ($payload['feature_items'] === []) {
             return response()->json([
@@ -172,15 +223,17 @@ class SiteSettingController extends Controller
 
         return response()->json([
             'message' => 'Home page content updated successfully.',
-            'data' => $this->siteSettingService->setHomePageContent($payload),
+            'data' => $this->siteSettingService->setHomePageContent($payload, $responseLocale),
         ]);
     }
 
-    public function resetHomeContent(): JsonResponse
+    public function resetHomeContent(Request $request): JsonResponse
     {
+        $locale = $this->resolveHomeContentLocale($request);
+
         return response()->json([
             'message' => 'Home page content reset to defaults.',
-            'data' => $this->siteSettingService->resetHomePageContent(),
+            'data' => $this->siteSettingService->resetHomePageContent($locale),
         ]);
     }
 
@@ -227,5 +280,34 @@ class SiteSettingController extends Controller
             'created_at' => $setting->created_at?->toIso8601String(),
             'updated_at' => $setting->updated_at?->toIso8601String(),
         ];
+    }
+
+    protected function normalizeHomeContentPayload(array $validated): array
+    {
+        $normalizeSingleLine = function (string $value): string {
+            $normalized = preg_replace('/\s+/u', ' ', trim($value));
+
+            return $normalized === null ? '' : $normalized;
+        };
+
+        $normalizeMultiLine = fn (string $value): string => trim(str_replace(["\r\n", "\r"], "\n", $value));
+
+        return [
+            'badge' => $normalizeSingleLine($validated['badge']),
+            'hero_title' => $normalizeSingleLine($validated['hero_title']),
+            'hero_note' => $normalizeMultiLine($validated['hero_note']),
+            'feature_items' => array_values(array_filter(array_map($normalizeSingleLine, $validated['feature_items']), fn ($item) => $item !== '')),
+            'feedback_title' => $normalizeSingleLine($validated['feedback_title']),
+            'feedback_subtitle' => $normalizeMultiLine($validated['feedback_subtitle']),
+        ];
+    }
+
+    protected function resolveHomeContentLocale(Request $request): string
+    {
+        $candidate = strtolower(trim((string) ($request->input('locale', $request->query('locale', SiteSettingService::HOME_CONTENT_DEFAULT_LOCALE)))));
+
+        return in_array($candidate, SiteSettingService::HOME_CONTENT_LOCALES, true)
+            ? $candidate
+            : SiteSettingService::HOME_CONTENT_DEFAULT_LOCALE;
     }
 }

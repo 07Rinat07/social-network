@@ -3,8 +3,10 @@
         <section class="chat-list fade-in chat-sidebar">
             <div class="chat-sidebar-head">
                 <div>
-                    <h2 class="section-title chat-sidebar-title">My chats</h2>
-                    <p class="section-subtitle chat-sidebar-subtitle">All dialogs {{ conversationCounters.all }}</p>
+                    <h2 class="section-title chat-sidebar-title">{{ $t('chats.title') }}</h2>
+                    <p class="section-subtitle chat-sidebar-subtitle">
+                        {{ $t('chats.allDialogsOnline', { all: conversationCounters.all, online: siteOnlineUsers.length }) }}
+                    </p>
                 </div>
                 <div class="chat-pane-switch">
                     <button
@@ -13,7 +15,7 @@
                         :class="leftPaneMode === 'conversations' ? 'btn-primary' : 'btn-outline'"
                         @click="setLeftPaneMode('conversations')"
                     >
-                        Диалоги
+                        {{ $t('chats.dialogs') }}
                     </button>
                     <button
                         class="btn btn-sm"
@@ -21,7 +23,7 @@
                         :class="leftPaneMode === 'users' ? 'btn-primary' : 'btn-outline'"
                         @click="setLeftPaneMode('users')"
                     >
-                        Люди
+                        {{ $t('chats.people') }}
                     </button>
                 </div>
             </div>
@@ -32,14 +34,14 @@
                     class="input-field chat-search-field"
                     v-model.trim="conversationSearch"
                     type="text"
-                    placeholder="Search..."
+                    :placeholder="$t('chats.searchPlaceholder')"
                 >
                 <input
                     v-else
                     class="input-field chat-search-field"
                     v-model.trim="userSearch"
                     type="text"
-                    placeholder="Поиск пользователей"
+                    :placeholder="$t('chats.userSearch')"
                     @input="onUserSearchInput"
                 >
 
@@ -50,7 +52,7 @@
                         :class="conversationFilter === 'all' ? 'btn-primary' : 'btn-outline'"
                         @click="setConversationFilter('all')"
                     >
-                        Все {{ conversationCounters.all }}
+                        {{ $t('chats.filterAll', { count: conversationCounters.all }) }}
                     </button>
                     <button
                         class="btn btn-sm"
@@ -58,7 +60,7 @@
                         :class="conversationFilter === 'unread' ? 'btn-primary' : 'btn-outline'"
                         @click="setConversationFilter('unread')"
                     >
-                        Непрочит. {{ conversationCounters.unread }}
+                        {{ $t('chats.filterUnread', { count: conversationCounters.unread }) }}
                     </button>
                     <button
                         class="btn btn-sm"
@@ -66,7 +68,7 @@
                         :class="conversationFilter === 'blocked' ? 'btn-primary' : 'btn-outline'"
                         @click="setConversationFilter('blocked')"
                     >
-                        Блок {{ conversationCounters.blocked }}
+                        {{ $t('chats.filterBlocked', { count: conversationCounters.blocked }) }}
                     </button>
                 </div>
             </div>
@@ -99,11 +101,18 @@
 
                     <div class="chat-item-body">
                         <div class="chat-item-row">
-                            <strong class="chat-item-title">{{ conversation.title }}</strong>
+                            <div class="chat-item-title-wrap">
+                                <strong class="chat-item-title">{{ conversation.title }}</strong>
+                                <span
+                                    v-if="conversation.type === 'direct' && isConversationPeerOnline(conversation)"
+                                    class="chat-online-dot"
+                                    :title="$t('chats.peerOnlineNow')"
+                                ></span>
+                            </div>
                             <span class="chat-item-time">{{ conversationTime(conversation) }}</span>
                         </div>
                         <p class="muted chat-item-preview">{{ messagePreview(conversation) }}</p>
-                        <p v-if="conversation.is_blocked" class="error-text chat-item-warning">Диалог заблокирован.</p>
+                        <p v-if="conversation.is_blocked" class="error-text chat-item-warning">{{ $t('chats.dialogBlocked') }}</p>
                     </div>
 
                     <div class="chat-item-side">
@@ -117,7 +126,7 @@
                             class="chat-pin-btn"
                             type="button"
                             @click.stop="toggleConversationPin(conversation.id)"
-                            :title="isConversationPinned(conversation.id) ? 'Убрать из закреплённых' : 'Закрепить диалог'"
+                            :title="isConversationPinned(conversation.id) ? $t('chats.unpinDialog') : $t('chats.pinDialog')"
                         >
                             {{ isConversationPinned(conversation.id) ? '★' : '☆' }}
                         </button>
@@ -125,7 +134,7 @@
                 </div>
 
                 <p v-if="filteredConversations.length === 0" class="muted chat-empty">
-                    Диалоги по текущему фильтру не найдены.
+                    {{ $t('chats.dialogsNotFound') }}
                 </p>
             </div>
 
@@ -141,13 +150,21 @@
                         <div>
                             <strong>{{ displayName(user) }}</strong>
                             <p class="muted chat-user-nickname" v-if="user.nickname">@{{ user.nickname }}</p>
+                            <div class="chat-user-presence-row">
+                                <span class="chat-presence-pill" :class="{ 'is-online': isUserOnline(user) }">
+                                    {{ isUserOnline(user) ? $t('chats.online') : $t('chats.offline') }}
+                                </span>
+                                <span v-if="isUserInActiveChat(user)" class="chat-presence-pill is-in-chat">
+                                    {{ $t('chats.inThisChat') }}
+                                </span>
+                            </div>
                         </div>
                     </div>
 
                     <p class="muted chat-user-status">
-                        <span v-if="isBlockedByMe(user)">Вы заблокировали этого пользователя.</span>
-                        <span v-else-if="isBlockedByUser(user)">Этот пользователь заблокировал вас.</span>
-                        <span v-else>Доступен для личного чата.</span>
+                        <span v-if="isBlockedByMe(user)">{{ $t('chats.youBlockedUser') }}</span>
+                        <span v-else-if="isBlockedByUser(user)">{{ $t('chats.userBlockedYou') }}</span>
+                        <span v-else>{{ $t('chats.directChatAvailable') }}</span>
                     </p>
 
                     <p
@@ -163,43 +180,43 @@
                             @click="startDirectChat(user)"
                             :disabled="isBlockedByMe(user) || isBlockedByUser(user)"
                         >
-                            Личный чат
+                            {{ $t('chats.directChat') }}
                         </button>
                         <button
                             v-if="!isBlockedByMe(user)"
                             class="btn btn-danger btn-sm"
                             @click="blockUser(user, 'temporary')"
                         >
-                            Блок 24ч
+                            {{ $t('chats.block24h') }}
                         </button>
                         <button
                             v-if="!isBlockedByMe(user)"
                             class="btn btn-danger btn-sm"
                             @click="blockUser(user, 'permanent')"
                         >
-                            Блок навсегда
+                            {{ $t('chats.blockForever') }}
                         </button>
                         <button
                             v-if="isBlockedByMe(user)"
                             class="btn btn-success btn-sm"
                             @click="unblockUser(user)"
                         >
-                            Разблокировать
+                            {{ $t('chats.unblock') }}
                         </button>
                     </div>
                 </div>
 
                 <p v-if="users.length === 0" class="muted chat-empty">
-                    Пользователи не найдены.
+                    {{ $t('chats.usersNotFound') }}
                 </p>
             </div>
 
             <details class="chat-sound-panel">
-                <summary>Звук уведомлений</summary>
+                <summary>{{ $t('chats.notificationSound') }}</summary>
                 <div class="form-grid chat-sound-grid">
                     <label class="muted chat-sound-toggle">
                         <input type="checkbox" v-model="notificationSettings.enabled" @change="saveNotificationSettings">
-                        Включить звук при входящих сообщениях
+                        {{ $t('chats.enableIncomingSound') }}
                     </label>
                     <select class="select-field" v-model="notificationSettings.sound" @change="saveNotificationSettings">
                         <option
@@ -209,9 +226,9 @@
                         >
                             {{ preset.label }}
                         </option>
-                        <option value="custom">Свой звук (из файла)</option>
+                        <option value="custom">{{ $t('chats.customSoundFromFile') }}</option>
                     </select>
-                    <label class="muted">Громкость: {{ notificationSettings.volume }}%</label>
+                    <label class="muted">{{ $t('chats.volumePercent', { value: notificationSettings.volume }) }}</label>
                     <input
                         type="range"
                         min="0"
@@ -225,7 +242,7 @@
                         type="button"
                         @click="previewNotificationSound"
                     >
-                        Проверить звук
+                        {{ $t('chats.testSound') }}
                     </button>
                     <input
                         class="input-field"
@@ -233,7 +250,7 @@
                         accept="audio/*"
                         @change="onCustomSoundSelected"
                     >
-                    <p class="muted chat-sound-note">Можно загрузить свой сигнал (до 15MB). Файлы больше 2MB работают до перезагрузки страницы.</p>
+                    <p class="muted chat-sound-note">{{ $t('chats.customSoundNote') }}</p>
                 </div>
             </details>
         </section>
@@ -252,11 +269,17 @@
                     </span>
                     <div>
                         <h3 class="section-title chat-window-title">
-                            {{ activeConversation ? activeConversation.title : 'Выберите чат' }}
+                            {{ activeConversation ? activeConversation.title : $t('chats.selectChat') }}
                         </h3>
                         <p class="muted chat-window-subtitle">{{ activeConversationSubtitle }}</p>
+                        <p v-if="activeConversationPresenceLine" class="muted chat-window-presence">
+                            {{ activeConversationPresenceLine }}
+                        </p>
+                        <p v-if="activeTypingStatusLine" class="chat-window-typing">
+                            {{ activeTypingStatusLine }}
+                        </p>
                         <p v-if="activeConversation && activeConversation.is_blocked" class="error-text chat-window-warning">
-                            В этом диалоге действует блокировка. Отправка сообщений недоступна.
+                            {{ $t('chats.dialogBlockedReadonly') }}
                         </p>
                     </div>
                 </div>
@@ -266,7 +289,7 @@
                         class="input-field chat-inline-search"
                         v-model.trim="messageSearch"
                         type="text"
-                        placeholder="Поиск по сообщениям"
+                        :placeholder="$t('chats.messageSearch')"
                         :disabled="!activeConversation"
                     >
                     <div class="chat-message-filter-row">
@@ -277,7 +300,7 @@
                             :disabled="!activeConversation"
                             @click="setMessageFilter('all')"
                         >
-                            Все
+                            {{ $t('chats.all') }}
                         </button>
                         <button
                             class="btn btn-sm"
@@ -286,11 +309,11 @@
                             :disabled="!activeConversation"
                             @click="setMessageFilter('files_only')"
                         >
-                            Только файлы
+                            {{ $t('chats.filesOnly') }}
                         </button>
                     </div>
                     <button class="btn btn-outline btn-sm" type="button" @click="scrollMessagesDown" :disabled="!activeConversation">
-                        Вниз
+                        {{ $t('chats.down') }}
                     </button>
                 </div>
             </header>
@@ -328,7 +351,7 @@
                                     :disabled="isMessageDeleting(message.id)"
                                     @click.stop="deleteMessage(message)"
                                 >
-                                    {{ isMessageDeleting(message.id) ? 'Удаление...' : 'Удалить' }}
+                                    {{ isMessageDeleting(message.id) ? $t('chats.deleting') : $t('common.delete') }}
                                 </button>
                             </div>
                             <div v-if="message.body" class="chat-message-body">{{ message.body }}</div>
@@ -354,7 +377,7 @@
                                         player-class="media-audio"
                                     ></MediaPlayer>
                                     <div v-else-if="attachment.type === 'file'" class="chat-file-card">
-                                        <strong class="chat-file-name">{{ attachment.original_name || 'Файл' }}</strong>
+                                        <strong class="chat-file-name">{{ attachment.original_name || $t('chats.file') }}</strong>
                                         <span class="muted chat-file-meta">
                                             {{ attachment.mime_type || 'application/octet-stream' }}
                                             <template v-if="Number(attachment.size || 0) > 0">
@@ -381,7 +404,7 @@
                                         type="button"
                                         @click.stop="downloadAttachment(attachment)"
                                     >
-                                        Скачать
+                                        {{ $t('chats.download') }}
                                     </button>
                                     <button
                                         v-if="canDeleteMessage(message)"
@@ -390,7 +413,7 @@
                                         :disabled="isAttachmentDeleting(message.id, attachment.id)"
                                         @click.stop="deleteAttachment(message, attachment)"
                                     >
-                                        {{ isAttachmentDeleting(message.id, attachment.id) ? 'Удаление...' : 'Удалить файл' }}
+                                        {{ isAttachmentDeleting(message.id, attachment.id) ? $t('chats.deleting') : $t('chats.deleteFile') }}
                                     </button>
                                 </div>
                             </div>
@@ -417,7 +440,7 @@
                                     class="chat-reaction-picker-btn"
                                     :class="{'is-active': hasMessageReactionFromMe(message, emoji)}"
                                     type="button"
-                                    :title="`Реакция ${emoji}`"
+                                    :title="$t('chats.reactionWithEmoji', { emoji })"
                                     :disabled="isMessageReactionToggling(message.id, emoji)"
                                     @click.stop="toggleMessageReaction(message, emoji)"
                                 >
@@ -427,27 +450,36 @@
                         </div>
                     </div>
 
-                    <p v-if="messages.length === 0" class="muted chat-empty">Сообщений пока нет.</p>
+                    <p v-if="messages.length === 0" class="muted chat-empty">{{ $t('chats.noMessagesYet') }}</p>
                     <p v-else-if="displayedMessages.length === 0" class="muted chat-empty">
-                        {{ messageFilter === 'files_only' ? 'Сообщений с файлами не найдено.' : 'По запросу ничего не найдено.' }}
+                        {{ messageFilter === 'files_only' ? $t('chats.noMessagesWithFiles') : $t('chats.nothingFoundByQuery') }}
                     </p>
+                    <div v-if="activeTypingStatusLine" class="chat-typing-bubble">
+                        {{ activeTypingStatusLine }}
+                    </div>
                 </template>
 
-                <p v-else class="muted chat-empty">Откройте чат, чтобы начать переписку.</p>
+                <p v-else class="muted chat-empty">{{ $t('chats.openChatToStart') }}</p>
             </div>
 
             <form class="form-grid chat-composer" @submit.prevent="sendMessage">
                 <div class="chat-composer-meta">
-                    <p class="muted">Ctrl+Enter для быстрой отправки.</p>
+                    <div class="chat-composer-hints">
+                        <p class="muted">{{ $t('chats.ctrlEnterHint') }}</p>
+                        <p v-if="composerStatusLabel" class="chat-composer-status">{{ composerStatusLabel }}</p>
+                    </div>
                     <span class="muted chat-char-counter">{{ messageBody.length }}/4000</span>
                 </div>
 
                 <textarea
                     class="textarea-field chat-composer-input"
                     v-model="messageBody"
-                    placeholder="Введите сообщение..."
+                    :placeholder="$t('chats.enterMessage')"
                     maxlength="4000"
                     :disabled="isComposerDisabled"
+                    @input="handleComposerInput"
+                    @focus="handleComposerInput"
+                    @blur="notifyTypingStopped"
                     @keydown.ctrl.enter.prevent="sendMessage"
                     @keydown.meta.enter.prevent="sendMessage"
                 ></textarea>
@@ -468,7 +500,15 @@
                         @change="onMessageFilesSelected"
                     >
                     <button class="btn btn-outline" type="button" @click="openFileDialog" :disabled="isComposerDisabled">
-                        Добавить файл/фото/видео/аудио
+                        {{ $t('chats.addFileMedia') }}
+                    </button>
+                    <button
+                        class="btn btn-outline chat-sticker-toggle"
+                        type="button"
+                        @click="toggleStickerTray"
+                        :disabled="isComposerDisabled"
+                    >
+                        {{ showStickerTray ? $t('chats.hideStickers') : $t('chats.stickers') }}
                     </button>
                     <button
                         class="btn btn-outline"
@@ -476,7 +516,7 @@
                         @click="startVoiceRecording"
                         :disabled="isComposerDisabled || isRecordingVoice || isProcessingVoice || voiceStopInProgress || !canRecordVoice"
                     >
-                        Записать голосовое
+                        {{ $t('chats.recordVoice') }}
                     </button>
                     <button
                         class="btn btn-danger"
@@ -485,7 +525,7 @@
                         :disabled="voiceStopInProgress"
                         v-if="isRecordingVoice"
                     >
-                        Остановить запись ({{ formattedVoiceRecordDuration }} / {{ formattedVoiceRecordDurationLimit }})
+                        {{ $t('chats.stopRecordingWithDuration', { current: formattedVoiceRecordDuration, limit: formattedVoiceRecordDurationLimit }) }}
                     </button>
                     <button
                         class="btn btn-outline"
@@ -494,23 +534,37 @@
                         :disabled="voiceStopInProgress"
                         v-if="isRecordingVoice"
                     >
-                        Отменить запись
+                        {{ $t('chats.cancelRecording') }}
                     </button>
                 </div>
 
+                <div v-if="showStickerTray" class="chat-sticker-tray">
+                    <button
+                        v-for="sticker in quickStickers"
+                        :key="sticker.id"
+                        type="button"
+                        class="chat-sticker-btn"
+                        @click="insertSticker(sticker)"
+                    >
+                        <span class="chat-sticker-emoji">{{ sticker.emoji }}</span>
+                        <span class="chat-sticker-label">{{ $t(sticker.labelKey) }}</span>
+                    </button>
+                    <p class="muted chat-sticker-note">{{ $t('chats.stickerHint') }}</p>
+                </div>
+
                 <p class="muted" v-if="!canRecordVoice">
-                    Запись голосовых в этом браузере недоступна. Можно отправить готовый аудиофайл.
+                    {{ $t('chats.voiceUnavailable') }}
                 </p>
                 <p class="muted" v-if="isRecordingVoice">
-                    Идёт запись голосового сообщения...
+                    {{ $t('chats.voiceRecordingNow') }}
                 </p>
                 <div
                     v-if="isRecordingVoice"
                     class="section-card chat-voice-card"
                 >
                     <div class="muted chat-voice-meta">
-                        <span>Уровень микрофона: {{ Math.round(voiceLevelPercent) }}%</span>
-                        <span>Лимит: {{ formattedVoiceRecordDurationLimit }}</span>
+                        <span>{{ $t('chats.micLevel', { value: Math.round(voiceLevelPercent) }) }}</span>
+                        <span>{{ $t('chats.limitValue', { value: formattedVoiceRecordDurationLimit }) }}</span>
                     </div>
                     <div class="chat-voice-progress chat-voice-progress-level">
                         <div
@@ -536,7 +590,7 @@
                     </div>
                 </div>
                 <p class="muted" v-if="isProcessingVoice">
-                    Обрабатываем запись...
+                    {{ $t('chats.processingRecording') }}
                 </p>
 
                 <div class="media-grid" v-if="selectedFilePreviews.length > 0">
@@ -556,7 +610,7 @@
                             player-class="media-audio"
                         ></MediaPlayer>
                         <div v-else-if="item.kind === 'file'" class="chat-file-card">
-                            <strong class="chat-file-name">{{ item.name || 'Файл' }}</strong>
+                            <strong class="chat-file-name">{{ item.name || $t('chats.file') }}</strong>
                             <span class="muted chat-file-meta">
                                 {{ item.mimeType || 'application/octet-stream' }}
                                 <template v-if="Number(item.size || 0) > 0">
@@ -582,13 +636,13 @@
                             {{ item.name }}
                         </p>
                         <button class="btn btn-danger btn-sm chat-preview-remove" type="button" @click="removeSelectedFile(item.key)">
-                            Убрать
+                            {{ $t('common.remove') }}
                         </button>
                     </div>
                 </div>
 
                 <button class="btn btn-primary chat-send-btn" type="submit" :disabled="isComposerDisabled || isSending || isRecordingVoice || isProcessingVoice || voiceStopInProgress || !canSendCurrentMessage">
-                    {{ isSending ? 'Отправка...' : 'Отправить' }}
+                    {{ isSending ? $t('common.sending') : $t('chats.send') }}
                 </button>
             </form>
         </section>
@@ -612,31 +666,39 @@
 
                     <div class="chat-inspector-grid">
                         <div class="chat-inspector-metric chat-inspector-metric--wide">
-                            <span class="muted">Тип</span>
-                            <strong>{{ activeConversation.type === 'global' ? 'Общий чат' : 'Личный чат' }}</strong>
+                            <span class="muted">{{ $t('chats.type') }}</span>
+                            <strong>{{ activeConversation.type === 'global' ? $t('chats.globalChat') : $t('chats.directChat') }}</strong>
                         </div>
                         <div class="chat-inspector-metric">
-                            <span class="muted">Участники</span>
+                            <span class="muted">{{ $t('chats.participants') }}</span>
                             <strong>{{ Array.isArray(activeConversation.participants) ? activeConversation.participants.length : 0 }}</strong>
                         </div>
                         <div class="chat-inspector-metric">
-                            <span class="muted">Непрочитано</span>
+                            <span class="muted">{{ $t('chats.unread') }}</span>
                             <strong>{{ Number(activeConversation.unread_count ?? 0) }}</strong>
+                        </div>
+                        <div class="chat-inspector-metric">
+                            <span class="muted">{{ $t('chats.onlineSite') }}</span>
+                            <strong>{{ activeConversationParticipantsOnlineCount }}</strong>
+                        </div>
+                        <div class="chat-inspector-metric">
+                            <span class="muted">{{ $t('chats.inChatNow') }}</span>
+                            <strong>{{ activeConversationParticipantsInChatCount }}</strong>
                         </div>
                     </div>
 
                     <div class="chat-inspector-actions">
                         <button class="btn btn-outline btn-sm" type="button" @click="markConversationRead(activeConversation.id)">
-                            Отметить прочитанным
+                            {{ $t('chats.markRead') }}
                         </button>
                         <button class="btn btn-outline btn-sm" type="button" @click="setLeftPaneMode('users')">
-                            Новый диалог
+                            {{ $t('chats.newDialog') }}
                         </button>
                     </div>
                 </div>
 
                 <div class="chat-inspector-card" v-if="activeConversationPeer">
-                    <h4 class="chat-inspector-card-title">Быстрые действия</h4>
+                    <h4 class="chat-inspector-card-title">{{ $t('chats.quickActions') }}</h4>
                     <div class="chat-inspector-actions">
                         <button
                             v-if="!isBlockedByMe(activeConversationPeer)"
@@ -644,7 +706,7 @@
                             type="button"
                             @click="blockUser(activeConversationPeer, 'temporary')"
                         >
-                            Блок 24ч
+                            {{ $t('chats.block24h') }}
                         </button>
                         <button
                             v-if="!isBlockedByMe(activeConversationPeer)"
@@ -652,7 +714,7 @@
                             type="button"
                             @click="blockUser(activeConversationPeer, 'permanent')"
                         >
-                            Блок навсегда
+                            {{ $t('chats.blockForever') }}
                         </button>
                         <button
                             v-if="isBlockedByMe(activeConversationPeer)"
@@ -660,7 +722,7 @@
                             type="button"
                             @click="unblockUser(activeConversationPeer)"
                         >
-                            Разблокировать
+                            {{ $t('chats.unblock') }}
                         </button>
                     </div>
                     <p v-if="isBlockedByMe(activeConversationPeer) && getMyBlockStatusLabel(activeConversationPeer)" class="muted">
@@ -669,54 +731,83 @@
                 </div>
 
                 <div class="chat-inspector-card">
-                    <h4 class="chat-inspector-card-title">Статистика диалога</h4>
+                    <h4 class="chat-inspector-card-title">{{ $t('chats.dialogStats') }}</h4>
                     <ul class="chat-stats-list">
                         <li>
-                            <span class="muted">Сообщений в окне</span>
+                            <span class="muted">{{ $t('chats.messagesInWindow') }}</span>
                             <strong>{{ messages.length }}</strong>
                         </li>
                         <li>
-                            <span class="muted">Медиа во вложениях</span>
+                            <span class="muted">{{ $t('chats.mediaInAttachments') }}</span>
                             <strong>{{ activeConversationMediaCount }}</strong>
                         </li>
                         <li>
-                            <span class="muted">Закреплён</span>
-                            <strong>{{ isConversationPinned(activeConversation.id) ? 'Да' : 'Нет' }}</strong>
+                            <span class="muted">{{ $t('chats.pinned') }}</span>
+                            <strong>{{ isConversationPinned(activeConversation.id) ? $t('admin.yes') : $t('admin.no') }}</strong>
+                        </li>
+                    </ul>
+                </div>
+
+                <div class="chat-inspector-card">
+                    <h4 class="chat-inspector-card-title">{{ $t('chats.onlineNow') }}</h4>
+                    <p class="muted">
+                        {{ $t('chats.onlineUsersCount', { count: siteOnlineUsers.length }) }}
+                    </p>
+                    <ul class="chat-online-list" v-if="siteOnlineUsers.length > 0">
+                        <li
+                            v-for="onlineUser in siteOnlineUsers"
+                            :key="`online-user-${onlineUser.id}`"
+                            class="chat-online-item"
+                        >
+                            <div class="chat-online-user">
+                                <img
+                                    v-if="avatarUrl(onlineUser)"
+                                    :src="avatarUrl(onlineUser)"
+                                    alt="avatar"
+                                    class="avatar avatar-sm"
+                                >
+                                <span v-else class="avatar avatar-sm avatar-placeholder">{{ initials(onlineUser) }}</span>
+                                <div class="chat-online-user-meta">
+                                    <strong>{{ displayName(onlineUser) }}</strong>
+                                    <p class="muted" v-if="onlineUser.nickname">@{{ onlineUser.nickname }}</p>
+                                </div>
+                            </div>
+                            <span v-if="isUserInActiveChat(onlineUser)" class="chat-presence-pill is-in-chat">{{ $t('chats.inThisChat') }}</span>
                         </li>
                     </ul>
                 </div>
             </template>
 
             <div class="chat-inspector-card" v-else>
-                <h4 class="chat-inspector-card-title">Информация</h4>
-                <p class="muted">Выберите чат слева, чтобы увидеть детали, фильтровать сообщения и управлять диалогом.</p>
+                <h4 class="chat-inspector-card-title">{{ $t('chats.info') }}</h4>
+                <p class="muted">{{ $t('chats.selectChatForDetails') }}</p>
             </div>
 
             <div class="chat-inspector-card">
-                <h4 class="chat-inspector-card-title">Хранение переписки</h4>
+                <h4 class="chat-inspector-card-title">{{ $t('chats.historyStorage') }}</h4>
                 <p class="muted chat-storage-note">
-                    Сообщения в чатах сохраняются, пока пользователь их не удалит. Эти настройки управляют содержимым архива и сроком хранения.
+                    {{ $t('chats.historyStorageNote') }}
                 </p>
 
                 <label class="chat-setting-check">
                     <input type="checkbox" v-model="chatStorageForm.save_text_messages">
-                    <span>Сохранять текст сообщений</span>
+                    <span>{{ $t('chats.saveTextMessages') }}</span>
                 </label>
                 <label class="chat-setting-check">
                     <input type="checkbox" v-model="chatStorageForm.save_media_attachments">
-                    <span>Сохранять медиа (фото/видео/аудио/gif)</span>
+                    <span>{{ $t('chats.saveMediaAttachments') }}</span>
                 </label>
                 <label class="chat-setting-check">
                     <input type="checkbox" v-model="chatStorageForm.save_file_attachments">
-                    <span>Сохранять файлы (документы/архивы)</span>
+                    <span>{{ $t('chats.saveFileAttachments') }}</span>
                 </label>
                 <label class="chat-setting-check">
                     <input type="checkbox" v-model="chatStorageForm.auto_archive_enabled">
-                    <span>Разрешить автоматическое архивирование</span>
+                    <span>{{ $t('chats.enableAutoArchive') }}</span>
                 </label>
 
                 <div class="chat-setting-inline">
-                    <label for="chatRetentionDays" class="muted">Срок хранения (дни)</label>
+                    <label for="chatRetentionDays" class="muted">{{ $t('chats.retentionDays') }}</label>
                     <input
                         id="chatRetentionDays"
                         class="input-field"
@@ -725,7 +816,7 @@
                         max="3650"
                         step="1"
                         v-model.trim="chatStorageForm.retention_days"
-                        placeholder="Пусто = бессрочно"
+                        :placeholder="$t('chats.emptyUnlimited')"
                     >
                 </div>
 
@@ -736,7 +827,7 @@
                         :disabled="isSavingChatStorageSettings || isLoadingChatStorageSettings"
                         @click="saveChatStorageSettings"
                     >
-                        {{ isSavingChatStorageSettings ? 'Сохранение...' : 'Сохранить настройки' }}
+                        {{ isSavingChatStorageSettings ? $t('admin.saving') : $t('chats.saveSettings') }}
                     </button>
                     <button
                         class="btn btn-outline btn-sm"
@@ -744,13 +835,13 @@
                         :disabled="isSavingChatStorageSettings || isLoadingChatStorageSettings"
                         @click="resetChatStorageForm"
                     >
-                        Сбросить
+                        {{ $t('chats.reset') }}
                     </button>
                 </div>
             </div>
 
             <div class="chat-inspector-card">
-                <h4 class="chat-inspector-card-title">Архивы чатов</h4>
+                <h4 class="chat-inspector-card-title">{{ $t('chats.chatArchives') }}</h4>
 
                 <div class="chat-inspector-actions">
                     <button
@@ -759,7 +850,7 @@
                         :disabled="archiveCreateScopeInProgress === 'all'"
                         @click="createChatArchive('all')"
                     >
-                        {{ archiveCreateScopeInProgress === 'all' ? 'Создание...' : 'Архив всех чатов' }}
+                        {{ archiveCreateScopeInProgress === 'all' ? $t('chats.creating') : $t('chats.archiveAllChats') }}
                     </button>
                     <button
                         class="btn btn-outline btn-sm"
@@ -767,12 +858,12 @@
                         :disabled="!activeConversation || archiveCreateScopeInProgress === 'conversation'"
                         @click="createChatArchive('conversation')"
                     >
-                        {{ archiveCreateScopeInProgress === 'conversation' ? 'Создание...' : 'Архив текущего чата' }}
+                        {{ archiveCreateScopeInProgress === 'conversation' ? $t('chats.creating') : $t('chats.archiveCurrentChat') }}
                     </button>
                 </div>
 
-                <p v-if="isLoadingChatArchives" class="muted">Загружаем архивы...</p>
-                <p v-else-if="chatArchives.length === 0" class="muted">Архивов пока нет.</p>
+                <p v-if="isLoadingChatArchives" class="muted">{{ $t('chats.loadingArchives') }}</p>
+                <p v-else-if="chatArchives.length === 0" class="muted">{{ $t('chats.noArchivesYet') }}</p>
 
                 <ul v-else class="chat-archive-list">
                     <li v-for="archive in chatArchives" :key="archive.id" class="chat-archive-item">
@@ -781,10 +872,10 @@
                             <span class="muted">{{ formatDateTime(archive.created_at) }}</span>
                         </div>
                         <p class="muted chat-archive-meta">
-                            Сообщений: {{ archive.messages_count }} · Чатов: {{ archive.conversations_count }}
+                            {{ $t('chats.archiveMeta', { messages: archive.messages_count, chats: archive.conversations_count }) }}
                         </p>
                         <p v-if="archive.restored_at" class="muted chat-archive-meta">
-                            Восстановлен: {{ formatDateTime(archive.restored_at) }}
+                            {{ $t('chats.restoredAt', { date: formatDateTime(archive.restored_at) }) }}
                         </p>
 
                         <div class="chat-inspector-actions">
@@ -794,7 +885,7 @@
                                 :disabled="isArchiveDownloading(archive.id)"
                                 @click="downloadChatArchive(archive)"
                             >
-                                {{ isArchiveDownloading(archive.id) ? 'Скачивание...' : 'Скачать' }}
+                                {{ isArchiveDownloading(archive.id) ? $t('chats.downloading') : $t('chats.download') }}
                             </button>
                             <button
                                 class="btn btn-outline btn-sm"
@@ -802,7 +893,7 @@
                                 :disabled="isArchiveRestoring(archive.id)"
                                 @click="restoreChatArchive(archive)"
                             >
-                                {{ isArchiveRestoring(archive.id) ? 'Восстановление...' : 'Восстановить' }}
+                                {{ isArchiveRestoring(archive.id) ? $t('chats.restoring') : $t('chats.restore') }}
                             </button>
                         </div>
                     </li>
@@ -832,19 +923,19 @@ const LEGACY_NOTIFICATION_SOUND_MAP = {
 }
 
 const NOTIFICATION_SOUND_PRESETS = [
-    { id: 'beep_short', label: 'Короткий сигнал', url: '/sounds/notifications/beep_short.ogg' },
-    { id: 'pop', label: 'Pop', url: '/sounds/notifications/pop.ogg' },
-    { id: 'swoosh', label: 'Swoosh', url: '/sounds/notifications/swoosh.ogg' },
-    { id: 'cartoon_boing', label: 'Boing', url: '/sounds/notifications/cartoon_boing.ogg' },
-    { id: 'wood_plank_flicks', label: 'Деревянный клик', url: '/sounds/notifications/wood_plank_flicks.ogg' },
-    { id: 'slide_whistle', label: 'Свисток', url: '/sounds/notifications/slide_whistle.ogg' },
-    { id: 'clang_and_wobble', label: 'Clang Wobble', url: '/sounds/notifications/clang_and_wobble.ogg' },
-    { id: 'concussive_hit_guitar_boing', label: 'Guitar Boing', url: '/sounds/notifications/concussive_hit_guitar_boing.ogg' },
-    { id: 'alarm_clock', label: 'Будильник', url: '/sounds/notifications/alarm_clock.ogg' },
-    { id: 'cartoon_cowbell', label: 'Cowbell', url: '/sounds/notifications/cartoon_cowbell.ogg' },
-    { id: 'wood_pecker', label: 'Wood Pecker', url: '/sounds/notifications/wood_pecker.ogg' },
-    { id: 'medium_bell_ringing_near', label: 'Колокольчик', url: '/sounds/notifications/medium_bell_ringing_near.ogg' },
-    { id: 'digital_watch_alarm_long', label: 'Digital Alarm', url: '/sounds/notifications/digital_watch_alarm_long.ogg' },
+    { id: 'beep_short', labelKey: 'chats.soundBeepShort', url: '/sounds/notifications/beep_short.ogg' },
+    { id: 'pop', labelKey: 'chats.soundPop', url: '/sounds/notifications/pop.ogg' },
+    { id: 'swoosh', labelKey: 'chats.soundSwoosh', url: '/sounds/notifications/swoosh.ogg' },
+    { id: 'cartoon_boing', labelKey: 'chats.soundBoing', url: '/sounds/notifications/cartoon_boing.ogg' },
+    { id: 'wood_plank_flicks', labelKey: 'chats.soundWoodClick', url: '/sounds/notifications/wood_plank_flicks.ogg' },
+    { id: 'slide_whistle', labelKey: 'chats.soundWhistle', url: '/sounds/notifications/slide_whistle.ogg' },
+    { id: 'clang_and_wobble', labelKey: 'chats.soundClangWobble', url: '/sounds/notifications/clang_and_wobble.ogg' },
+    { id: 'concussive_hit_guitar_boing', labelKey: 'chats.soundGuitarBoing', url: '/sounds/notifications/concussive_hit_guitar_boing.ogg' },
+    { id: 'alarm_clock', labelKey: 'chats.soundAlarmClock', url: '/sounds/notifications/alarm_clock.ogg' },
+    { id: 'cartoon_cowbell', labelKey: 'chats.soundCowbell', url: '/sounds/notifications/cartoon_cowbell.ogg' },
+    { id: 'wood_pecker', labelKey: 'chats.soundWoodPecker', url: '/sounds/notifications/wood_pecker.ogg' },
+    { id: 'medium_bell_ringing_near', labelKey: 'chats.soundBell', url: '/sounds/notifications/medium_bell_ringing_near.ogg' },
+    { id: 'digital_watch_alarm_long', labelKey: 'chats.soundDigitalAlarm', url: '/sounds/notifications/digital_watch_alarm_long.ogg' },
 ]
 
 const NOTIFICATION_SOUND_PRESET_IDS = new Set(NOTIFICATION_SOUND_PRESETS.map((preset) => preset.id))
@@ -882,7 +973,24 @@ export default {
             deletingAttachmentKeys: [],
             togglingMessageReactionKeys: [],
             subscribedChannels: {},
+            sitePresenceSubscribed: false,
+            siteOnlineUsers: [],
+            activeConversationOnlineUsers: [],
+            activeConversationPresenceChannelName: '',
+            typingStateByConversation: {},
+            typingExpireTimerIds: {},
+            typingIdleTimerId: null,
+            typingLastSentAt: 0,
             emojis: ['😀', '🔥', '❤️', '😂', '👏', '😎', '👍', '🎉', '🤝', '🤩'],
+            showStickerTray: false,
+            quickStickers: [
+                { id: 'wave', emoji: '👋✨', labelKey: 'chats.stickerWave', value: '👋✨😊' },
+                { id: 'sun', emoji: '🌞💬', labelKey: 'chats.stickerSun', value: '🌞💬🚀' },
+                { id: 'party', emoji: '🎉🪩', labelKey: 'chats.stickerParty', value: '🎉🪩🥳' },
+                { id: 'support', emoji: '🫶🤝', labelKey: 'chats.stickerSupport', value: '🫶🤝💙' },
+                { id: 'laugh', emoji: '😂🔥', labelKey: 'chats.stickerLaugh', value: '😂🔥🤣' },
+                { id: 'love', emoji: '💖🌸', labelKey: 'chats.stickerLove', value: '💖🌸✨' },
+            ],
             messageReactionEmojis: CHAT_MESSAGE_REACTION_EMOJIS,
             canRecordVoice: false,
             isRecordingVoice: false,
@@ -942,7 +1050,164 @@ export default {
         },
 
         notificationSoundPresets() {
-            return NOTIFICATION_SOUND_PRESETS
+            return NOTIFICATION_SOUND_PRESETS.map((preset) => ({
+                ...preset,
+                label: this.$t(preset.labelKey),
+            }))
+        },
+
+        onlineUserIdsSet() {
+            return new Set(this.siteOnlineUsers.map((user) => Number(user?.id)).filter((id) => Number.isFinite(id) && id > 0))
+        },
+
+        activeConversationOnlineIdsSet() {
+            return new Set(this.activeConversationOnlineUsers
+                .map((user) => Number(user?.id))
+                .filter((id) => Number.isFinite(id) && id > 0))
+        },
+
+        activeConversationTypingEntries() {
+            const conversationId = Number(this.activeConversation?.id ?? 0)
+            if (!Number.isFinite(conversationId) || conversationId <= 0) {
+                return []
+            }
+
+            const state = this.typingStateByConversation?.[conversationId]
+            if (!state || typeof state !== 'object') {
+                return []
+            }
+
+            return Object.values(state)
+                .filter((entry) => Number(entry?.id) > 0)
+                .filter((entry) => Number(entry.id) !== Number(this.currentUser?.id ?? 0))
+                .sort((first, second) => String(first.display_name || '').localeCompare(String(second.display_name || ''), 'ru'))
+        },
+
+        activeTypingStatusLine() {
+            const entries = this.activeConversationTypingEntries
+            if (entries.length === 0) {
+                return ''
+            }
+
+            if (entries.length === 1) {
+                const entry = entries[0]
+                const name = entry.display_name || this.$t('chats.peer')
+                const preview = String(entry.preview || '').trim()
+                const isSending = Boolean(entry.is_sending)
+                const hasAttachments = Boolean(entry.has_attachments)
+
+                if (isSending && hasAttachments) {
+                    return this.$t('chats.peerSendingWithAttachments', { name })
+                }
+
+                if (isSending) {
+                    return this.$t('chats.peerSendingMessage', { name })
+                }
+
+                if (preview !== '') {
+                    return this.$t('chats.peerTypingPreview', { name, preview })
+                }
+
+                if (hasAttachments) {
+                    return this.$t('chats.peerAttachingFiles', { name })
+                }
+
+                return this.$t('chats.peerTyping', { name })
+            }
+
+            const names = entries.slice(0, 2).map((entry) => entry.display_name || this.$t('chats.participant'))
+            const suffix = entries.length > 2 ? this.$t('chats.andMoreCount', { count: entries.length - 2 }) : ''
+
+            return this.$t('chats.peopleTyping', { names: names.join(', '), suffix })
+        },
+
+        activeConversationPresenceLine() {
+            if (!this.activeConversation) {
+                return ''
+            }
+
+            const onlineOnSite = this.activeConversationParticipantsOnlineCount
+            const onlineInChat = this.activeConversationParticipantsInChatCount
+
+            if (this.activeConversation.type === 'direct') {
+                const peer = this.activeConversationPeer
+                if (!peer) {
+                    return ''
+                }
+
+                const peerOnline = this.isUserOnline(peer)
+                const peerInChat = this.isUserInActiveChat(peer)
+
+                return this.$t('chats.peerStatusLine', {
+                    online: peerOnline ? this.$t('chats.online') : this.$t('chats.notOnline'),
+                    inChat: peerInChat ? this.$t('admin.yes') : this.$t('admin.no'),
+                })
+            }
+
+            return this.$t('chats.participantsPresenceLine', {
+                siteOnline: onlineOnSite,
+                total: this.activeConversationParticipantsTotal,
+                inChat: onlineInChat,
+            })
+        },
+
+        activeConversationParticipantIds() {
+            const participants = Array.isArray(this.activeConversation?.participants)
+                ? this.activeConversation.participants
+                : []
+
+            return participants
+                .map((participant) => Number(participant?.id))
+                .filter((id) => Number.isFinite(id) && id > 0)
+        },
+
+        activeConversationParticipantsTotal() {
+            return this.activeConversationParticipantIds.length
+        },
+
+        activeConversationParticipantsOnlineCount() {
+            const participantIds = new Set(this.activeConversationParticipantIds)
+            if (participantIds.size === 0) {
+                return 0
+            }
+
+            return this.siteOnlineUsers
+                .filter((user) => participantIds.has(Number(user.id)))
+                .length
+        },
+
+        activeConversationParticipantsInChatCount() {
+            const participantIds = new Set(this.activeConversationParticipantIds)
+            if (participantIds.size === 0) {
+                return 0
+            }
+
+            return this.activeConversationOnlineUsers
+                .filter((user) => participantIds.has(Number(user.id)))
+                .length
+        },
+
+        composerStatusLabel() {
+            if (this.isSending) {
+                return this.selectedFiles.length > 0
+                    ? this.$t('chats.sendingMessageWithFiles')
+                    : this.$t('chats.sendingMessage')
+            }
+
+            if (this.isRecordingVoice) {
+                return this.$t('chats.voiceRecordingNow')
+            }
+
+            if (this.isProcessingVoice) {
+                return this.$t('chats.preparingVoiceToSend')
+            }
+
+            const activeTypingLine = this.activeTypingStatusLine
+            if (activeTypingLine !== '') {
+                return activeTypingLine
+            }
+
+            return ''
         },
 
         conversationCounters() {
@@ -1006,7 +1271,7 @@ export default {
 
         activeConversationSubtitle() {
             if (!this.activeConversation) {
-                return 'Слева выберите общий или личный чат.'
+                return this.$t('chats.pickGlobalOrDirect')
             }
 
             const participantsCount = Array.isArray(this.activeConversation.participants)
@@ -1014,18 +1279,20 @@ export default {
                 : 0
 
             if (this.activeConversation.is_blocked) {
-                return 'Диалог открыт только для чтения до снятия блокировки.'
+                return this.$t('chats.readonlyUntilUnblock')
             }
 
             if (this.activeConversation.type === 'global') {
-                return `Общий канал · участников: ${participantsCount > 0 ? participantsCount : 'много'}`
+                return this.$t('chats.globalChannelParticipants', {
+                    count: participantsCount > 0 ? participantsCount : this.$t('chats.many'),
+                })
             }
 
             if (this.activeConversationPeer?.nickname) {
-                return `@${this.activeConversationPeer.nickname} · realtime-диалог`
+                return this.$t('chats.realtimeDialogWithNickname', { nickname: this.activeConversationPeer.nickname })
             }
 
-            return `Личный диалог · участников: ${participantsCount}`
+            return this.$t('chats.directDialogParticipants', { count: participantsCount })
         },
 
         activeConversationMediaCount() {
@@ -1069,6 +1336,7 @@ export default {
         this.loadChatUiSettings()
         this.canRecordVoice = this.isVoiceRecordingSupported()
         await this.loadCurrentUser()
+        this.syncSitePresenceChannel()
         await Promise.all([
             this.loadConversations(),
             this.loadUsers(),
@@ -1084,12 +1352,15 @@ export default {
 
     beforeUnmount() {
         this.stopVoiceRecording(true)
+        this.notifyTypingStopped()
         if (this.userSearchDebounceTimerId) {
             window.clearTimeout(this.userSearchDebounceTimerId)
             this.userSearchDebounceTimerId = null
         }
         this.revokeRuntimeCustomNotificationSoundUrl()
         this.unsubscribeAllChannels()
+        this.unsubscribePresenceChannels()
+        this.clearTypingState()
         this.clearSelectedFiles()
     },
 
@@ -1102,8 +1373,409 @@ export default {
             resetImagePreviewFallback(event)
         },
 
-        openMedia(url, alt = 'Фото') {
-            this.$refs.mediaLightbox?.open(url, alt)
+        openMedia(url, alt = null) {
+            this.$refs.mediaLightbox?.open(url, alt || this.$t('chats.photo'))
+        },
+
+        handleComposerInput() {
+            this.notifyTypingActivity()
+        },
+
+        normalizePresenceUser(user) {
+            const id = Number(user?.id ?? 0)
+            if (!Number.isFinite(id) || id <= 0) {
+                return null
+            }
+
+            const displayName = String(user?.display_name || user?.name || this.$t('common.user')).trim() || this.$t('common.user')
+
+            return {
+                id,
+                name: String(user?.name || displayName),
+                display_name: displayName,
+                nickname: user?.nickname || null,
+                avatar_url: user?.avatar_url || null,
+                is_admin: Boolean(user?.is_admin),
+            }
+        },
+
+        normalizePresenceUsers(users) {
+            const byId = new Map()
+            const source = Array.isArray(users) ? users : []
+
+            for (const user of source) {
+                const normalized = this.normalizePresenceUser(user)
+                if (!normalized) {
+                    continue
+                }
+
+                byId.set(normalized.id, normalized)
+            }
+
+            return Array.from(byId.values()).sort((first, second) => {
+                return String(first.display_name).localeCompare(String(second.display_name), 'ru')
+            })
+        },
+
+        syncSitePresenceChannel() {
+            if (typeof window === 'undefined' || !window.Echo || this.sitePresenceSubscribed) {
+                return
+            }
+
+            try {
+                window.Echo.join('site.online')
+                    .here((users) => {
+                        this.siteOnlineUsers = this.normalizePresenceUsers(users)
+                    })
+                    .joining((user) => {
+                        const incoming = this.normalizePresenceUser(user)
+                        if (!incoming) {
+                            return
+                        }
+
+                        const next = [...this.siteOnlineUsers.filter((item) => Number(item.id) !== incoming.id), incoming]
+                        this.siteOnlineUsers = this.normalizePresenceUsers(next)
+                    })
+                    .leaving((user) => {
+                        const userId = Number(user?.id ?? 0)
+                        if (!Number.isFinite(userId) || userId <= 0) {
+                            return
+                        }
+
+                        this.siteOnlineUsers = this.siteOnlineUsers.filter((item) => Number(item.id) !== userId)
+                    })
+
+                this.sitePresenceSubscribed = true
+            } catch (error) {
+                this.sitePresenceSubscribed = false
+            }
+        },
+
+        syncActiveConversationPresenceChannel() {
+            if (typeof window === 'undefined' || !window.Echo) {
+                this.activeConversationOnlineUsers = []
+                this.activeConversationPresenceChannelName = ''
+                return
+            }
+
+            const nextConversationId = Number(this.activeConversation?.id ?? 0)
+            const nextChannelName = Number.isFinite(nextConversationId) && nextConversationId > 0
+                ? `chat.presence.${nextConversationId}`
+                : ''
+
+            if (this.activeConversationPresenceChannelName && this.activeConversationPresenceChannelName !== nextChannelName) {
+                window.Echo.leave(this.activeConversationPresenceChannelName)
+                this.activeConversationPresenceChannelName = ''
+                this.activeConversationOnlineUsers = []
+            }
+
+            if (nextChannelName === '' || this.activeConversationPresenceChannelName === nextChannelName) {
+                return
+            }
+
+            try {
+                window.Echo.join(nextChannelName)
+                    .here((users) => {
+                        this.activeConversationOnlineUsers = this.normalizePresenceUsers(users)
+                    })
+                    .joining((user) => {
+                        const incoming = this.normalizePresenceUser(user)
+                        if (!incoming) {
+                            return
+                        }
+
+                        const next = [...this.activeConversationOnlineUsers.filter((item) => Number(item.id) !== incoming.id), incoming]
+                        this.activeConversationOnlineUsers = this.normalizePresenceUsers(next)
+                    })
+                    .leaving((user) => {
+                        const userId = Number(user?.id ?? 0)
+                        if (!Number.isFinite(userId) || userId <= 0) {
+                            return
+                        }
+
+                        this.activeConversationOnlineUsers = this.activeConversationOnlineUsers
+                            .filter((item) => Number(item.id) !== userId)
+                    })
+
+                this.activeConversationPresenceChannelName = nextChannelName
+            } catch (error) {
+                this.activeConversationPresenceChannelName = ''
+                this.activeConversationOnlineUsers = []
+            }
+        },
+
+        unsubscribePresenceChannels() {
+            if (typeof window !== 'undefined' && window.Echo) {
+                if (this.sitePresenceSubscribed) {
+                    window.Echo.leave('site.online')
+                }
+
+                if (this.activeConversationPresenceChannelName) {
+                    window.Echo.leave(this.activeConversationPresenceChannelName)
+                }
+            }
+
+            this.sitePresenceSubscribed = false
+            this.activeConversationPresenceChannelName = ''
+            this.siteOnlineUsers = []
+            this.activeConversationOnlineUsers = []
+        },
+
+        isUserOnline(user) {
+            const userId = Number(user?.id ?? 0)
+            if (!Number.isFinite(userId) || userId <= 0) {
+                return false
+            }
+
+            return this.onlineUserIdsSet.has(userId)
+        },
+
+        isUserInActiveChat(user) {
+            const userId = Number(user?.id ?? 0)
+            if (!Number.isFinite(userId) || userId <= 0) {
+                return false
+            }
+
+            return this.activeConversationOnlineIdsSet.has(userId)
+        },
+
+        isConversationPeerOnline(conversation) {
+            const peer = this.conversationPeer(conversation)
+
+            return Boolean(peer && this.isUserOnline(peer))
+        },
+
+        normalizeTypingPreview(value) {
+            const text = String(value || '').replace(/\s+/g, ' ').trim()
+            if (text === '') {
+                return ''
+            }
+
+            const maxLength = 86
+            if (text.length <= maxLength) {
+                return text
+            }
+
+            return `${text.slice(0, maxLength)}...`
+        },
+
+        resolveTypingChannelName(conversationId = null) {
+            const resolvedConversationId = Number(conversationId ?? this.activeConversation?.id ?? 0)
+            if (!Number.isFinite(resolvedConversationId) || resolvedConversationId <= 0) {
+                return ''
+            }
+
+            return this.subscribedChannels?.[resolvedConversationId] || `chat.conversation.${resolvedConversationId}`
+        },
+
+        sendTypingWhisper(isTyping, options = {}) {
+            if (typeof window === 'undefined' || !window.Echo || !this.currentUser) {
+                return
+            }
+
+            const conversationId = Number(options?.conversationId ?? this.activeConversation?.id ?? 0)
+            if (!Number.isFinite(conversationId) || conversationId <= 0) {
+                return
+            }
+
+            const channelName = this.resolveTypingChannelName(conversationId)
+            if (channelName === '') {
+                return
+            }
+
+            const hasAttachments = this.selectedFiles.length > 0
+            const payload = {
+                conversation_id: conversationId,
+                user_id: Number(this.currentUser.id),
+                display_name: this.displayName(this.currentUser),
+                is_typing: Boolean(isTyping),
+                has_attachments: hasAttachments,
+                is_sending: Boolean(options?.isSending),
+                preview: Boolean(isTyping) ? this.normalizeTypingPreview(this.messageBody) : '',
+                at: Date.now(),
+            }
+
+            try {
+                window.Echo.private(channelName).whisper('typing', payload)
+            } catch (error) {
+                // Ignore whisper transport glitches to avoid blocking chat input.
+            }
+        },
+
+        notifyTypingActivity(options = {}) {
+            if (this.isComposerDisabled || !this.activeConversation) {
+                return
+            }
+
+            const hasDraft = this.messageBody.trim() !== ''
+                || this.selectedFiles.length > 0
+                || this.isRecordingVoice
+                || this.isProcessingVoice
+
+            const now = Date.now()
+            const minIntervalMs = 700
+            const shouldSendNow = Boolean(options?.immediate) || (now - Number(this.typingLastSentAt || 0) >= minIntervalMs)
+
+            if (hasDraft && shouldSendNow) {
+                this.sendTypingWhisper(true, {
+                    isSending: Boolean(options?.isSending),
+                })
+                this.typingLastSentAt = now
+            }
+
+            if (this.typingIdleTimerId) {
+                window.clearTimeout(this.typingIdleTimerId)
+                this.typingIdleTimerId = null
+            }
+
+            if (hasDraft) {
+                this.typingIdleTimerId = window.setTimeout(() => {
+                    this.sendTypingWhisper(false)
+                    this.typingLastSentAt = Date.now()
+                }, 2600)
+                return
+            }
+
+            if (shouldSendNow) {
+                this.sendTypingWhisper(false)
+                this.typingLastSentAt = now
+            }
+        },
+
+        notifyTypingStopped(conversationId = null) {
+            if (this.typingIdleTimerId) {
+                window.clearTimeout(this.typingIdleTimerId)
+                this.typingIdleTimerId = null
+            }
+
+            this.sendTypingWhisper(false, { conversationId })
+            this.typingLastSentAt = Date.now()
+        },
+
+        typingStateKey(conversationId, userId) {
+            return `${Number(conversationId)}:${Number(userId)}`
+        },
+
+        clearTypingExpireTimer(timerKey) {
+            const timerId = this.typingExpireTimerIds[timerKey]
+            if (timerId) {
+                window.clearTimeout(timerId)
+            }
+
+            if (Object.prototype.hasOwnProperty.call(this.typingExpireTimerIds, timerKey)) {
+                const next = { ...this.typingExpireTimerIds }
+                delete next[timerKey]
+                this.typingExpireTimerIds = next
+            }
+        },
+
+        removeTypingStateEntry(conversationId, userId) {
+            const normalizedConversationId = Number(conversationId)
+            const normalizedUserId = Number(userId)
+            if (!Number.isFinite(normalizedConversationId) || normalizedConversationId <= 0 || !Number.isFinite(normalizedUserId) || normalizedUserId <= 0) {
+                return
+            }
+
+            const currentState = this.typingStateByConversation?.[normalizedConversationId]
+            if (!currentState || typeof currentState !== 'object' || !Object.prototype.hasOwnProperty.call(currentState, normalizedUserId)) {
+                this.clearTypingExpireTimer(this.typingStateKey(normalizedConversationId, normalizedUserId))
+                return
+            }
+
+            const nextConversationState = { ...currentState }
+            delete nextConversationState[normalizedUserId]
+
+            const nextTypingState = { ...this.typingStateByConversation }
+            if (Object.keys(nextConversationState).length === 0) {
+                delete nextTypingState[normalizedConversationId]
+            } else {
+                nextTypingState[normalizedConversationId] = nextConversationState
+            }
+
+            this.typingStateByConversation = nextTypingState
+            this.clearTypingExpireTimer(this.typingStateKey(normalizedConversationId, normalizedUserId))
+        },
+
+        clearConversationTypingState(conversationId) {
+            const normalizedConversationId = Number(conversationId)
+            if (!Number.isFinite(normalizedConversationId) || normalizedConversationId <= 0) {
+                return
+            }
+
+            const nextTypingState = { ...this.typingStateByConversation }
+            if (Object.prototype.hasOwnProperty.call(nextTypingState, normalizedConversationId)) {
+                delete nextTypingState[normalizedConversationId]
+                this.typingStateByConversation = nextTypingState
+            }
+
+            const keyPrefix = `${normalizedConversationId}:`
+            for (const timerKey of Object.keys(this.typingExpireTimerIds)) {
+                if (!timerKey.startsWith(keyPrefix)) {
+                    continue
+                }
+
+                this.clearTypingExpireTimer(timerKey)
+            }
+        },
+
+        handleTypingWhisper(conversationId, payload) {
+            const normalizedConversationId = Number(conversationId ?? payload?.conversation_id ?? 0)
+            const senderId = Number(payload?.user_id ?? 0)
+
+            if (!Number.isFinite(normalizedConversationId) || normalizedConversationId <= 0) {
+                return
+            }
+
+            if (!Number.isFinite(senderId) || senderId <= 0 || senderId === Number(this.currentUser?.id ?? 0)) {
+                return
+            }
+
+            if (!Boolean(payload?.is_typing)) {
+                this.removeTypingStateEntry(normalizedConversationId, senderId)
+                return
+            }
+
+            const currentConversationState = this.typingStateByConversation?.[normalizedConversationId] || {}
+            const nextConversationState = {
+                ...currentConversationState,
+                [senderId]: {
+                    id: senderId,
+                    display_name: String(payload?.display_name || this.$t('chats.peer')),
+                    preview: this.normalizeTypingPreview(payload?.preview),
+                    has_attachments: Boolean(payload?.has_attachments),
+                    is_sending: Boolean(payload?.is_sending),
+                    updated_at: Date.now(),
+                },
+            }
+
+            this.typingStateByConversation = {
+                ...this.typingStateByConversation,
+                [normalizedConversationId]: nextConversationState,
+            }
+
+            const timerKey = this.typingStateKey(normalizedConversationId, senderId)
+            this.clearTypingExpireTimer(timerKey)
+            this.typingExpireTimerIds = {
+                ...this.typingExpireTimerIds,
+                [timerKey]: window.setTimeout(() => {
+                    this.removeTypingStateEntry(normalizedConversationId, senderId)
+                }, 7000),
+            }
+        },
+
+        clearTypingState() {
+            if (this.typingIdleTimerId) {
+                window.clearTimeout(this.typingIdleTimerId)
+                this.typingIdleTimerId = null
+            }
+
+            for (const timerId of Object.values(this.typingExpireTimerIds)) {
+                window.clearTimeout(timerId)
+            }
+
+            this.typingExpireTimerIds = {}
+            this.typingStateByConversation = {}
+            this.typingLastSentAt = 0
         },
 
         downloadAttachment(attachment) {
@@ -1198,7 +1870,7 @@ export default {
                 this.chatStorageSettings = normalized
                 this.applyChatStorageSettingsToForm(normalized)
             } catch (error) {
-                alert(this.resolveApiMessage(error, 'Не удалось загрузить настройки хранения чатов.'))
+                alert(this.resolveApiMessage(error, this.$t('chats.loadStorageSettingsFailed')))
             } finally {
                 this.isLoadingChatStorageSettings = false
             }
@@ -1216,7 +1888,7 @@ export default {
                 const maxRetentionDays = Number(this.chatStorageSettings?.max_retention_days ?? 3650)
 
                 if (!Number.isInteger(parsed) || parsed < 1 || parsed > maxRetentionDays) {
-                    alert(`Срок хранения должен быть целым числом от 1 до ${maxRetentionDays}.`)
+                    alert(this.$t('chats.retentionRangeError', { max: maxRetentionDays }))
                     return
                 }
 
@@ -1240,7 +1912,7 @@ export default {
                 this.chatStorageSettings = normalized
                 this.applyChatStorageSettingsToForm(normalized)
             } catch (error) {
-                alert(this.resolveApiMessage(error, 'Не удалось сохранить настройки хранения чатов.'))
+                alert(this.resolveApiMessage(error, this.$t('chats.saveStorageSettingsFailed')))
             } finally {
                 this.isSavingChatStorageSettings = false
             }
@@ -1258,7 +1930,7 @@ export default {
             return {
                 id: archiveId,
                 scope: String(archive?.scope || 'all'),
-                title: String(archive?.title || `Архив #${archiveId}`),
+                title: String(archive?.title || this.$t('chats.archiveWithId', { id: archiveId })),
                 messages_count: Number.isInteger(messagesCount) && messagesCount >= 0 ? messagesCount : 0,
                 conversations_count: Number.isInteger(conversationsCount) && conversationsCount >= 0 ? conversationsCount : 0,
                 created_at: archive?.created_at || null,
@@ -1297,7 +1969,7 @@ export default {
                     .filter((archive) => archive !== null)
                     .sort((first, second) => Number(second.id) - Number(first.id))
             } catch (error) {
-                alert(this.resolveApiMessage(error, 'Не удалось загрузить список архивов чатов.'))
+                alert(this.resolveApiMessage(error, this.$t('chats.loadArchivesFailed')))
             } finally {
                 this.isLoadingChatArchives = false
             }
@@ -1336,7 +2008,7 @@ export default {
                 this.upsertChatArchive(response?.data?.data)
                 await this.loadChatArchives()
             } catch (error) {
-                alert(this.resolveApiMessage(error, 'Не удалось создать архив чата.'))
+                alert(this.resolveApiMessage(error, this.$t('chats.createArchiveFailed')))
             } finally {
                 this.archiveCreateScopeInProgress = ''
             }
@@ -1394,7 +2066,7 @@ export default {
                 document.body.removeChild(link)
                 URL.revokeObjectURL(blobUrl)
             } catch (error) {
-                alert(this.resolveApiMessage(error, 'Не удалось скачать архив.'))
+                alert(this.resolveApiMessage(error, this.$t('chats.downloadArchiveFailed')))
             } finally {
                 this.downloadingArchiveIds = this.downloadingArchiveIds.filter((id) => id !== archiveId)
             }
@@ -1406,7 +2078,7 @@ export default {
                 return
             }
 
-            const shouldRestore = window.confirm('Восстановить архив в отдельный чат?')
+            const shouldRestore = window.confirm(this.$t('chats.confirmRestoreArchive'))
             if (!shouldRestore) {
                 return
             }
@@ -1426,14 +2098,14 @@ export default {
                     }
                 }
             } catch (error) {
-                alert(this.resolveApiMessage(error, 'Не удалось восстановить архив.'))
+                alert(this.resolveApiMessage(error, this.$t('chats.restoreArchiveFailed')))
             } finally {
                 this.restoringArchiveIds = this.restoringArchiveIds.filter((id) => id !== archiveId)
             }
         },
 
         displayName(user) {
-            return user?.display_name || user?.name || 'Пользователь'
+            return user?.display_name || user?.name || this.$t('common.user')
         },
 
         avatarUrl(user) {
@@ -1619,7 +2291,7 @@ export default {
 
         messagePreview(conversation) {
             if (!conversation?.last_message) {
-                return 'Пока нет сообщений'
+                return this.$t('chats.noMessagesYet')
             }
 
             const message = conversation.last_message
@@ -1740,8 +2412,12 @@ export default {
                 const updated = this.conversations.find((conversation) => conversation.id === this.activeConversation.id)
                 if (updated) {
                     this.activeConversation = updated
+                } else {
+                    this.activeConversation = null
                 }
             }
+
+            this.syncActiveConversationPresenceChannel()
         },
 
         onUserSearchInput() {
@@ -1762,7 +2438,7 @@ export default {
             const response = await axios.get('/api/chats/users', {
                 params: {
                     search: this.userSearch,
-                    per_page: 25,
+                    per_page: 100,
                 }
             })
 
@@ -1795,7 +2471,7 @@ export default {
                 if (error.response?.status === 423) {
                     await Promise.all([this.loadUsers(), this.loadMyBlocks(), this.loadConversations()])
                 }
-                alert(this.resolveApiMessage(error, 'Не удалось открыть личный чат.'))
+                alert(this.resolveApiMessage(error, this.$t('chats.openDirectChatFailed')))
             }
         },
 
@@ -1809,7 +2485,7 @@ export default {
 
                 await Promise.all([this.loadUsers(), this.loadMyBlocks(), this.loadConversations()])
             } catch (error) {
-                alert(this.resolveApiMessage(error, 'Не удалось заблокировать пользователя.'))
+                alert(this.resolveApiMessage(error, this.$t('chats.blockUserFailed')))
             }
         },
 
@@ -1818,7 +2494,7 @@ export default {
                 await axios.delete(`/api/users/${user.id}/block`)
                 await Promise.all([this.loadUsers(), this.loadMyBlocks(), this.loadConversations()])
             } catch (error) {
-                alert(this.resolveApiMessage(error, 'Не удалось снять блокировку.'))
+                alert(this.resolveApiMessage(error, this.$t('chats.unblockUserFailed')))
             }
         },
 
@@ -1845,17 +2521,25 @@ export default {
             }
 
             if (!block.expires_at) {
-                return 'Тип блокировки: навсегда'
+                return this.$t('chats.blockTypePermanent')
             }
 
-            return `Тип блокировки: до ${this.formatDateTime(block.expires_at)}`
+            return this.$t('chats.blockTypeUntil', { date: this.formatDateTime(block.expires_at) })
         },
 
         async openConversation(conversation) {
+            const previousConversationId = Number(this.activeConversation?.id ?? 0)
+            const nextConversationId = Number(conversation?.id ?? 0)
+            if (previousConversationId > 0 && previousConversationId !== nextConversationId) {
+                this.notifyTypingStopped(previousConversationId)
+            }
+
             this.activeConversation = conversation
             this.leftPaneMode = 'conversations'
+            this.showStickerTray = false
             this.saveChatUiSettings()
             this.messageSearch = ''
+            this.syncActiveConversationPresenceChannel()
             await this.loadMessages()
         },
 
@@ -1877,7 +2561,7 @@ export default {
             } catch (error) {
                 this.messages = []
                 if (error.response?.status === 403) {
-                    alert('Нет доступа к этому чату.')
+                    alert(this.$t('chats.noAccessToChat'))
                 }
             }
         },
@@ -1912,6 +2596,28 @@ export default {
 
         appendEmoji(emoji) {
             this.messageBody = `${this.messageBody}${emoji}`
+            this.notifyTypingActivity({ immediate: true })
+        },
+
+        toggleStickerTray() {
+            if (this.isComposerDisabled) {
+                this.showStickerTray = false
+                return
+            }
+
+            this.showStickerTray = !this.showStickerTray
+        },
+
+        insertSticker(sticker) {
+            const value = String(sticker?.value || '').trim()
+            if (value === '' || this.isComposerDisabled) {
+                return
+            }
+
+            const suffix = this.messageBody.trim() === '' ? '' : ' '
+            this.messageBody = `${this.messageBody}${suffix}${value}`
+            this.showStickerTray = false
+            this.notifyTypingActivity({ immediate: true })
         },
 
         openFileDialog() {
@@ -2000,6 +2706,7 @@ export default {
                 this.voiceLevelPercent = 0
                 this.voiceAutoStopTriggered = false
                 this.isRecordingVoice = true
+                this.notifyTypingActivity({ immediate: true })
                 await this.startVoicePcmCapture(stream)
 
                 if (typeof window !== 'undefined' && typeof window.MediaRecorder !== 'undefined') {
@@ -2038,14 +2745,14 @@ export default {
                         this.voiceAutoStopTriggered = true
                         this.stopVoiceRecording(false)
                             .finally(() => {
-                                alert(`Достигнут лимит ${this.formattedVoiceRecordDurationLimit}. Голосовое добавлено в сообщение.`)
+                                alert(this.$t('chats.voiceLimitReached', { limit: this.formattedVoiceRecordDurationLimit }))
                             })
                     }
                 }, 1000)
             } catch (error) {
                 this.resetVoicePcmCaptureState(true)
                 this.stopVoiceRecording(true)
-                alert('Не удалось получить доступ к микрофону.')
+                alert(this.$t('chats.microphoneAccessFailed'))
             }
         },
 
@@ -2080,6 +2787,7 @@ export default {
                     this.isProcessingVoice = false
                     this.resetVoicePcmCaptureState(true)
                     this.voiceRecordStartedAt = null
+                    this.notifyTypingActivity({ immediate: true })
                     return
                 }
 
@@ -2125,7 +2833,7 @@ export default {
                     }
 
                     if (!appended) {
-                        alert('Голосовое не записалось. Попробуйте ещё раз.')
+                        alert(this.$t('chats.voiceNotRecordedRetry'))
                     }
                 } catch (error) {
                     let appended = false
@@ -2140,7 +2848,7 @@ export default {
                     }
 
                     if (!appended) {
-                        alert('Голосовое не записалось. Попробуйте ещё раз.')
+                        alert(this.$t('chats.voiceNotRecordedRetry'))
                     }
                 } finally {
                     if (recorder && recorder.state !== 'inactive') {
@@ -2164,6 +2872,7 @@ export default {
                     this.resetVoicePcmCaptureState(true)
                     this.voiceRecordStartedAt = null
                     this.isProcessingVoice = false
+                    this.notifyTypingActivity({ immediate: true })
                 }
             } finally {
                 this.voiceStopInProgress = false
@@ -2369,7 +3078,7 @@ export default {
                 : new Blob(chunks)
 
             if (blob.size === 0) {
-                alert('Голосовое получилось пустым. Повторите запись.')
+                alert(this.$t('chats.voiceEmptyRetry'))
                 return false
             }
 
@@ -2535,6 +3244,7 @@ export default {
             }
 
             this.$refs.messageFiles.value = null
+            this.notifyTypingActivity({ immediate: true })
         },
 
         resolvePreviewKind(file) {
@@ -2562,6 +3272,7 @@ export default {
 
             this.selectedFiles = this.selectedFiles.filter((item) => item.key !== key)
             this.selectedFilePreviews = this.selectedFilePreviews.filter((item) => item.key !== key)
+            this.notifyTypingActivity({ immediate: true })
         },
 
         clearSelectedFiles() {
@@ -2571,6 +3282,7 @@ export default {
 
             this.selectedFiles = []
             this.selectedFilePreviews = []
+            this.notifyTypingActivity({ immediate: true })
         },
 
         async sendMessage() {
@@ -2579,6 +3291,7 @@ export default {
             }
 
             this.isSending = true
+            this.notifyTypingActivity({ immediate: true, isSending: true })
             try {
                 let response
 
@@ -2606,11 +3319,13 @@ export default {
                 this.clearSelectedFiles()
                 this.updateConversationFromIncoming(response.data.data)
                 this.$nextTick(() => this.scrollMessagesDown())
+                this.notifyTypingStopped()
             } catch (error) {
                 if (error.response?.status === 423) {
                     await this.loadConversations()
                 }
-                alert(this.resolveApiMessage(error, 'Не удалось отправить сообщение.'))
+                alert(this.resolveApiMessage(error, this.$t('chats.sendMessageFailed')))
+                this.notifyTypingActivity({ immediate: true })
             } finally {
                 this.isSending = false
             }
@@ -2653,6 +3368,7 @@ export default {
                 if (!activeIds.has(Number(id))) {
                     window.Echo.leave(channelName)
                     delete this.subscribedChannels[id]
+                    this.clearConversationTypingState(id)
                 }
             }
 
@@ -2667,6 +3383,9 @@ export default {
                     .listen('.chat.message.sent', (payload) => {
                         this.handleIncomingMessage(payload)
                     })
+                    .listenForWhisper('typing', (payload) => {
+                        this.handleTypingWhisper(conversation.id, payload)
+                    })
 
                 this.subscribedChannels[conversation.id] = channelName
             }
@@ -2675,6 +3394,7 @@ export default {
         unsubscribeAllChannels() {
             if (!window.Echo) {
                 this.subscribedChannels = {}
+                this.clearTypingState()
                 return
             }
 
@@ -2683,12 +3403,17 @@ export default {
             }
 
             this.subscribedChannels = {}
+            this.clearTypingState()
         },
 
         handleIncomingMessage(payload) {
             const normalizedPayload = this.normalizeMessage(payload)
             const mine = this.isMine(payload)
             const isActiveConversation = Boolean(this.activeConversation && normalizedPayload.conversation_id === this.activeConversation.id)
+            const senderId = Number(normalizedPayload?.user?.id ?? 0)
+            if (senderId > 0) {
+                this.removeTypingStateEntry(normalizedPayload.conversation_id, senderId)
+            }
 
             this.updateConversationFromIncoming(normalizedPayload, {
                 incrementUnread: !mine && !isActiveConversation,
@@ -2754,7 +3479,7 @@ export default {
             const attachments = Array.isArray(message.attachments) ? message.attachments : []
             const count = attachments.length
             if (count === 0) {
-                return 'Сообщение'
+                return this.$t('chats.message')
             }
 
             const audioCount = attachments.filter((item) => item.type === 'audio').length
@@ -2764,19 +3489,27 @@ export default {
 
             const parts = []
             if (audioCount > 0) {
-                parts.push(audioCount === 1 ? 'Голосовое' : `Голосовых: ${audioCount}`)
+                parts.push(audioCount === 1
+                    ? this.$t('chats.voiceSingle')
+                    : this.$t('chats.voiceCount', { count: audioCount }))
             }
             if (videoCount > 0) {
-                parts.push(videoCount === 1 ? 'Видео' : `Видео: ${videoCount}`)
+                parts.push(videoCount === 1
+                    ? this.$t('chats.videoSingle')
+                    : this.$t('chats.videoCount', { count: videoCount }))
             }
             if (mediaCount > 0) {
-                parts.push(mediaCount === 1 ? 'Медиа' : `Медиа: ${mediaCount}`)
+                parts.push(mediaCount === 1
+                    ? this.$t('chats.mediaSingle')
+                    : this.$t('chats.mediaCount', { count: mediaCount }))
             }
             if (fileCount > 0) {
-                parts.push(fileCount === 1 ? 'Файл' : `Файлов: ${fileCount}`)
+                parts.push(fileCount === 1
+                    ? this.$t('chats.file')
+                    : this.$t('chats.fileCount', { count: fileCount }))
             }
 
-            return parts.join(' · ') || `Вложений: ${count}`
+            return parts.join(' · ') || this.$t('chats.attachmentsCount', { count })
         },
 
         sortConversationsByActivity() {
@@ -2852,7 +3585,7 @@ export default {
                     this.syncMessageAcrossConversationCards(updatedMessage)
                 }
             } catch (error) {
-                alert(this.resolveApiMessage(error, 'Не удалось обновить реакцию.'))
+                alert(this.resolveApiMessage(error, this.$t('chats.updateReactionFailed')))
             } finally {
                 this.togglingMessageReactionKeys = this.togglingMessageReactionKeys.filter((item) => item !== key)
             }
@@ -2895,7 +3628,7 @@ export default {
                 return
             }
 
-            const shouldDelete = window.confirm('Удалить это сообщение?')
+            const shouldDelete = window.confirm(this.$t('chats.confirmDeleteMessage'))
             if (!shouldDelete) {
                 return
             }
@@ -2907,7 +3640,7 @@ export default {
                 this.removeMessageLocally(messageId)
                 await this.loadConversations()
             } catch (error) {
-                alert(this.resolveApiMessage(error, 'Не удалось удалить сообщение.'))
+                alert(this.resolveApiMessage(error, this.$t('chats.deleteMessageFailed')))
             } finally {
                 this.deletingMessageIds = this.deletingMessageIds.filter((id) => id !== messageId)
             }
@@ -2929,7 +3662,7 @@ export default {
                 return
             }
 
-            const shouldDelete = window.confirm('Удалить это вложение?')
+            const shouldDelete = window.confirm(this.$t('chats.confirmDeleteAttachment'))
             if (!shouldDelete) {
                 return
             }
@@ -2949,7 +3682,7 @@ export default {
 
                 await this.loadConversations()
             } catch (error) {
-                alert(this.resolveApiMessage(error, 'Не удалось удалить вложение.'))
+                alert(this.resolveApiMessage(error, this.$t('chats.deleteAttachmentFailed')))
             } finally {
                 this.deletingAttachmentKeys = this.deletingAttachmentKeys.filter((item) => item !== key)
             }
@@ -3069,12 +3802,12 @@ export default {
             }
 
             if (!file.type.startsWith('audio/')) {
-                alert('Можно загрузить только аудиофайл.')
+                alert(this.$t('chats.onlyAudioFileAllowed'))
                 return
             }
 
             if (file.size > MAX_CUSTOM_NOTIFICATION_SOUND_BYTES) {
-                alert('Файл звука слишком большой. Максимум 15MB.')
+                alert(this.$t('chats.soundFileTooLarge'))
                 return
             }
 
@@ -3092,7 +3825,7 @@ export default {
                 this.notificationSettings.customSoundDataUrl = URL.createObjectURL(file)
                 this.notificationSettings.sound = 'custom'
                 this.saveNotificationSettings()
-                alert('Файл загружен. Звук будет работать до перезагрузки страницы (файл больше 2MB).')
+                alert(this.$t('chats.soundFileLoadedRuntimeOnly'))
             }
 
             event.target.value = null

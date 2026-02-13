@@ -1,57 +1,57 @@
 <template>
     <div class="page-wrap grid-layout">
         <section class="section-card">
-            <h1 class="section-title">Админ-панель</h1>
-            <p class="section-subtitle">Полный контроль пользователей, контента, чатов и фидбека.</p>
+            <h1 class="section-title">{{ $t('admin.title') }}</h1>
+            <p class="section-subtitle">{{ $t('admin.subtitle') }}</p>
 
             <div class="stats-grid" style="margin-bottom: 1rem;">
                 <div class="stat-card">
-                    <span class="stat-label">Пользователи</span>
+                    <span class="stat-label">{{ $t('admin.statsUsers') }}</span>
                     <div class="stat-value">{{ summary.users ?? 0 }}</div>
                 </div>
                 <div class="stat-card">
-                    <span class="stat-label">Посты</span>
+                    <span class="stat-label">{{ $t('admin.statsPosts') }}</span>
                     <div class="stat-value">{{ summary.posts ?? 0 }}</div>
                 </div>
                 <div class="stat-card">
-                    <span class="stat-label">Комментарии</span>
+                    <span class="stat-label">{{ $t('admin.statsComments') }}</span>
                     <div class="stat-value">{{ summary.comments ?? 0 }}</div>
                 </div>
                 <div class="stat-card">
-                    <span class="stat-label">Лайки</span>
+                    <span class="stat-label">{{ $t('admin.statsLikes') }}</span>
                     <div class="stat-value">{{ summary.likes ?? 0 }}</div>
                 </div>
                 <div class="stat-card">
-                    <span class="stat-label">Сообщения чатов</span>
+                    <span class="stat-label">{{ $t('admin.statsMessages') }}</span>
                     <div class="stat-value">{{ summary.messages ?? 0 }}</div>
                 </div>
                 <div class="stat-card">
-                    <span class="stat-label">Публичные посты</span>
+                    <span class="stat-label">{{ $t('admin.statsPublicPosts') }}</span>
                     <div class="stat-value">{{ summary.public_posts ?? 0 }}</div>
                 </div>
                 <div class="stat-card">
-                    <span class="stat-label">В карусели</span>
+                    <span class="stat-label">{{ $t('admin.statsCarousel') }}</span>
                     <div class="stat-value">{{ summary.carousel_posts ?? 0 }}</div>
                 </div>
                 <div class="stat-card">
-                    <span class="stat-label">Вложения чатов</span>
+                    <span class="stat-label">{{ $t('admin.statsAttachments') }}</span>
                     <div class="stat-value">{{ summary.chat_attachments ?? 0 }}</div>
                 </div>
                 <div class="stat-card">
-                    <span class="stat-label">Активные блокировки</span>
+                    <span class="stat-label">{{ $t('admin.statsBlocks') }}</span>
                     <div class="stat-value">{{ summary.active_blocks ?? 0 }}</div>
                 </div>
             </div>
 
             <div class="admin-tabs">
-                <button class="btn" :class="activeTab === 'users' ? 'btn-primary' : 'btn-outline'" @click="selectTab('users')">Пользователи</button>
-                <button class="btn" :class="activeTab === 'posts' ? 'btn-primary' : 'btn-outline'" @click="selectTab('posts')">Посты</button>
-                <button class="btn" :class="activeTab === 'comments' ? 'btn-primary' : 'btn-outline'" @click="selectTab('comments')">Комментарии</button>
-                <button class="btn" :class="activeTab === 'feedback' ? 'btn-primary' : 'btn-outline'" @click="selectTab('feedback')">Фидбек</button>
-                <button class="btn" :class="activeTab === 'conversations' ? 'btn-primary' : 'btn-outline'" @click="selectTab('conversations')">Чаты</button>
-                <button class="btn" :class="activeTab === 'messages' ? 'btn-primary' : 'btn-outline'" @click="selectTab('messages')">Сообщения</button>
-                <button class="btn" :class="activeTab === 'blocks' ? 'btn-primary' : 'btn-outline'" @click="selectTab('blocks')">Блокировки</button>
-                <button class="btn" :class="activeTab === 'settings' ? 'btn-primary' : 'btn-outline'" @click="selectTab('settings')">Настройки сайта</button>
+                <button class="btn" :class="activeTab === 'users' ? 'btn-primary' : 'btn-outline'" @click="selectTab('users')">{{ $t('admin.tabUsers') }}</button>
+                <button class="btn" :class="activeTab === 'posts' ? 'btn-primary' : 'btn-outline'" @click="selectTab('posts')">{{ $t('admin.tabPosts') }}</button>
+                <button class="btn" :class="activeTab === 'comments' ? 'btn-primary' : 'btn-outline'" @click="selectTab('comments')">{{ $t('admin.tabComments') }}</button>
+                <button class="btn" :class="activeTab === 'feedback' ? 'btn-primary' : 'btn-outline'" @click="selectTab('feedback')">{{ $t('admin.tabFeedback') }}</button>
+                <button class="btn" :class="activeTab === 'conversations' ? 'btn-primary' : 'btn-outline'" @click="selectTab('conversations')">{{ $t('admin.tabConversations') }}</button>
+                <button class="btn" :class="activeTab === 'messages' ? 'btn-primary' : 'btn-outline'" @click="selectTab('messages')">{{ $t('admin.tabMessages') }}</button>
+                <button class="btn" :class="activeTab === 'blocks' ? 'btn-primary' : 'btn-outline'" @click="selectTab('blocks')">{{ $t('admin.tabBlocks') }}</button>
+                <button class="btn" :class="activeTab === 'settings' ? 'btn-primary' : 'btn-outline'" @click="selectTab('settings')">{{ $t('admin.tabSettings') }}</button>
             </div>
 
             <div v-if="activeTab === 'users'" class="table-wrap fade-in">
@@ -59,33 +59,66 @@
                     <thead>
                     <tr>
                         <th>ID</th>
-                        <th>Имя</th>
+                        <th>{{ $t('admin.name') }}</th>
                         <th>Email</th>
-                        <th>Админ</th>
-                        <th>Постов</th>
-                        <th></th>
+                        <th>{{ $t('admin.adminColumn') }}</th>
+                        <th>{{ $t('admin.postsColumn') }}</th>
+                        <th>{{ $t('admin.statusColumn') }}</th>
+                        <th>{{ $t('admin.actionsColumn') }}</th>
                     </tr>
                     </thead>
                     <tbody>
-                    <tr v-for="user in users" :key="`admin-user-${user.id}`">
+                    <tr
+                        v-for="user in users"
+                        :key="`admin-user-${user.id}`"
+                        :class="{ 'admin-user-row--dirty': hasUserChanges(user) }"
+                    >
                         <td>{{ user.id }}</td>
                         <td>
-                            <input class="input-field" v-model="user.name" type="text">
+                            <input
+                                class="input-field"
+                                :class="{ 'admin-user-field--dirty': hasUserChanges(user) }"
+                                v-model="user.name"
+                                type="text"
+                            >
                         </td>
                         <td>
-                            <input class="input-field" v-model="user.email" type="email">
+                            <input
+                                class="input-field"
+                                :class="{ 'admin-user-field--dirty': hasUserChanges(user) }"
+                                v-model="user.email"
+                                type="email"
+                            >
                         </td>
                         <td>
-                            <select class="select-field" v-model="user.is_admin">
-                                <option :value="false">Нет</option>
-                                <option :value="true">Да</option>
+                            <select
+                                class="select-field"
+                                :class="{ 'admin-user-field--dirty': hasUserChanges(user) }"
+                                v-model="user.is_admin"
+                            >
+                                <option :value="false">{{ $t('admin.no') }}</option>
+                                <option :value="true">{{ $t('admin.yes') }}</option>
                             </select>
                         </td>
                         <td>{{ user.posts_count ?? 0 }}</td>
                         <td>
-                            <div style="display: flex; gap: 0.4rem;">
-                                <button class="btn btn-success btn-sm" @click="saveUser(user)">Сохранить</button>
-                                <button class="btn btn-danger btn-sm" @click="removeUser(user)">Удалить</button>
+                            <span
+                                class="admin-user-status"
+                                :class="`is-${userStatusMeta(user).kind}`"
+                            >
+                                {{ userStatusMeta(user).label }}
+                            </span>
+                        </td>
+                        <td>
+                            <div class="admin-user-actions">
+                                <button
+                                    class="btn btn-success btn-sm"
+                                    @click="saveUser(user)"
+                                    :disabled="!canSaveUser(user)"
+                                >
+                                    {{ user._save_state === 'saving' ? $t('admin.saving') : $t('admin.save') }}
+                                </button>
+                                <button class="btn btn-danger btn-sm" @click="removeUser(user)">{{ $t('common.delete') }}</button>
                             </div>
                         </td>
                     </tr>
@@ -95,111 +128,111 @@
 
             <div v-if="activeTab === 'posts'" class="simple-list fade-in">
                 <div class="simple-item" style="display: block;">
-                    <strong style="display: block; margin-bottom: 0.5rem;">Создать пост от имени любого пользователя</strong>
+                    <strong style="display: block; margin-bottom: 0.5rem;">{{ $t('admin.createPostAsAnyUser') }}</strong>
                     <div class="form-grid">
                         <input
                             class="input-field"
                             type="number"
                             min="1"
                             v-model.number="postCreateForm.user_id"
-                            placeholder="ID автора"
+                            :placeholder="$t('admin.authorId')"
                         >
                         <input
                             class="input-field"
                             type="text"
                             maxlength="255"
                             v-model.trim="postCreateForm.title"
-                            placeholder="Заголовок"
+                            :placeholder="$t('admin.postTitle')"
                         >
                         <textarea
                             class="textarea-field"
                             style="min-height: 120px;"
                             maxlength="5000"
                             v-model.trim="postCreateForm.content"
-                            placeholder="Текст поста"
+                            :placeholder="$t('admin.postText')"
                         ></textarea>
                         <input
                             class="input-field"
                             type="number"
                             min="1"
                             v-model.number="postCreateForm.reposted_id"
-                            placeholder="ID репоста (необязательно)"
+                            :placeholder="$t('admin.repostIdOptional')"
                         >
 
                         <label class="muted" style="display: flex; align-items: center; gap: 0.45rem;">
                             <input type="checkbox" v-model="postCreateForm.is_public">
-                            Публичный пост
+                            {{ $t('admin.publicPost') }}
                         </label>
                         <label class="muted" style="display: flex; align-items: center; gap: 0.45rem;">
                             <input type="checkbox" v-model="postCreateForm.show_in_feed" :disabled="!postCreateForm.is_public">
-                            Показывать в ленте
+                            {{ $t('admin.showInFeed') }}
                         </label>
                         <label class="muted" style="display: flex; align-items: center; gap: 0.45rem;">
                             <input type="checkbox" v-model="postCreateForm.show_in_carousel" :disabled="!postCreateForm.is_public">
-                            Показывать в карусели
+                            {{ $t('admin.showInCarousel') }}
                         </label>
 
                         <div style="display: flex; gap: 0.45rem; flex-wrap: wrap;">
-                            <button class="btn btn-primary btn-sm" @click="createPost">Создать пост</button>
-                            <button class="btn btn-danger btn-sm" @click="clearAllLikes">Очистить все лайки</button>
+                            <button class="btn btn-primary btn-sm" @click="createPost">{{ $t('admin.createPost') }}</button>
+                            <button class="btn btn-danger btn-sm" @click="clearAllLikes">{{ $t('admin.clearAllLikes') }}</button>
                         </div>
                     </div>
                 </div>
 
                 <div class="simple-item" v-for="post in posts" :key="`admin-post-${post.id}`" style="display: block;">
                     <div style="display: flex; justify-content: space-between; gap: 0.8rem; flex-wrap: wrap; align-items: center;">
-                        <strong>#{{ post.id }} · Лайков: {{ post.likes_count ?? 0 }}</strong>
+                        <strong>#{{ post.id }} · {{ $t('admin.likesCount', { count: post.likes_count ?? 0 }) }}</strong>
                         <div style="display: flex; gap: 0.4rem; flex-wrap: wrap;">
-                            <button class="btn btn-outline btn-sm" @click="clearPostLikes(post)">Очистить лайки</button>
-                            <button class="btn btn-danger btn-sm" @click="removePost(post)">Удалить</button>
+                            <button class="btn btn-outline btn-sm" @click="clearPostLikes(post)">{{ $t('admin.clearLikes') }}</button>
+                            <button class="btn btn-danger btn-sm" @click="removePost(post)">{{ $t('common.delete') }}</button>
                         </div>
                     </div>
 
                     <div class="form-grid" style="margin-top: 0.6rem;">
-                        <p class="muted" style="margin: 0;">Текущий автор: {{ post.user?.name ?? '—' }} (ID: {{ post.user?.id ?? post.user_id }})</p>
+                        <p class="muted" style="margin: 0;">{{ $t('admin.currentAuthor', { name: post.user?.name ?? '—', id: post.user?.id ?? post.user_id }) }}</p>
                         <input
                             class="input-field"
                             type="number"
                             min="1"
                             v-model.number="post.user_id"
-                            placeholder="ID автора"
+                            :placeholder="$t('admin.authorId')"
                         >
                         <input
                             class="input-field"
                             type="text"
                             maxlength="255"
                             v-model.trim="post.title"
-                            placeholder="Заголовок"
+                            :placeholder="$t('admin.postTitle')"
                         >
                         <textarea
                             class="textarea-field"
                             style="min-height: 120px;"
                             maxlength="5000"
                             v-model.trim="post.content"
-                            placeholder="Текст поста"
+                            :placeholder="$t('admin.postText')"
                         ></textarea>
                         <input
                             class="input-field"
                             type="number"
                             min="1"
                             v-model.number="post.reposted_id"
-                            placeholder="ID репоста (необязательно)"
+                            :placeholder="$t('admin.repostIdOptional')"
                         >
 
                         <label class="muted" style="display: flex; align-items: center; gap: 0.45rem;">
                             <input type="checkbox" v-model="post.is_public">
-                            Публичный пост
+                            {{ $t('admin.publicPost') }}
                         </label>
                         <label class="muted" style="display: flex; align-items: center; gap: 0.45rem;">
                             <input type="checkbox" v-model="post.show_in_feed" :disabled="!post.is_public">
-                            Показывать в ленте
+                            {{ $t('admin.showInFeed') }}
                         </label>
                         <label class="muted" style="display: flex; align-items: center; gap: 0.45rem;">
                             <input type="checkbox" v-model="post.show_in_carousel" :disabled="!post.is_public">
-                            Показывать в карусели
+                            {{ $t('admin.showInCarousel') }}
                         </label>
 
-                        <button class="btn btn-success btn-sm" @click="savePost(post)">Сохранить пост</button>
+                        <button class="btn btn-success btn-sm" @click="savePost(post)">{{ $t('admin.savePost') }}</button>
                     </div>
                 </div>
             </div>
@@ -208,7 +241,7 @@
                 <div class="simple-item" v-for="comment in comments" :key="`admin-comment-${comment.id}`" style="display: block;">
                     <div style="display: flex; justify-content: space-between; gap: 0.8rem; flex-wrap: wrap;">
                         <strong>#{{ comment.id }} · {{ comment.user?.name ?? '—' }}</strong>
-                        <button class="btn btn-danger btn-sm" @click="removeComment(comment)">Удалить</button>
+                        <button class="btn btn-danger btn-sm" @click="removeComment(comment)">{{ $t('common.delete') }}</button>
                     </div>
                     <p style="margin: 0.35rem 0 0;">{{ comment.body }}</p>
                 </div>
@@ -227,8 +260,8 @@
                                 <option value="in_progress">in_progress</option>
                                 <option value="resolved">resolved</option>
                             </select>
-                            <button class="btn btn-success btn-sm" @click="saveFeedback(item)">Обновить</button>
-                            <button class="btn btn-danger btn-sm" @click="removeFeedback(item)">Удалить</button>
+                            <button class="btn btn-success btn-sm" @click="saveFeedback(item)">{{ $t('admin.update') }}</button>
+                            <button class="btn btn-danger btn-sm" @click="removeFeedback(item)">{{ $t('common.delete') }}</button>
                         </div>
                     </div>
                     <p style="margin: 0.45rem 0 0;">{{ item.message }}</p>
@@ -237,10 +270,10 @@
 
             <div v-if="activeTab === 'conversations'" class="simple-list fade-in">
                 <div class="simple-item" style="display: block;">
-                    <strong style="display: block; margin-bottom: 0.45rem;">Массовые действия с чатами</strong>
+                    <strong style="display: block; margin-bottom: 0.45rem;">{{ $t('admin.bulkChatActions') }}</strong>
                     <div style="display: flex; gap: 0.45rem; flex-wrap: wrap;">
-                        <button class="btn btn-outline btn-sm" @click="clearAllConversations">Очистить все чаты</button>
-                        <button class="btn btn-danger btn-sm" @click="removeAllConversations">Удалить все чаты</button>
+                        <button class="btn btn-outline btn-sm" @click="clearAllConversations">{{ $t('admin.clearAllChats') }}</button>
+                        <button class="btn btn-danger btn-sm" @click="removeAllConversations">{{ $t('admin.deleteAllChats') }}</button>
                     </div>
                 </div>
 
@@ -248,12 +281,16 @@
                     <div style="display: flex; justify-content: space-between; gap: 0.8rem; flex-wrap: wrap; align-items: center;">
                         <strong>#{{ conversation.id }} · {{ conversation.display_title || conversation.title }}</strong>
                         <div style="display: flex; gap: 0.45rem; flex-wrap: wrap;">
-                            <button class="btn btn-outline btn-sm" @click="clearConversationMessages(conversation)">Очистить чат</button>
-                            <button class="btn btn-danger btn-sm" @click="removeConversation(conversation)">Удалить чат</button>
+                            <button class="btn btn-outline btn-sm" @click="clearConversationMessages(conversation)">{{ $t('admin.clearChat') }}</button>
+                            <button class="btn btn-danger btn-sm" @click="removeConversation(conversation)">{{ $t('admin.deleteChat') }}</button>
                         </div>
                     </div>
                     <p class="muted" style="margin: 0.25rem 0 0;">
-                        Тип: {{ conversation.type }} · Участников: {{ conversation.participants?.length ?? 0 }} · Сообщений: {{ conversation.messages_count ?? 0 }}
+                        {{ $t('admin.chatMeta', {
+                            type: conversation.type,
+                            participants: conversation.participants?.length ?? 0,
+                            messages: conversation.messages_count ?? 0,
+                        }) }}
                     </p>
                 </div>
             </div>
@@ -262,14 +299,14 @@
                 <div class="simple-item" v-for="message in messages" :key="`admin-message-${message.id}`" style="display: block;">
                     <div style="display: flex; justify-content: space-between; gap: 0.8rem; flex-wrap: wrap;">
                         <strong>#{{ message.id }} · {{ message.user?.name ?? '—' }}</strong>
-                        <button class="btn btn-danger btn-sm" @click="removeMessage(message)">Удалить</button>
+                        <button class="btn btn-danger btn-sm" @click="removeMessage(message)">{{ $t('common.delete') }}</button>
                     </div>
                     <p class="muted" style="margin: 0.2rem 0 0;">
-                        Чат #{{ message.conversation_id }}
+                        {{ $t('admin.chatNumber', { id: message.conversation_id }) }}
                     </p>
-                    <p style="margin: 0.35rem 0 0;">{{ message.body || 'Только вложения' }}</p>
+                    <p style="margin: 0.35rem 0 0;">{{ message.body || $t('admin.onlyAttachments') }}</p>
                     <p class="muted" style="margin: 0.25rem 0 0;" v-if="(message.attachments?.length ?? 0) > 0">
-                        Вложений: {{ message.attachments.length }}
+                        {{ $t('admin.attachmentsCount', { count: message.attachments.length }) }}
                     </p>
                 </div>
             </div>
@@ -280,10 +317,10 @@
                         <div>
                             <strong>#{{ block.id }} · {{ block.blocker?.name ?? '—' }} → {{ block.blocked_user?.name ?? '—' }}</strong>
                             <p class="muted" style="margin: 0.2rem 0 0;">
-                                Статус: {{ block.expires_at ? `до ${formatDate(block.expires_at)}` : 'постоянная' }}
+                                {{ $t('admin.blockStatus') }}: {{ block.expires_at ? $t('admin.blockUntil', { date: formatDate(block.expires_at) }) : $t('admin.blockPermanent') }}
                             </p>
                         </div>
-                        <button class="btn btn-danger btn-sm" @click="removeBlock(block)">Удалить</button>
+                        <button class="btn btn-danger btn-sm" @click="removeBlock(block)">{{ $t('common.delete') }}</button>
                     </div>
 
                     <div class="form-grid" style="margin-top: 0.6rem;">
@@ -295,15 +332,15 @@
                         <input
                             class="input-field"
                             type="text"
-                            placeholder="Причина"
+                            :placeholder="$t('admin.reason')"
                             maxlength="500"
                             v-model="block.reason"
                         >
 
                         <div style="display: flex; gap: 0.45rem; flex-wrap: wrap;">
-                            <button class="btn btn-success btn-sm" @click="saveBlock(block)">Сохранить</button>
-                            <button class="btn btn-outline btn-sm" @click="setPermanentBlock(block)">Сделать постоянной</button>
-                            <button class="btn btn-outline btn-sm" @click="extendBlockFor24Hours(block)">+24 часа</button>
+                            <button class="btn btn-success btn-sm" @click="saveBlock(block)">{{ $t('admin.save') }}</button>
+                            <button class="btn btn-outline btn-sm" @click="setPermanentBlock(block)">{{ $t('admin.makePermanent') }}</button>
+                            <button class="btn btn-outline btn-sm" @click="extendBlockFor24Hours(block)">{{ $t('admin.add24h') }}</button>
                         </div>
                     </div>
                 </div>
@@ -311,25 +348,49 @@
 
             <div v-if="activeTab === 'settings'" class="simple-list fade-in">
                 <div class="simple-item" style="display: block;">
-                    <strong style="display: block; margin-bottom: 0.5rem;">Контент главной страницы</strong>
+                    <strong style="display: block; margin-bottom: 0.5rem;">{{ $t('admin.homeContentTitle') }}</strong>
                     <p class="muted" style="margin: 0 0 0.65rem;">
-                        Этот блок управляет текстами главной страницы (бейдж, заголовок, описание, преимущества и обратная связь).
+                        {{ $t('admin.homeContentSubtitle') }}
                     </p>
+                    <div style="display: flex; align-items: center; justify-content: space-between; gap: 0.6rem; margin: 0 0 0.75rem; flex-wrap: wrap;">
+                        <span class="muted" style="font-size: 0.82rem;">
+                            {{ $t('admin.editLanguage') }}:
+                            <strong>{{ homeContentActiveLocale === 'en' ? $t('admin.languageNameEn') : $t('admin.languageNameRu') }}</strong>
+                        </span>
+                        <div style="display: flex; gap: 0.45rem;">
+                            <button
+                                class="btn btn-sm"
+                                :class="homeContentActiveLocale === 'ru' ? 'btn-primary' : 'btn-outline'"
+                                type="button"
+                                @click="setHomeContentLocale('ru')"
+                            >
+                                RU
+                            </button>
+                            <button
+                                class="btn btn-sm"
+                                :class="homeContentActiveLocale === 'en' ? 'btn-primary' : 'btn-outline'"
+                                type="button"
+                                @click="setHomeContentLocale('en')"
+                            >
+                                EN
+                            </button>
+                        </div>
+                    </div>
 
                     <div class="form-grid">
-                        <label class="muted" style="font-size: 0.82rem;">Бейдж</label>
-                        <input class="input-field" type="text" maxlength="80" v-model.trim="homeContentForm.badge">
+                        <label class="muted" style="font-size: 0.82rem;">{{ $t('admin.badge') }}</label>
+                        <input class="input-field" type="text" maxlength="80" v-model.trim="activeHomeContentLocalePayload.badge">
 
-                        <label class="muted" style="font-size: 0.82rem;">Главный заголовок</label>
-                        <textarea class="textarea-field" style="min-height: 90px;" maxlength="300" v-model.trim="homeContentForm.hero_title"></textarea>
+                        <label class="muted" style="font-size: 0.82rem;">{{ $t('admin.heroTitle') }}</label>
+                        <textarea class="textarea-field" style="min-height: 90px;" maxlength="300" v-model.trim="activeHomeContentLocalePayload.hero_title"></textarea>
 
-                        <label class="muted" style="font-size: 0.82rem;">Описание под заголовком</label>
-                        <textarea class="textarea-field" style="min-height: 120px;" maxlength="3000" v-model.trim="homeContentForm.hero_note"></textarea>
+                        <label class="muted" style="font-size: 0.82rem;">{{ $t('admin.heroNote') }}</label>
+                        <textarea class="textarea-field" style="min-height: 120px;" maxlength="3000" v-model.trim="activeHomeContentLocalePayload.hero_note"></textarea>
 
-                        <label class="muted" style="font-size: 0.82rem;">Пункты преимуществ</label>
+                        <label class="muted" style="font-size: 0.82rem;">{{ $t('admin.featureItems') }}</label>
                         <div style="display: flex; flex-direction: column; gap: 0.5rem;">
                             <div
-                                v-for="(item, index) in homeContentForm.feature_items"
+                                v-for="(item, index) in activeHomeContentLocalePayload.feature_items"
                                 :key="`home-feature-item-${index}`"
                                 style="display: flex; gap: 0.45rem; align-items: center;"
                             >
@@ -337,66 +398,66 @@
                                     class="input-field"
                                     type="text"
                                     maxlength="220"
-                                    :placeholder="`Пункт #${index + 1}`"
-                                    v-model.trim="homeContentForm.feature_items[index]"
+                                    :placeholder="$t('admin.featureItemWithIndex', { index: index + 1 })"
+                                    v-model.trim="activeHomeContentLocalePayload.feature_items[index]"
                                 >
                                 <button
                                     class="btn btn-danger btn-sm"
                                     type="button"
                                     @click="removeHomeFeatureItem(index)"
-                                    :disabled="homeContentForm.feature_items.length <= 1"
+                                    :disabled="activeHomeContentLocalePayload.feature_items.length <= 1"
                                 >
-                                    Удалить
+                                    {{ $t('common.delete') }}
                                 </button>
                             </div>
                             <button
                                 class="btn btn-outline btn-sm"
                                 type="button"
                                 @click="addHomeFeatureItem"
-                                :disabled="homeContentForm.feature_items.length >= 8"
+                                :disabled="activeHomeContentLocalePayload.feature_items.length >= 8"
                             >
-                                Добавить пункт
+                                {{ $t('admin.addItem') }}
                             </button>
                         </div>
 
-                        <label class="muted" style="font-size: 0.82rem;">Заголовок обратной связи</label>
-                        <input class="input-field" type="text" maxlength="180" v-model.trim="homeContentForm.feedback_title">
+                        <label class="muted" style="font-size: 0.82rem;">{{ $t('admin.feedbackTitle') }}</label>
+                        <input class="input-field" type="text" maxlength="180" v-model.trim="activeHomeContentLocalePayload.feedback_title">
 
-                        <label class="muted" style="font-size: 0.82rem;">Описание обратной связи</label>
-                        <textarea class="textarea-field" style="min-height: 90px;" maxlength="500" v-model.trim="homeContentForm.feedback_subtitle"></textarea>
+                        <label class="muted" style="font-size: 0.82rem;">{{ $t('admin.feedbackSubtitle') }}</label>
+                        <textarea class="textarea-field" style="min-height: 90px;" maxlength="500" v-model.trim="activeHomeContentLocalePayload.feedback_subtitle"></textarea>
 
                         <div style="display: flex; gap: 0.45rem; flex-wrap: wrap;">
-                            <button class="btn btn-success btn-sm" @click="saveHomeContent">Сохранить контент главной</button>
-                            <button class="btn btn-outline btn-sm" @click="resetHomeContent">Сбросить к стандартному</button>
+                            <button class="btn btn-success btn-sm" @click="saveHomeContent">{{ $t('admin.saveHomeContent') }}</button>
+                            <button class="btn btn-outline btn-sm" @click="resetHomeContent">{{ $t('admin.resetToDefault') }}</button>
                         </div>
                     </div>
                 </div>
 
                 <div class="simple-item" style="display: block;">
-                    <strong style="display: block; margin-bottom: 0.5rem;">Где хранить фото и видео</strong>
+                    <strong style="display: block; margin-bottom: 0.5rem;">{{ $t('admin.storageTitle') }}</strong>
                     <p class="muted" style="margin: 0 0 0.65rem;">
-                        Админ выбирает: хранить на сервере сайта, в облаке, либо дать выбор пользователям.
+                        {{ $t('admin.storageSubtitle') }}
                     </p>
 
                     <div class="form-grid">
                         <select class="select-field" v-model="storageSettings.media_storage_mode">
-                            <option value="server_local">Только сервер сайта</option>
-                            <option value="cloud">Только облачное хранилище</option>
-                            <option value="user_choice">Пользователь выбирает сам</option>
+                            <option value="server_local">{{ $t('admin.storageServerOnly') }}</option>
+                            <option value="cloud">{{ $t('admin.storageCloudOnly') }}</option>
+                            <option value="user_choice">{{ $t('admin.storageUserChoice') }}</option>
                         </select>
 
-                        <label class="muted" style="font-size: 0.82rem;">Диск сервера</label>
+                        <label class="muted" style="font-size: 0.82rem;">{{ $t('admin.serverDisk') }}</label>
                         <input class="input-field" v-model.trim="storageSettings.server_media_disk" type="text" placeholder="public">
 
-                        <label class="muted" style="font-size: 0.82rem;">Диск облака</label>
+                        <label class="muted" style="font-size: 0.82rem;">{{ $t('admin.cloudDisk') }}</label>
                         <input class="input-field" v-model.trim="storageSettings.cloud_media_disk" type="text" placeholder="s3">
 
-                        <button class="btn btn-success btn-sm" @click="saveStorageSettings">Сохранить настройки хранилища</button>
+                        <button class="btn btn-success btn-sm" @click="saveStorageSettings">{{ $t('admin.saveStorage') }}</button>
                     </div>
                 </div>
 
                 <div class="simple-item" style="display: block;">
-                    <strong style="display: block; margin-bottom: 0.5rem;">Создать настройку сайта</strong>
+                    <strong style="display: block; margin-bottom: 0.5rem;">{{ $t('admin.createSiteSetting') }}</strong>
                     <div class="form-grid">
                         <input class="input-field" v-model.trim="newSetting.key" type="text" placeholder="key_name">
                         <select class="select-field" v-model="newSetting.type">
@@ -406,16 +467,16 @@
                             <option value="boolean">boolean</option>
                             <option value="json">json</option>
                         </select>
-                        <textarea class="textarea-field" style="min-height: 90px;" v-model="newSetting.valueText" placeholder="значение"></textarea>
-                        <input class="input-field" v-model.trim="newSetting.description" type="text" placeholder="Описание (необязательно)">
-                        <button class="btn btn-primary btn-sm" @click="createSetting">Создать</button>
+                        <textarea class="textarea-field" style="min-height: 90px;" v-model="newSetting.valueText" :placeholder="$t('admin.value')"></textarea>
+                        <input class="input-field" v-model.trim="newSetting.description" type="text" :placeholder="$t('admin.descriptionOptional')">
+                        <button class="btn btn-primary btn-sm" @click="createSetting">{{ $t('admin.create') }}</button>
                     </div>
                 </div>
 
                 <div class="simple-item" v-for="setting in settings" :key="`admin-setting-${setting.id}`" style="display: block;">
                     <div style="display: flex; justify-content: space-between; gap: 0.8rem; flex-wrap: wrap; align-items: center;">
                         <strong>#{{ setting.id }} · {{ setting.key }}</strong>
-                        <button class="btn btn-danger btn-sm" @click="removeSetting(setting)">Удалить</button>
+                        <button class="btn btn-danger btn-sm" @click="removeSetting(setting)">{{ $t('common.delete') }}</button>
                     </div>
 
                     <div class="form-grid" style="margin-top: 0.6rem;">
@@ -428,8 +489,8 @@
                             <option value="json">json</option>
                         </select>
                         <textarea class="textarea-field" style="min-height: 90px;" v-model="setting.valueText"></textarea>
-                        <input class="input-field" type="text" v-model.trim="setting.description" placeholder="Описание">
-                        <button class="btn btn-success btn-sm" @click="saveSetting(setting)">Сохранить</button>
+                        <input class="input-field" type="text" v-model.trim="setting.description" :placeholder="$t('admin.description')">
+                        <button class="btn btn-success btn-sm" @click="saveSetting(setting)">{{ $t('admin.save') }}</button>
                     </div>
                 </div>
             </div>
@@ -438,6 +499,50 @@
 </template>
 
 <script>
+import enMessages from '../../i18n/messages/en'
+import ruMessages from '../../i18n/messages/ru'
+
+function resolveMessage(messages, key, fallback = '') {
+    if (!messages || typeof messages !== 'object' || typeof key !== 'string' || key.trim() === '') {
+        return fallback
+    }
+
+    const value = key.split('.').reduce((cursor, part) => {
+        if (!cursor || typeof cursor !== 'object') {
+            return null
+        }
+        return Object.prototype.hasOwnProperty.call(cursor, part) ? cursor[part] : null
+    }, messages)
+
+    return value ?? fallback
+}
+
+function defaultHomeContentFromMessages(locale = 'ru') {
+    const dictionary = locale === 'en' ? enMessages : ruMessages
+
+    const featureItems = resolveMessage(dictionary, 'admin.defaultHome.featureItems', [])
+    return {
+        badge: String(resolveMessage(dictionary, 'admin.defaultHome.badge', '')),
+        hero_title: String(resolveMessage(dictionary, 'admin.defaultHome.heroTitle', '')),
+        hero_note: String(resolveMessage(dictionary, 'admin.defaultHome.heroNote', '')),
+        feature_items: Array.isArray(featureItems)
+            ? featureItems.map((item) => String(item ?? '').trim()).filter((item) => item !== '').slice(0, 8)
+            : [],
+        feedback_title: String(resolveMessage(dictionary, 'admin.defaultHome.feedbackTitle', '')),
+        feedback_subtitle: String(resolveMessage(dictionary, 'admin.defaultHome.feedbackSubtitle', '')),
+    }
+}
+
+function buildDefaultHomeContentLocalesPayload() {
+    return {
+        locale: 'ru',
+        locales: {
+            ru: defaultHomeContentFromMessages('ru'),
+            en: defaultHomeContentFromMessages('en'),
+        },
+    }
+}
+
 export default {
     name: 'Admin',
 
@@ -462,18 +567,8 @@ export default {
             messages: [],
             blocks: [],
             settings: [],
-            homeContentForm: {
-                badge: 'Социальная сеть SPA',
-                hero_title: 'Современная платформа с постами, чатами, каруселью медиа и гибкими настройками хранения.',
-                hero_note: 'Публикуйте контент, общайтесь, продвигайте лучшие посты и управляйте видимостью своих материалов. Администратор контролирует настройки сайта и политику хранения фото/видео.',
-                feature_items: [
-                    'Публичные и приватные посты с гибким показом в ленте/карусели.',
-                    'Личные и общие чаты с realtime-доставкой.',
-                    'Админ-панель с полным управлением настройками платформы.',
-                ],
-                feedback_title: 'Обратная связь для администрации',
-                feedback_subtitle: 'Напишите нам предложение, жалобу или вопрос. Сообщение сразу попадёт в админ-панель.',
-            },
+            homeContentActiveLocale: 'ru',
+            homeContentForm: buildDefaultHomeContentLocalesPayload(),
             storageSettings: {
                 media_storage_mode: 'server_local',
                 server_media_disk: 'public',
@@ -486,6 +581,18 @@ export default {
                 description: '',
             },
         }
+    },
+
+    computed: {
+        activeHomeContentLocalePayload() {
+            if (!this.homeContentForm?.locales || typeof this.homeContentForm.locales !== 'object') {
+                return this.defaultHomeContentPayload(this.homeContentActiveLocale)
+            }
+
+            return this.homeContentForm.locales[this.homeContentActiveLocale]
+                ?? this.homeContentForm.locales.ru
+                ?? this.defaultHomeContentPayload('ru')
+        },
     },
 
     async mounted() {
@@ -537,27 +644,150 @@ export default {
 
         async loadUsers() {
             const response = await axios.get('/api/admin/users', { params: { per_page: 50 } })
-            this.users = (response.data.data ?? []).map((user) => ({
+            this.users = (response.data.data ?? []).map((user) => this.normalizeAdminUser(user))
+        },
+
+        normalizeAdminUser(user) {
+            const normalized = {
                 ...user,
                 is_admin: Boolean(user.is_admin),
-            }))
+            }
+
+            return {
+                ...normalized,
+                _save_state: 'idle',
+                _save_message: '',
+                _error_snapshot: null,
+                _snapshot: this.buildAdminUserSnapshot(normalized),
+            }
+        },
+
+        buildAdminUserSnapshot(user) {
+            return {
+                name: String(user?.name ?? '').trim(),
+                email: String(user?.email ?? '').trim(),
+                is_admin: Boolean(user?.is_admin),
+            }
+        },
+
+        hasUserChanges(user) {
+            const snapshot = user?._snapshot ?? this.buildAdminUserSnapshot(user)
+            const current = this.buildAdminUserSnapshot(user)
+
+            return current.name !== snapshot.name
+                || current.email !== snapshot.email
+                || current.is_admin !== snapshot.is_admin
+        },
+
+        canSaveUser(user) {
+            if (!user || user._save_state === 'saving') {
+                return false
+            }
+
+            const current = this.buildAdminUserSnapshot(user)
+            if (current.name === '' || current.email === '') {
+                return false
+            }
+
+            return this.hasUserChanges(user)
+        },
+
+        userStatusMeta(user) {
+            if (!user) {
+                return { kind: 'idle', label: '—' }
+            }
+
+            if (user._save_state === 'saving') {
+                return { kind: 'saving', label: this.$t('admin.saving') }
+            }
+
+            if (user._save_state === 'error') {
+                const errorSnapshot = user?._error_snapshot
+                if (errorSnapshot) {
+                    const current = this.buildAdminUserSnapshot(user)
+                    const changedSinceError = current.name !== errorSnapshot.name
+                        || current.email !== errorSnapshot.email
+                        || current.is_admin !== errorSnapshot.is_admin
+
+                    if (changedSinceError) {
+                        return { kind: 'dirty', label: this.$t('admin.unsavedChanges') }
+                    }
+                }
+
+                return {
+                    kind: 'error',
+                    label: user._save_message || this.$t('admin.saveError'),
+                }
+            }
+
+            if (this.hasUserChanges(user)) {
+                return { kind: 'dirty', label: this.$t('admin.unsavedChanges') }
+            }
+
+            if (user._save_state === 'success') {
+                return {
+                    kind: 'success',
+                    label: user._save_message || this.$t('admin.saved'),
+                }
+            }
+
+            return { kind: 'idle', label: this.$t('admin.noChanges') }
+        },
+
+        extractRequestError(error, fallback) {
+            const firstError = Object.values(error.response?.data?.errors ?? {})
+                .flat()
+                .find(Boolean)
+
+            return firstError ?? error.response?.data?.message ?? fallback
         },
 
         async saveUser(user) {
+            if (!this.canSaveUser(user)) {
+                return
+            }
+
+            const previousSnapshot = user._snapshot ?? this.buildAdminUserSnapshot(user)
+            const currentSnapshot = this.buildAdminUserSnapshot(user)
+            const nameWasChanged = previousSnapshot.name !== currentSnapshot.name
+
+            user._save_state = 'saving'
+            user._save_message = ''
+            user._error_snapshot = null
+
             try {
-                await axios.patch(`/api/admin/users/${user.id}`, {
+                const response = await axios.patch(`/api/admin/users/${user.id}`, {
                     name: user.name,
                     email: user.email,
                     is_admin: Boolean(user.is_admin),
                 })
+
+                const updatedUser = response.data?.data ?? {}
+                user.name = updatedUser.name ?? user.name
+                user.email = updatedUser.email ?? user.email
+                user.is_admin = Boolean(updatedUser.is_admin ?? user.is_admin)
+                user._snapshot = this.buildAdminUserSnapshot(user)
+
+                const savedAt = new Date().toLocaleTimeString('ru-RU', {
+                    hour: '2-digit',
+                    minute: '2-digit',
+                    second: '2-digit',
+                })
+                user._save_state = 'success'
+                user._save_message = nameWasChanged
+                    ? this.$t('admin.nameSavedAt', { time: savedAt })
+                    : this.$t('admin.savedAt', { time: savedAt })
+
                 await this.loadSummary()
             } catch (error) {
-                alert(error.response?.data?.message ?? 'Не удалось сохранить пользователя.')
+                user._save_state = 'error'
+                user._save_message = this.extractRequestError(error, this.$t('admin.saveUserFailed'))
+                user._error_snapshot = this.buildAdminUserSnapshot(user)
             }
         },
 
         async removeUser(user) {
-            if (!confirm(`Удалить пользователя ${user.name}?`)) {
+            if (!confirm(this.$t('admin.confirmDeleteUser', { name: user.name }))) {
                 return
             }
 
@@ -566,7 +796,7 @@ export default {
                 await this.loadUsers()
                 await this.loadSummary()
             } catch (error) {
-                alert(error.response?.data?.message ?? 'Не удалось удалить пользователя.')
+                alert(error.response?.data?.message ?? this.$t('admin.deleteUserFailed'))
             }
         },
 
@@ -620,7 +850,7 @@ export default {
                 const firstError = Object.values(error.response?.data?.errors ?? {})
                     .flat()
                     .find(Boolean)
-                alert(firstError ?? error.response?.data?.message ?? 'Не удалось создать пост.')
+                alert(firstError ?? error.response?.data?.message ?? this.$t('admin.createPostFailed'))
             }
         },
 
@@ -633,12 +863,12 @@ export default {
                 const firstError = Object.values(error.response?.data?.errors ?? {})
                     .flat()
                     .find(Boolean)
-                alert(firstError ?? error.response?.data?.message ?? 'Не удалось обновить пост.')
+                alert(firstError ?? error.response?.data?.message ?? this.$t('admin.updatePostFailed'))
             }
         },
 
         async removePost(post) {
-            if (!confirm(`Удалить пост #${post.id}?`)) {
+            if (!confirm(this.$t('admin.confirmDeletePost', { id: post.id }))) {
                 return
             }
 
@@ -648,7 +878,7 @@ export default {
         },
 
         async clearPostLikes(post) {
-            if (!confirm(`Очистить лайки у поста #${post.id}?`)) {
+            if (!confirm(this.$t('admin.confirmClearPostLikes', { id: post.id }))) {
                 return
             }
 
@@ -658,7 +888,7 @@ export default {
         },
 
         async clearAllLikes() {
-            if (!confirm('Очистить все лайки во всей системе?')) {
+            if (!confirm(this.$t('admin.confirmClearAllLikes'))) {
                 return
             }
 
@@ -673,7 +903,7 @@ export default {
         },
 
         async removeComment(comment) {
-            if (!confirm(`Удалить комментарий #${comment.id}?`)) {
+            if (!confirm(this.$t('admin.confirmDeleteComment', { id: comment.id }))) {
                 return
             }
 
@@ -696,7 +926,7 @@ export default {
         },
 
         async removeFeedback(item) {
-            if (!confirm(`Удалить feedback #${item.id}?`)) {
+            if (!confirm(this.$t('admin.confirmDeleteFeedback', { id: item.id }))) {
                 return
             }
 
@@ -711,7 +941,7 @@ export default {
         },
 
         async clearConversationMessages(conversation) {
-            if (!confirm(`Очистить все сообщения чата #${conversation.id}?`)) {
+            if (!confirm(this.$t('admin.confirmClearChatMessages', { id: conversation.id }))) {
                 return
             }
 
@@ -720,7 +950,7 @@ export default {
         },
 
         async removeConversation(conversation) {
-            if (!confirm(`Удалить чат #${conversation.id} полностью?`)) {
+            if (!confirm(this.$t('admin.confirmDeleteChat', { id: conversation.id }))) {
                 return
             }
 
@@ -729,7 +959,7 @@ export default {
         },
 
         async clearAllConversations() {
-            if (!confirm('Очистить сообщения во всех чатах?')) {
+            if (!confirm(this.$t('admin.confirmClearAllChatsMessages'))) {
                 return
             }
 
@@ -738,7 +968,7 @@ export default {
         },
 
         async removeAllConversations() {
-            if (!confirm('Удалить все чаты полностью?')) {
+            if (!confirm(this.$t('admin.confirmDeleteAllChats'))) {
                 return
             }
 
@@ -762,7 +992,7 @@ export default {
         },
 
         async removeMessage(message) {
-            if (!confirm(`Удалить сообщение #${message.id}?`)) {
+            if (!confirm(this.$t('admin.confirmDeleteMessage', { id: message.id }))) {
                 return
             }
 
@@ -781,7 +1011,7 @@ export default {
                 await this.loadBlocks()
                 await this.loadSummary()
             } catch (error) {
-                alert(error.response?.data?.message ?? 'Не удалось обновить блокировку.')
+                alert(error.response?.data?.message ?? this.$t('admin.updateBlockFailed'))
             }
         },
 
@@ -801,7 +1031,7 @@ export default {
         },
 
         async removeBlock(block) {
-            if (!confirm(`Удалить блокировку #${block.id}?`)) {
+            if (!confirm(this.$t('admin.confirmDeleteBlock', { id: block.id }))) {
                 return
             }
 
@@ -829,23 +1059,16 @@ export default {
             }
         },
 
-        defaultHomeContentPayload() {
-            return {
-                badge: 'Социальная сеть SPA',
-                hero_title: 'Современная платформа с постами, чатами, каруселью медиа и гибкими настройками хранения.',
-                hero_note: 'Публикуйте контент, общайтесь, продвигайте лучшие посты и управляйте видимостью своих материалов. Администратор контролирует настройки сайта и политику хранения фото/видео.',
-                feature_items: [
-                    'Публичные и приватные посты с гибким показом в ленте/карусели.',
-                    'Личные и общие чаты с realtime-доставкой.',
-                    'Админ-панель с полным управлением настройками платформы.',
-                ],
-                feedback_title: 'Обратная связь для администрации',
-                feedback_subtitle: 'Напишите нам предложение, жалобу или вопрос. Сообщение сразу попадёт в админ-панель.',
-            }
+        defaultHomeContentPayload(locale = 'ru') {
+            return defaultHomeContentFromMessages(locale === 'en' ? 'en' : 'ru')
         },
 
-        normalizeHomeContentPayload(payload) {
-            const fallback = this.defaultHomeContentPayload()
+        defaultHomeContentLocalesPayload() {
+            return buildDefaultHomeContentLocalesPayload()
+        },
+
+        normalizeSingleHomeLocalePayload(payload, locale = 'ru') {
+            const fallback = this.defaultHomeContentPayload(locale)
             const featureItems = Array.isArray(payload?.feature_items)
                 ? payload.feature_items.map((item) => String(item ?? '').trim()).filter((item) => item !== '').slice(0, 8)
                 : []
@@ -860,53 +1083,97 @@ export default {
             }
         },
 
+        normalizeHomeContentPayload(payload) {
+            const sourceLocales = payload?.locales && typeof payload.locales === 'object'
+                ? payload.locales
+                : {
+                    ru: payload,
+                    en: this.defaultHomeContentPayload('en'),
+                }
+
+            return {
+                locale: payload?.locale === 'en' ? 'en' : 'ru',
+                locales: {
+                    ru: this.normalizeSingleHomeLocalePayload(sourceLocales.ru, 'ru'),
+                    en: this.normalizeSingleHomeLocalePayload(sourceLocales.en, 'en'),
+                },
+            }
+        },
+
+        setHomeContentLocale(locale) {
+            this.homeContentActiveLocale = locale === 'en' ? 'en' : 'ru'
+        },
+
         async loadHomeContentSettings() {
             try {
-                const response = await axios.get('/api/site/home-content')
+                const response = await axios.get('/api/site/home-content', {
+                    params: {
+                        locale: this.homeContentActiveLocale,
+                    },
+                })
                 this.homeContentForm = this.normalizeHomeContentPayload(response.data.data ?? {})
+                this.homeContentActiveLocale = this.homeContentForm.locale === 'en' ? 'en' : 'ru'
             } catch (error) {
-                this.homeContentForm = this.defaultHomeContentPayload()
+                this.homeContentForm = this.defaultHomeContentLocalesPayload()
+                this.homeContentActiveLocale = 'ru'
             }
         },
 
         addHomeFeatureItem() {
-            if (this.homeContentForm.feature_items.length >= 8) {
+            if (!Array.isArray(this.activeHomeContentLocalePayload?.feature_items)) {
                 return
             }
 
-            this.homeContentForm.feature_items.push('')
+            if (this.activeHomeContentLocalePayload.feature_items.length >= 8) {
+                return
+            }
+
+            this.activeHomeContentLocalePayload.feature_items.push('')
         },
 
         removeHomeFeatureItem(index) {
-            if (this.homeContentForm.feature_items.length <= 1) {
+            if (!Array.isArray(this.activeHomeContentLocalePayload?.feature_items)) {
                 return
             }
 
-            this.homeContentForm.feature_items.splice(index, 1)
+            if (this.activeHomeContentLocalePayload.feature_items.length <= 1) {
+                return
+            }
+
+            this.activeHomeContentLocalePayload.feature_items.splice(index, 1)
         },
 
         async saveHomeContent() {
             try {
-                const response = await axios.patch('/api/admin/settings/home-content', this.normalizeHomeContentPayload(this.homeContentForm))
+                const response = await axios.patch('/api/admin/settings/home-content', {
+                    locale: this.homeContentActiveLocale,
+                    ...this.normalizeHomeContentPayload(this.homeContentForm),
+                })
                 this.homeContentForm = this.normalizeHomeContentPayload(response.data.data ?? {})
+                this.homeContentActiveLocale = this.homeContentForm.locale === 'en' ? 'en' : 'ru'
             } catch (error) {
                 const firstError = Object.values(error.response?.data?.errors ?? {})
                     .flat()
                     .find(Boolean)
-                alert(firstError ?? error.response?.data?.message ?? 'Не удалось сохранить контент главной страницы.')
+                alert(firstError ?? error.response?.data?.message ?? this.$t('admin.saveHomeContentFailed'))
             }
         },
 
         async resetHomeContent() {
-            if (!confirm('Сбросить контент главной страницы к стандартному виду?')) {
+            if (!confirm(this.$t('admin.confirmResetHomeContent'))) {
                 return
             }
 
             try {
-                const response = await axios.delete('/api/admin/settings/home-content')
+                const response = await axios.delete('/api/admin/settings/home-content', {
+                    params: {
+                        locale: this.homeContentActiveLocale,
+                    },
+                })
                 this.homeContentForm = this.normalizeHomeContentPayload(response.data.data ?? {})
+                this.homeContentActiveLocale = this.homeContentForm.locale === 'en' ? 'en' : 'ru'
             } catch (error) {
-                alert(error.response?.data?.message ?? 'Не удалось сбросить контент главной страницы.')
+                alert(error.response?.data?.message ?? this.$t('admin.resetHomeContentFailed'))
             }
         },
 
@@ -920,13 +1187,13 @@ export default {
                 await this.loadStorageSettings()
                 await this.loadSummary()
             } catch (error) {
-                alert(error.response?.data?.message ?? 'Не удалось сохранить настройки хранилища.')
+                alert(error.response?.data?.message ?? this.$t('admin.saveStorageFailed'))
             }
         },
 
         async createSetting() {
             if (!this.newSetting.key) {
-                alert('Укажите ключ настройки.')
+                alert(this.$t('admin.settingKeyRequired'))
                 return
             }
 
@@ -947,7 +1214,7 @@ export default {
 
                 await this.loadSettings()
             } catch (error) {
-                alert(error.response?.data?.message ?? 'Не удалось создать настройку.')
+                alert(error.response?.data?.message ?? this.$t('admin.createSettingFailed'))
             }
         },
 
@@ -961,12 +1228,12 @@ export default {
                 })
                 await this.loadSettings()
             } catch (error) {
-                alert(error.response?.data?.message ?? 'Не удалось сохранить настройку.')
+                alert(error.response?.data?.message ?? this.$t('admin.saveSettingFailed'))
             }
         },
 
         async removeSetting(setting) {
-            if (!confirm(`Удалить настройку "${setting.key}"?`)) {
+            if (!confirm(this.$t('admin.confirmDeleteSetting', { key: setting.key }))) {
                 return
             }
 
@@ -1022,7 +1289,7 @@ export default {
                 return value
             }
 
-            return date.toLocaleString('ru-RU')
+            return date.toLocaleString(this.$route?.params?.locale === 'en' ? 'en-GB' : 'ru-RU')
         },
 
         toDatetimeLocal(value) {

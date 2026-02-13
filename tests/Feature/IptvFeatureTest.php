@@ -3,6 +3,7 @@
 namespace Tests\Feature;
 
 use App\Models\User;
+use App\Services\IptvProxyService;
 use App\Services\IptvTranscodeService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Http;
@@ -81,6 +82,37 @@ class IptvFeatureTest extends TestCase
         $this->assertIsBool($response->json('data.ffmpeg_available'));
         $this->assertIsInt($response->json('data.max_sessions'));
         $this->assertIsInt($response->json('data.session_ttl_seconds'));
+    }
+
+    public function test_proxy_start_returns_relative_playlist_url_for_proxy_player(): void
+    {
+        $user = User::factory()->create();
+        Sanctum::actingAs($user);
+
+        $sessionId = 'abcdefghijklmnopqrstuvwx';
+        $sourceUrl = 'https://iptv.example.com/channel.m3u8';
+
+        $this->mock(IptvProxyService::class, function ($mock) use ($sessionId, $sourceUrl): void {
+            $mock
+                ->shouldReceive('startSession')
+                ->once()
+                ->with($sourceUrl)
+                ->andReturn([
+                    'session_id' => $sessionId,
+                    'source_url' => $sourceUrl,
+                    'created_at' => time(),
+                    'last_access_at' => time(),
+                ]);
+        });
+
+        $response = $this->postJson('/api/iptv/proxy/start', [
+            'url' => $sourceUrl,
+        ]);
+
+        $response
+            ->assertOk()
+            ->assertJsonPath('data.session_id', $sessionId)
+            ->assertJsonPath('data.playlist_url', "/api/iptv/proxy/{$sessionId}/playlist.m3u8");
     }
 
     public function test_transcode_start_rejects_private_hosts_with_validation_error(): void
@@ -216,6 +248,15 @@ class IptvFeatureTest extends TestCase
             ->assertJsonPath('message', 'HLS-плейлист совместимого режима не найден или истек.');
     }
 
+    public function test_proxy_playlist_returns_not_found_for_unknown_session(): void
+    {
+        $response = $this->getJson('/api/iptv/proxy/abcdefghijklmnopqrstuvwx/playlist.m3u8');
+
+        $response
+            ->assertStatus(404)
+            ->assertJsonPath('message', 'Прокси-плейлист не найден или истек.');
+    }
+
     public function test_guest_can_open_transcode_playlist_endpoint_without_redirect_to_login(): void
     {
         $response = $this->getJson('/api/iptv/transcode/abcdefghijklmnopqrstuvwx/playlist.m3u8');
@@ -246,6 +287,24 @@ class IptvFeatureTest extends TestCase
             ->assertJsonPath('message', 'HLS-сегмент не найден или истек.');
     }
 
+    public function test_proxy_segment_requires_segment_url_parameter(): void
+    {
+        $response = $this->getJson('/api/iptv/proxy/abcdefghijklmnopqrstuvwx/segment');
+
+        $response
+            ->assertStatus(422)
+            ->assertJsonPath('message', 'Не указан URL сегмента для прокси.');
+    }
+
+    public function test_guest_can_open_proxy_segment_endpoint_without_redirect_to_login(): void
+    {
+        $response = $this->getJson('/api/iptv/proxy/abcdefghijklmnopqrstuvwx/segment?url=https%3A%2F%2Fstream.example.com%2Fsegment.ts');
+
+        $response
+            ->assertStatus(404)
+            ->assertJsonPath('message', 'Прокси-сегмент не найден или истек.');
+    }
+
     public function test_transcode_stop_returns_success_for_unknown_session(): void
     {
         $user = User::factory()->create();
@@ -256,5 +315,17 @@ class IptvFeatureTest extends TestCase
         $response
             ->assertOk()
             ->assertJsonPath('message', 'Совместимый режим остановлен.');
+    }
+
+    public function test_proxy_stop_returns_success_for_unknown_session(): void
+    {
+        $user = User::factory()->create();
+        Sanctum::actingAs($user);
+
+        $response = $this->deleteJson('/api/iptv/proxy/abcdefghijklmnopqrstuvwx');
+
+        $response
+            ->assertOk()
+            ->assertJsonPath('message', 'IPTV-прокси остановлен.');
     }
 }

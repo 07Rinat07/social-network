@@ -19,6 +19,13 @@ class SiteSettingService
     public const KEY_SERVER_MEDIA_DISK = 'server_media_disk';
     public const KEY_CLOUD_MEDIA_DISK = 'cloud_media_disk';
     public const KEY_HOME_PAGE_CONTENT = 'home_page_content';
+    public const HOME_CONTENT_LOCALE_RU = 'ru';
+    public const HOME_CONTENT_LOCALE_EN = 'en';
+    public const HOME_CONTENT_DEFAULT_LOCALE = self::HOME_CONTENT_LOCALE_RU;
+    public const HOME_CONTENT_LOCALES = [
+        self::HOME_CONTENT_LOCALE_RU,
+        self::HOME_CONTENT_LOCALE_EN,
+    ];
 
     protected static ?array $cache = null;
 
@@ -131,83 +138,106 @@ class SiteSettingService
         ];
     }
 
-    public function defaultHomePageContent(): array
+    public function defaultHomePageContent(?string $locale = null): array
     {
-        return [
-            'badge' => 'Социальная сеть SPA',
-            'hero_title' => 'Современная платформа с постами, чатами, каруселью медиа и гибкими настройками хранения.',
-            'hero_note' => 'Публикуйте контент, общайтесь, продвигайте лучшие посты и управляйте видимостью своих материалов. Администратор контролирует настройки сайта и политику хранения фото/видео.',
-            'feature_items' => [
-                'Публичные и приватные посты с гибким показом в ленте/карусели.',
-                'Личные и общие чаты с realtime-доставкой.',
-                'Админ-панель с полным управлением настройками платформы.',
-            ],
-            'feedback_title' => 'Обратная связь для администрации',
-            'feedback_subtitle' => 'Напишите нам предложение, жалобу или вопрос. Сообщение сразу попадёт в админ-панель.',
-        ];
+        $normalizedLocale = $this->normalizeHomeContentLocale($locale);
+        $locales = $this->defaultHomePageContentLocales();
+
+        return $this->composeHomePageContentResponse($locales, $normalizedLocale);
     }
 
-    public function homePageContent(): array
+    public function defaultHomePageContentForLocale(string $locale): array
     {
-        $defaults = $this->defaultHomePageContent();
+        $normalizedLocale = $this->normalizeHomeContentLocale($locale);
+
+        return match ($normalizedLocale) {
+            self::HOME_CONTENT_LOCALE_EN => [
+                'badge' => 'Social Network SPA',
+                'hero_title' => 'Modern platform with posts, chats, media carousel, and flexible storage settings.',
+                'hero_note' => 'Publish content, communicate, promote top posts, and manage visibility of your media. Administrator controls site settings and photo/video storage policy.',
+                'feature_items' => [
+                    'Public and private posts with flexible feed/carousel visibility.',
+                    'Private and global chats with realtime delivery.',
+                    'Admin panel with complete platform settings control.',
+                ],
+                'feedback_title' => 'Feedback for administration',
+                'feedback_subtitle' => 'Send us a suggestion, complaint, or question. The message goes directly to the admin panel.',
+            ],
+            default => [
+                'badge' => 'Социальная сеть SPA',
+                'hero_title' => 'Современная платформа с постами, чатами, каруселью медиа и гибкими настройками хранения.',
+                'hero_note' => 'Публикуйте контент, общайтесь, продвигайте лучшие посты и управляйте видимостью своих материалов. Администратор контролирует настройки сайта и политику хранения фото/видео.',
+                'feature_items' => [
+                    'Публичные и приватные посты с гибким показом в ленте/карусели.',
+                    'Личные и общие чаты с realtime-доставкой.',
+                    'Админ-панель с полным управлением настройками платформы.',
+                ],
+                'feedback_title' => 'Обратная связь для администрации',
+                'feedback_subtitle' => 'Напишите нам предложение, жалобу или вопрос. Сообщение сразу попадёт в админ-панель.',
+            ],
+        };
+    }
+
+    public function defaultHomePageContentLocales(): array
+    {
+        $result = [];
+
+        foreach (self::HOME_CONTENT_LOCALES as $locale) {
+            $result[$locale] = $this->defaultHomePageContentForLocale($locale);
+        }
+
+        return $result;
+    }
+
+    public function homePageContent(?string $locale = null): array
+    {
+        $normalizedLocale = $this->normalizeHomeContentLocale($locale);
+        $locales = $this->homePageContentLocales();
+
+        return $this->composeHomePageContentResponse($locales, $normalizedLocale);
+    }
+
+    public function homePageContentLocales(): array
+    {
         $raw = $this->get(self::KEY_HOME_PAGE_CONTENT);
 
-        if (!is_array($raw)) {
-            return $defaults;
-        }
-
-        $sanitizeSingleLine = function (mixed $value): string {
-            if (!is_string($value)) {
-                return '';
-            }
-
-            $normalized = preg_replace('/\s+/u', ' ', trim($value));
-
-            return $normalized === null ? '' : $normalized;
-        };
-
-        $sanitizeMultiLine = function (mixed $value): string {
-            if (!is_string($value)) {
-                return '';
-            }
-
-            return trim(str_replace(["\r\n", "\r"], "\n", $value));
-        };
-
-        $featureItems = collect(is_array($raw['feature_items'] ?? null) ? $raw['feature_items'] : [])
-            ->map(fn ($item) => $sanitizeSingleLine($item))
-            ->filter(fn ($item) => $item !== '')
-            ->take(8)
-            ->values()
-            ->all();
-
-        if ($featureItems === []) {
-            $featureItems = $defaults['feature_items'];
-        }
-
-        return [
-            'badge' => $sanitizeSingleLine($raw['badge'] ?? '') ?: $defaults['badge'],
-            'hero_title' => $sanitizeSingleLine($raw['hero_title'] ?? '') ?: $defaults['hero_title'],
-            'hero_note' => $sanitizeMultiLine($raw['hero_note'] ?? '') ?: $defaults['hero_note'],
-            'feature_items' => $featureItems,
-            'feedback_title' => $sanitizeSingleLine($raw['feedback_title'] ?? '') ?: $defaults['feedback_title'],
-            'feedback_subtitle' => $sanitizeMultiLine($raw['feedback_subtitle'] ?? '') ?: $defaults['feedback_subtitle'],
-        ];
+        return $this->extractHomePageContentLocales($raw);
     }
 
-    public function setHomePageContent(array $content): array
+    public function setHomePageContent(array $content, ?string $locale = null): array
     {
+        $normalizedLocale = $this->normalizeHomeContentLocale($locale);
+        $locales = $this->homePageContentLocales();
+
+        if (is_array($content['locales'] ?? null)) {
+            foreach (self::HOME_CONTENT_LOCALES as $localeCode) {
+                if (!is_array($content['locales'][$localeCode] ?? null)) {
+                    continue;
+                }
+
+                $locales[$localeCode] = $this->normalizeHomePageLocalePayload(
+                    $content['locales'][$localeCode],
+                    $this->defaultHomePageContentForLocale($localeCode)
+                );
+            }
+        } else {
+            $locales[$normalizedLocale] = $this->normalizeHomePageLocalePayload(
+                $content,
+                $this->defaultHomePageContentForLocale($normalizedLocale)
+            );
+        }
+
         $this->set(
             self::KEY_HOME_PAGE_CONTENT,
             SiteSetting::TYPE_JSON,
-            $content,
+            ['locales' => $locales],
             'Editable content for home page hero and feedback blocks'
         );
 
-        return $this->homePageContent();
+        return $this->homePageContent($normalizedLocale);
     }
 
-    public function resetHomePageContent(): array
+    public function resetHomePageContent(?string $locale = null): array
     {
         SiteSetting::query()
             ->where('key', self::KEY_HOME_PAGE_CONTENT)
@@ -215,7 +245,95 @@ class SiteSettingService
 
         self::$cache = null;
 
-        return $this->defaultHomePageContent();
+        return $this->defaultHomePageContent($locale);
+    }
+
+    protected function normalizeHomeContentLocale(?string $locale): string
+    {
+        $normalized = strtolower(trim((string) $locale));
+
+        return in_array($normalized, self::HOME_CONTENT_LOCALES, true)
+            ? $normalized
+            : self::HOME_CONTENT_DEFAULT_LOCALE;
+    }
+
+    protected function extractHomePageContentLocales(mixed $raw): array
+    {
+        $defaults = $this->defaultHomePageContentLocales();
+        $legacyPayload = is_array($raw) ? $raw : [];
+        $hasLocalizedPayload = is_array($legacyPayload['locales'] ?? null);
+        $localizedPayload = $hasLocalizedPayload ? $legacyPayload['locales'] : [];
+        $result = [];
+
+        foreach (self::HOME_CONTENT_LOCALES as $locale) {
+            $candidatePayload = is_array($localizedPayload[$locale] ?? null)
+                ? $localizedPayload[$locale]
+                : [];
+
+            if (!$hasLocalizedPayload && $locale === self::HOME_CONTENT_LOCALE_RU) {
+                // Backward compatibility: old payload used a flat single-locale structure.
+                $candidatePayload = $legacyPayload;
+            }
+
+            $result[$locale] = $this->normalizeHomePageLocalePayload($candidatePayload, $defaults[$locale]);
+        }
+
+        return $result;
+    }
+
+    protected function composeHomePageContentResponse(array $locales, string $locale): array
+    {
+        $normalizedLocale = $this->normalizeHomeContentLocale($locale);
+        $activeContent = $locales[$normalizedLocale] ?? $this->defaultHomePageContentForLocale($normalizedLocale);
+
+        return array_merge(
+            ['locale' => $normalizedLocale],
+            $activeContent,
+            ['locales' => $locales]
+        );
+    }
+
+    protected function normalizeHomePageSingleLine(mixed $value): string
+    {
+        if (!is_string($value)) {
+            return '';
+        }
+
+        $normalized = preg_replace('/\s+/u', ' ', trim($value));
+
+        return $normalized === null ? '' : $normalized;
+    }
+
+    protected function normalizeHomePageMultiLine(mixed $value): string
+    {
+        if (!is_string($value)) {
+            return '';
+        }
+
+        return trim(str_replace(["\r\n", "\r"], "\n", $value));
+    }
+
+    protected function normalizeHomePageLocalePayload(array $raw, array $fallback): array
+    {
+        $featureItems = collect(is_array($raw['feature_items'] ?? null) ? $raw['feature_items'] : [])
+            ->map(fn ($item) => $this->normalizeHomePageSingleLine($item))
+            ->filter(fn ($item) => $item !== '')
+            ->take(8)
+            ->values()
+            ->all();
+
+        if ($featureItems === []) {
+            $featureItems = $fallback['feature_items'];
+        }
+
+        return [
+            'badge' => $this->normalizeHomePageSingleLine($raw['badge'] ?? '') ?: $fallback['badge'],
+            'hero_title' => $this->normalizeHomePageSingleLine($raw['hero_title'] ?? '') ?: $fallback['hero_title'],
+            'hero_note' => $this->normalizeHomePageMultiLine($raw['hero_note'] ?? '') ?: $fallback['hero_note'],
+            'feature_items' => $featureItems,
+            'feedback_title' => $this->normalizeHomePageSingleLine($raw['feedback_title'] ?? '') ?: $fallback['feedback_title'],
+            'feedback_subtitle' => $this->normalizeHomePageMultiLine($raw['feedback_subtitle'] ?? '') ?: $fallback['feedback_subtitle'],
+        ];
     }
 
     public function decodeValue(SiteSetting $setting): mixed

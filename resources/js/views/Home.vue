@@ -1,47 +1,168 @@
 <template>
     <div class="page-wrap grid-layout home-page-bg" :style="homePageStyle">
         <section class="section-card hero-grid home-hero-card">
-            <div>
-                <span class="badge">{{ homeContent.badge }}</span>
-                <h1 class="hero-heading">{{ homeContent.hero_title }}</h1>
-                <p class="hero-note">{{ homeContent.hero_note }}</p>
-                <div class="feature-list">
-                    <div class="feature-item" v-for="(item, index) in homeContent.feature_items" :key="`home-feature-${index}`">{{ item }}</div>
+            <div class="home-hero-main">
+                <div class="home-hero-copy">
+                    <span class="badge home-hero-badge">{{ homeContent.badge }}</span>
+                    <h1 class="hero-heading">{{ homeContent.hero_title }}</h1>
+                    <p class="hero-note">{{ homeContent.hero_note }}</p>
+                </div>
+
+                <div class="home-hero-actions" v-if="!isAuthenticated">
+                    <router-link class="btn btn-primary" :to="{name: 'user.registration'}">{{ $t('home.createAccount') }}</router-link>
+                    <router-link class="btn btn-outline" :to="{name: 'user.login'}">{{ $t('home.signIn') }}</router-link>
+                </div>
+
+                <div class="home-feature-list">
+                    <article class="home-feature-item" v-for="(item, index) in homeContent.feature_items" :key="`home-feature-${index}`">
+                        <span class="home-feature-index">{{ String(index + 1).padStart(2, '0') }}</span>
+                        <span>{{ item }}</span>
+                    </article>
                 </div>
             </div>
 
             <div class="section-card hero-quick">
-                <h2 class="section-title hero-quick-title">{{ isVerifiedUser ? 'Добро пожаловать' : (isAuthenticated ? 'Подтвердите email' : 'Быстрый старт') }}</h2>
+                <h2 class="section-title hero-quick-title">{{ quickTitle }}</h2>
                 <p class="section-subtitle" v-if="isVerifiedUser">
-                    {{ user?.display_name || user?.name }}, вам доступны карусель публичных медиа и ленты лучших публикаций.
+                    {{ $t('home.welcomeLine', {name: (user?.display_name || user?.name)}) }}
                 </p>
                 <p class="section-subtitle" v-else-if="isAuthenticated">
-                    Подтвердите email, чтобы открыть публикации, чаты, ленты и личный кабинет.
+                    {{ $t('home.verifyHint') }}
                 </p>
                 <p class="section-subtitle" v-else>
-                    Создайте аккаунт и получите доступ ко всем функциям соцсети.
+                    {{ $t('home.guestHint') }}
                 </p>
                 <div class="form-grid">
                     <template v-if="!isAuthenticated">
-                        <router-link class="btn btn-primary" :to="{name: 'user.registration'}">Регистрация</router-link>
-                        <router-link class="btn btn-outline" :to="{name: 'user.login'}">Вход в аккаунт</router-link>
+                        <router-link class="btn btn-primary" :to="{name: 'user.registration'}">{{ $t('home.registration') }}</router-link>
+                        <router-link class="btn btn-outline" :to="{name: 'user.login'}">{{ $t('home.accountLogin') }}</router-link>
                     </template>
                     <template v-else-if="isVerifiedUser">
-                        <router-link class="btn btn-primary" :to="{name: 'user.personal'}">Создать пост</router-link>
-                        <router-link class="btn btn-outline" :to="{name: 'chat.index'}">Открыть чаты</router-link>
-                        <router-link class="btn btn-sun" :to="{name: 'user.feed'}">Лента подписок</router-link>
+                        <router-link class="btn btn-primary" :to="{name: 'user.personal'}">{{ $t('home.createPost') }}</router-link>
+                        <router-link class="btn btn-outline" :to="{name: 'chat.index'}">{{ $t('home.openChats') }}</router-link>
+                        <router-link class="btn btn-sun" :to="{name: 'user.feed'}">{{ $t('home.followingFeed') }}</router-link>
                     </template>
                     <template v-else>
-                        <router-link class="btn btn-primary" :to="{name: 'auth.verify'}">Подтвердить email</router-link>
-                        <router-link class="btn btn-outline" :to="{name: 'home'}">На главную</router-link>
+                        <router-link class="btn btn-primary" :to="{name: 'auth.verify'}">{{ $t('home.verifyEmail') }}</router-link>
+                        <router-link class="btn btn-outline" :to="{name: 'home'}">{{ $t('home.toHome') }}</router-link>
                     </template>
+                </div>
+
+                <div class="home-quick-stats">
+                    <article class="home-quick-stat" v-for="item in quickStats" :key="item.label">
+                        <span>{{ item.label }}</span>
+                        <strong>{{ item.value }}</strong>
+                    </article>
+                </div>
+
+                <div class="home-quick-parade" aria-hidden="true">
+                    <div class="home-quick-parade-head">
+                        <span>{{ $t('home.feedInMotion') }}</span>
+                        <small>{{ $t('home.motionTrail') }}</small>
+                    </div>
+                    <div class="home-quick-parade-stage">
+                        <div class="home-quick-parade-lane"></div>
+                        <span class="home-quick-checkpoint is-feed">{{ $t('home.motionFeed') }}</span>
+                        <span class="home-quick-checkpoint is-chat">{{ $t('home.motionChat') }}</span>
+                        <span class="home-quick-checkpoint is-like">{{ $t('home.motionLike') }}</span>
+
+                        <div class="home-quick-mascot-runner">
+                            <div class="home-quick-mascot">
+                                <div class="home-quick-mascot-figure">
+                                    <div class="home-quick-mascot-head">
+                                        <svg class="home-quick-logo-head" viewBox="0 0 120 120" role="presentation" focusable="false">
+                                            <g opacity="0.95">
+                                                <rect x="54" y="6" width="12" height="36" rx="6" fill="#37b9ff"></rect>
+                                                <rect x="54" y="6" width="12" height="36" rx="6" transform="rotate(45 60 60)" fill="#9d74ff"></rect>
+                                                <rect x="54" y="6" width="12" height="36" rx="6" transform="rotate(90 60 60)" fill="#1fcf8f"></rect>
+                                                <rect x="54" y="6" width="12" height="36" rx="6" transform="rotate(135 60 60)" fill="#ff80ba"></rect>
+                                                <rect x="54" y="6" width="12" height="36" rx="6" transform="rotate(180 60 60)" fill="#ff9b52"></rect>
+                                                <rect x="54" y="6" width="12" height="36" rx="6" transform="rotate(225 60 60)" fill="#f5c14f"></rect>
+                                                <rect x="54" y="6" width="12" height="36" rx="6" transform="rotate(270 60 60)" fill="#39c3be"></rect>
+                                                <rect x="54" y="6" width="12" height="36" rx="6" transform="rotate(315 60 60)" fill="#56a7ff"></rect>
+                                            </g>
+                                            <circle cx="60" cy="60" r="21" fill="#0d63d7"></circle>
+                                            <circle cx="60" cy="60" r="14" fill="#f3f9ff" fill-opacity="0.26"></circle>
+                                            <g fill="#ffffff" opacity="0.94">
+                                                <circle cx="60" cy="48" r="2.8"></circle>
+                                                <circle cx="70.6" cy="63.8" r="2.8"></circle>
+                                                <circle cx="49.4" cy="63.8" r="2.8"></circle>
+                                                <circle cx="60" cy="60" r="3.2"></circle>
+                                            </g>
+                                        </svg>
+                                    </div>
+                                    <span class="home-quick-mascot-body"></span>
+                                    <span class="home-quick-mascot-arm is-left"></span>
+                                    <span class="home-quick-mascot-arm is-right"></span>
+                                    <span class="home-quick-mascot-leg is-left"></span>
+                                    <span class="home-quick-mascot-leg is-right"></span>
+                                    <span class="home-quick-mascot-trail"></span>
+                                </div>
+                                <span class="home-quick-bubble">{{ $t('home.motionBubble') }}</span>
+                            </div>
+                        </div>
+
+                        <span class="home-quick-float is-chat">💬</span>
+                        <span class="home-quick-float is-heart">❤️</span>
+                        <span class="home-quick-float is-star">✨</span>
+                        <span class="home-quick-float is-bolt">⚡</span>
+                    </div>
+                </div>
+
+                <div class="home-world-widget">
+                    <div class="home-world-widget-head">
+                        <span>{{ worldOverviewTitle }}</span>
+                        <small v-if="worldOverviewUpdatedLabel">{{ worldOverviewUpdatedLabel }}</small>
+                    </div>
+
+                    <p class="muted home-world-widget-hint" v-if="isWorldOverviewLoading && worldOverviewCities.length === 0">
+                        {{ $t('home.worldLoading') }}
+                    </p>
+                    <p class="error-text" v-if="worldOverviewError">{{ worldOverviewError }}</p>
+
+                    <div class="home-world-grid" v-if="worldOverviewCities.length > 0">
+                        <article class="home-world-card" v-for="city in worldOverviewCities" :key="`world-city-${city.id}`">
+                            <div class="home-world-card-head">
+                                <strong>{{ city.name }}</strong>
+                                <span>{{ city.country }}</span>
+                            </div>
+
+                            <div class="home-world-card-time">{{ formatWorldCityTime(city) }}</div>
+
+                            <div class="home-world-card-weather">
+                                <span class="home-world-card-icon">{{ city.weather?.icon || '🌡️' }}</span>
+                                <span>{{ formatWorldCityTemperature(city) }}</span>
+                                <small>{{ formatWorldCityWind(city) }}</small>
+                            </div>
+
+                            <p class="home-world-card-note">
+                                {{ city.weather?.description || $t('home.noWeatherData') }}
+                            </p>
+                        </article>
+                    </div>
                 </div>
             </div>
         </section>
 
+        <section class="section-card home-showcase-card">
+            <div class="home-showcase-head">
+                <span class="badge home-showcase-badge">{{ $t('home.showcaseBadge') }}</span>
+                <h2 class="section-title">{{ $t('home.showcaseTitle') }}</h2>
+                <p class="section-subtitle">{{ $t('home.showcaseSubtitle') }}</p>
+            </div>
+
+            <div class="home-showcase-grid">
+                <article class="home-showcase-item" v-for="item in homeShowcaseCards" :key="item.kicker">
+                    <span class="home-showcase-kicker">{{ item.kicker }}</span>
+                    <h3>{{ item.title }}</h3>
+                    <p>{{ item.note }}</p>
+                </article>
+            </div>
+        </section>
+
         <section class="section-card" v-if="isVerifiedUser">
-            <h2 class="section-title">Галерея-карусель публичного медиа</h2>
-            <p class="section-subtitle">Здесь показываются фото и видео, которые авторы отметили для карусели.</p>
+            <h2 class="section-title">{{ $t('home.carouselTitle') }}</h2>
+            <p class="section-subtitle">{{ $t('home.carouselSubtitle') }}</p>
 
             <div
                 v-if="carouselItems.length > 0"
@@ -51,73 +172,101 @@
                 @focusin="pauseCarouselAutoplay"
                 @focusout="resumeCarouselAutoplay"
             >
-                <div class="home-carousel-media">
-                    <MediaPlayer
-                        v-if="currentCarouselItem.type === 'video'"
-                        type="video"
-                        :src="currentCarouselItem.url"
-                        player-class="media-video"
-                    ></MediaPlayer>
-                    <button
-                        v-else
-                        type="button"
-                        class="media-open-btn"
-                        @click="openMedia(currentCarouselItem.url, currentCarouselItem.post?.title || 'carousel media')"
+                <div class="home-carousel-marquee">
+                    <div
+                        class="home-carousel-track"
+                        :class="{ 'is-paused': isCarouselAutoplayPaused || carouselItems.length <= 1 }"
+                        :style="carouselTrackStyle"
                     >
-                        <img
-                            :src="currentCarouselItem.url"
-                            :alt="currentCarouselItem.post?.title || 'carousel media'"
-                            class="media-preview home-carousel-image"
-                            @error="handlePreviewError($event, currentCarouselItem.post?.title || 'media')"
-                            @load="handlePreviewLoad"
+                        <button
+                            v-for="item in carouselConveyorItems"
+                            :key="item._carouselTrackKey"
+                            type="button"
+                            class="home-carousel-card"
+                            :class="{ 'is-active': item._sourceIndex === activeCarouselIndex }"
+                            @click="handleCarouselCardClick(item._sourceIndex)"
                         >
-                    </button>
+                            <div class="home-carousel-card-media">
+                                <div v-if="item.type === 'video'" class="home-carousel-card-video-placeholder">
+                                    {{ $t('home.videoLabel') }}
+                                </div>
+                                <img
+                                    v-else
+                                    :src="item.url"
+                                    :alt="item.post?.title || 'carousel media'"
+                                    class="media-preview home-carousel-card-image"
+                                    @error="handlePreviewError($event, item.post?.title || 'media')"
+                                    @load="handlePreviewLoad"
+                                >
+                            </div>
+                            <span class="home-carousel-card-type">{{ item.type === 'video' ? 'VIDEO' : 'PHOTO' }}</span>
+                            <strong class="home-carousel-card-title">{{ item.post?.title || $t('home.untitledPost') }}</strong>
+                            <small class="muted home-carousel-card-author">
+                                {{ item.post?.user?.display_name || item.post?.user?.name || $t('common.user') }}
+                            </small>
+                        </button>
+                    </div>
                 </div>
 
                 <div class="home-carousel-meta">
-                    <strong>{{ currentCarouselItem.post?.title || 'Пост без заголовка' }}</strong>
+                    <strong>{{ currentCarouselItem.post?.title || $t('home.untitledPost') }}</strong>
                     <p class="muted home-carousel-author">
-                        Автор: {{ currentCarouselItem.post?.user?.display_name || currentCarouselItem.post?.user?.name || 'Пользователь' }} ·
+                        {{ $t('home.author') }} {{ currentCarouselItem.post?.user?.display_name || currentCarouselItem.post?.user?.name || $t('common.user') }} ·
                         👁 {{ currentCarouselItem.post?.views_count ?? 0 }}
                     </p>
                     <p class="home-carousel-content">{{ currentCarouselItem.post?.content || '—' }}</p>
                 </div>
 
                 <div class="home-carousel-controls">
-                    <button class="btn btn-outline btn-sm" @click="prevSlide">Предыдущее</button>
-                    <button class="btn btn-outline btn-sm" @click="nextSlide">Следующее</button>
-                    <span class="muted home-carousel-counter">{{ currentSlide + 1 }} / {{ carouselItems.length }}</span>
+                    <button class="btn btn-outline btn-sm" @click="selectPreviousCarouselItem">{{ $t('home.previous') }}</button>
+                    <button class="btn btn-outline btn-sm" @click="selectNextCarouselItem">{{ $t('home.next') }}</button>
+                    <button
+                        class="btn btn-primary btn-sm"
+                        :disabled="!canOpenCurrentCarouselPost"
+                        @click="openCarouselPostModal"
+                    >
+                        {{ $t('home.openPost') }}
+                    </button>
+                    <button
+                        class="btn btn-outline btn-sm"
+                        :disabled="!currentCarouselItem.url"
+                        @click="openMedia(currentCarouselItem.url, currentCarouselItem.post?.title || 'carousel media')"
+                    >
+                        {{ $t('home.openMedia') }}
+                    </button>
+                    <span class="muted home-carousel-counter">{{ activeCarouselIndex + 1 }} / {{ carouselItems.length }}</span>
                 </div>
+                <p class="muted home-carousel-tip">{{ $t('home.carouselTip') }}</p>
             </div>
 
-            <p v-else class="muted">Пока нет публичных материалов для карусели.</p>
+            <p v-else class="muted">{{ $t('home.carouselEmpty') }}</p>
         </section>
 
         <section class="section-card" v-if="isVerifiedUser">
-            <h2 class="section-title">Ленты сообщества</h2>
-            <p class="section-subtitle">Популярные, самые просматриваемые и новые посты платформы.</p>
+            <h2 class="section-title">{{ $t('home.communityFeeds') }}</h2>
+            <p class="section-subtitle">{{ $t('home.communityFeedsSubtitle') }}</p>
 
             <div class="discover-tabs">
-                <button class="btn" :class="discoverSort === 'popular' ? 'btn-primary' : 'btn-outline'" @click="loadDiscover('popular')">Популярные</button>
-                <button class="btn" :class="discoverSort === 'most_viewed' ? 'btn-primary' : 'btn-outline'" @click="loadDiscover('most_viewed')">Просматриваемые</button>
-                <button class="btn" :class="discoverSort === 'newest' ? 'btn-primary' : 'btn-outline'" @click="loadDiscover('newest')">Новые</button>
+                <button class="btn" :class="discoverSort === 'popular' ? 'btn-primary' : 'btn-outline'" @click="loadDiscover('popular')">{{ $t('home.popular') }}</button>
+                <button class="btn" :class="discoverSort === 'most_viewed' ? 'btn-primary' : 'btn-outline'" @click="loadDiscover('most_viewed')">{{ $t('home.mostViewed') }}</button>
+                <button class="btn" :class="discoverSort === 'newest' ? 'btn-primary' : 'btn-outline'" @click="loadDiscover('newest')">{{ $t('home.newest') }}</button>
             </div>
 
-            <p class="muted" v-if="isLoadingDiscover">Загрузка...</p>
-            <p class="muted" v-else-if="discoverPosts.length === 0">Пока нет постов для этого раздела.</p>
+            <p class="muted" v-if="isLoadingDiscover">{{ $t('common.loading') }}</p>
+            <p class="muted" v-else-if="discoverPosts.length === 0">{{ $t('home.discoverEmpty') }}</p>
 
             <div class="post-list" v-else>
                 <Post v-for="post in discoverPosts" :key="`discover-post-${post.id}`" :post="post"></Post>
             </div>
         </section>
 
-        <section class="section-card home-feedback-card">
+        <section id="feedback-form" class="section-card home-feedback-card">
             <h2 class="section-title">{{ homeContent.feedback_title }}</h2>
             <p class="section-subtitle">{{ homeContent.feedback_subtitle }}</p>
             <form class="form-grid" @submit.prevent="submitFeedback">
-                <input class="input-field" v-model.trim="form.name" type="text" placeholder="Ваше имя">
-                <input class="input-field" v-model.trim="form.email" type="email" placeholder="Ваш email">
-                <textarea class="textarea-field" v-model.trim="form.message" placeholder="Ваше сообщение"></textarea>
+                <input class="input-field" v-model.trim="form.name" type="text" :placeholder="$t('home.feedbackNamePlaceholder')">
+                <input class="input-field" v-model.trim="form.email" type="email" :placeholder="$t('home.feedbackEmailPlaceholder')">
+                <textarea class="textarea-field" v-model.trim="form.message" :placeholder="$t('home.feedbackMessagePlaceholder')"></textarea>
 
                 <div v-if="errors.name">
                     <p v-for="error in errors.name" :key="error" class="error-text">{{ error }}</p>
@@ -133,25 +282,42 @@
                 </div>
                 <p v-if="successMessage" class="success-text">{{ successMessage }}</p>
                 <div v-if="feedbackDeliveryState === 'sent'" class="feature-item">
-                    <p class="muted">Обращение принято.</p>
+                    <p class="muted">{{ $t('home.feedbackAccepted') }}</p>
                 </div>
                 <div v-if="feedbackDeliveryState !== 'idle'" class="feature-item">
                     <p class="muted">
-                        Статус отправки: <strong>{{ feedbackDeliveryLabel }}</strong>
+                        {{ $t('home.feedbackDeliveryStatus') }} <strong>{{ feedbackDeliveryLabel }}</strong>
                     </p>
                     <p v-if="lastFeedbackMeta?.id" class="muted">
-                        Номер обращения: <strong>#{{ lastFeedbackMeta.id }}</strong>
+                        {{ $t('home.feedbackRequestNumber') }} <strong>#{{ lastFeedbackMeta.id }}</strong>
                     </p>
                     <p v-if="lastFeedbackMeta?.status" class="muted">
-                        Статус обращения: <strong>{{ feedbackStatusLabel(lastFeedbackMeta.status) }}</strong>
+                        {{ $t('home.feedbackRequestStatus') }} <strong>{{ feedbackStatusLabel(lastFeedbackMeta.status) }}</strong>
                     </p>
                 </div>
 
                 <button class="btn btn-primary" :disabled="isSending" type="submit">
-                    {{ isSending ? 'Отправка...' : 'Отправить в администрацию' }}
+                    {{ isSending ? $t('common.sending') : $t('home.sendToAdmin') }}
                 </button>
             </form>
         </section>
+
+        <div
+            v-if="isCarouselPostModalOpen && carouselModalPost"
+            class="home-post-modal"
+            role="dialog"
+            aria-modal="true"
+            :aria-label="$t('home.carouselPostModalAria')"
+            @click.self="closeCarouselPostModal"
+        >
+            <div class="home-post-modal-dialog">
+                <div class="home-post-modal-head">
+                    <strong>{{ $t('home.carouselPostModalTitle') }}</strong>
+                    <button class="btn btn-outline btn-sm" type="button" @click="closeCarouselPostModal">{{ $t('common.close') }}</button>
+                </div>
+                <Post :post="carouselModalPost"></Post>
+            </div>
+        </div>
 
         <MediaLightbox ref="mediaLightbox"></MediaLightbox>
     </div>
@@ -159,32 +325,48 @@
 
 <script>
 import MediaLightbox from '../components/MediaLightbox.vue'
-import MediaPlayer from '../components/MediaPlayer.vue'
 import Post from '../components/Post.vue'
 import { applyImagePreviewFallback, resetImagePreviewFallback } from '../utils/mediaPreview'
 import homeSocialMapBackground from '../../images/home-social-map.jpg'
+import enMessages from '../i18n/messages/en'
+import ruMessages from '../i18n/messages/ru'
 
-const defaultHomeContent = () => ({
-    badge: 'Социальная сеть SPA',
-    hero_title: 'Современная платформа с постами, чатами, каруселью медиа и гибкими настройками хранения.',
-    hero_note: 'Публикуйте контент, общайтесь, продвигайте лучшие посты и управляйте видимостью своих материалов. Администратор контролирует настройки сайта и политику хранения фото/видео.',
-    feature_items: [
-        'Публичные и приватные посты с гибким показом в ленте/карусели.',
-        'Личные и общие чаты с realtime-доставкой.',
-        'Админ-панель с полным управлением настройками платформы.',
-    ],
-    feedback_title: 'Обратная связь для администрации',
-    feedback_subtitle: 'Напишите нам предложение, жалобу или вопрос. Сообщение сразу попадёт в админ-панель.',
-})
+function resolveMessage(messages, key, fallback = '') {
+    if (!messages || typeof messages !== 'object' || typeof key !== 'string' || key.trim() === '') {
+        return fallback
+    }
 
-const CAROUSEL_AUTOPLAY_INTERVAL_MS = 5000
+    const value = key.split('.').reduce((cursor, part) => {
+        if (!cursor || typeof cursor !== 'object') {
+            return null
+        }
+
+        return Object.prototype.hasOwnProperty.call(cursor, part) ? cursor[part] : null
+    }, messages)
+
+    return value ?? fallback
+}
+
+const defaultHomeContent = (locale = 'ru') => {
+    const dictionary = locale === 'en' ? enMessages : ruMessages
+    const featureItems = resolveMessage(dictionary, 'admin.defaultHome.featureItems', [])
+    return {
+        badge: String(resolveMessage(dictionary, 'admin.defaultHome.badge', '')),
+        hero_title: String(resolveMessage(dictionary, 'admin.defaultHome.heroTitle', '')),
+        hero_note: String(resolveMessage(dictionary, 'admin.defaultHome.heroNote', '')),
+        feature_items: Array.isArray(featureItems)
+            ? featureItems.map((item) => String(item ?? '').trim()).filter((item) => item !== '').slice(0, 8)
+            : [],
+        feedback_title: String(resolveMessage(dictionary, 'admin.defaultHome.feedbackTitle', '')),
+        feedback_subtitle: String(resolveMessage(dictionary, 'admin.defaultHome.feedbackSubtitle', '')),
+    }
+}
 
 export default {
     name: 'Home',
 
     components: {
         MediaLightbox,
-        MediaPlayer,
         Post,
     },
 
@@ -192,9 +374,9 @@ export default {
         return {
             user: null,
             isAuthenticated: false,
-            homeContent: defaultHomeContent(),
+            homeContent: defaultHomeContent('ru'),
             carouselItems: [],
-            currentSlide: 0,
+            activeCarouselIndex: 0,
             discoverSort: 'popular',
             discoverPosts: [],
             isLoadingDiscover: false,
@@ -208,8 +390,17 @@ export default {
             isSending: false,
             feedbackDeliveryState: 'idle',
             lastFeedbackMeta: null,
-            carouselAutoplayTimerId: null,
             isCarouselAutoplayPaused: false,
+            isCarouselPostModalOpen: false,
+            carouselModalPost: null,
+            worldOverviewCities: [],
+            isWorldOverviewLoading: false,
+            worldOverviewError: '',
+            worldOverviewUpdatedAt: '',
+            worldOverviewSource: '',
+            worldClockTick: Date.now(),
+            worldClockTimerId: null,
+            worldOverviewRefreshTimerId: null,
         }
     },
 
@@ -218,9 +409,33 @@ export default {
             return this.isAuthenticated && Boolean(this.user?.email_verified_at)
         },
 
+        isEnglishLocale() {
+            return this.resolveHomeContentLocale() === 'en'
+        },
+
         homePageStyle() {
             return {
                 '--home-bg-image': `url(${homeSocialMapBackground})`
+            }
+        },
+
+        carouselConveyorItems() {
+            if (!Array.isArray(this.carouselItems) || this.carouselItems.length === 0) {
+                return []
+            }
+
+            const loops = this.carouselItems.length > 1 ? [0, 1] : [0]
+            return loops.flatMap((loop) => this.carouselItems.map((item, index) => ({
+                ...item,
+                _sourceIndex: index,
+                _carouselTrackKey: `carousel-track-${loop}-${item.id ?? 'item'}-${index}`,
+            })))
+        },
+
+        carouselTrackStyle() {
+            const baseDuration = Math.max(18, Math.round(this.carouselItems.length * 3.6))
+            return {
+                '--home-carousel-duration': `${baseDuration}s`,
             }
         },
 
@@ -229,29 +444,151 @@ export default {
                 return {}
             }
 
-            return this.carouselItems[this.currentSlide] ?? this.carouselItems[0]
+            return this.carouselItems[this.activeCarouselIndex] ?? this.carouselItems[0]
+        },
+
+        canOpenCurrentCarouselPost() {
+            return Boolean(this.currentCarouselItem?.post?.id && this.currentCarouselItem?.post?.user?.id)
+        },
+
+        quickTitle() {
+            if (this.isVerifiedUser) {
+                return this.$t('home.quickWelcome')
+            }
+
+            return this.isAuthenticated
+                ? this.$t('home.quickVerify')
+                : this.$t('home.quickStart')
         },
 
         feedbackDeliveryLabel() {
             const map = {
-                sending: 'Отправляется...',
-                sent: 'Отправлено и получено администрацией',
-                failed: 'Ошибка отправки',
+                sending: this.$t('home.feedbackSending'),
+                sent: this.$t('home.feedbackSent'),
+                failed: this.$t('home.feedbackFailed'),
             }
 
             return map[this.feedbackDeliveryState] ?? '—'
-        }
+        },
+
+        quickStats() {
+            const access = this.isVerifiedUser
+                ? this.$t('home.quickAccessFull')
+                : (this.isAuthenticated ? this.$t('home.quickAccessPending') : this.$t('home.quickAccessGuest'))
+
+            const media = this.isVerifiedUser
+                ? this.$t('home.quickMediaCount', {count: this.carouselItems.length})
+                : this.$t('home.quickAfterAuth')
+
+            const chats = this.isVerifiedUser
+                ? this.$t('home.quickChatsActive')
+                : this.$t('home.quickAfterLogin')
+
+            return [
+                {
+                    label: this.$t('home.quickAccessLabel'),
+                    value: access,
+                },
+                {
+                    label: this.$t('home.quickCarouselLabel'),
+                    value: media,
+                },
+                {
+                    label: this.$t('home.quickChatsLabel'),
+                    value: chats,
+                },
+            ]
+        },
+
+        homeShowcaseCards() {
+            return [
+                {
+                    kicker: '01',
+                    title: this.$t('home.showcaseCard1Title'),
+                    note: this.$t('home.showcaseCard1Note'),
+                },
+                {
+                    kicker: '02',
+                    title: this.$t('home.showcaseCard2Title'),
+                    note: this.$t('home.showcaseCard2Note'),
+                },
+                {
+                    kicker: '03',
+                    title: this.$t('home.showcaseCard3Title'),
+                    note: this.$t('home.showcaseCard3Note'),
+                },
+            ]
+        },
+
+        worldOverviewTitle() {
+            return this.$t('home.worldTitle')
+        },
+
+        worldOverviewUpdatedLabel() {
+            if (!this.worldOverviewUpdatedAt) {
+                return ''
+            }
+
+            const date = new Date(this.worldOverviewUpdatedAt)
+            if (Number.isNaN(date.getTime())) {
+                return ''
+            }
+
+            const prefix = this.$t('home.updatedPrefix')
+            const locale = this.isEnglishLocale ? 'en-GB' : 'ru-RU'
+
+            return `${prefix}: ${date.toLocaleTimeString(locale, {
+                hour: '2-digit',
+                minute: '2-digit',
+            })}`
+        },
     },
 
     async mounted() {
+        if (typeof window !== 'undefined') {
+            window.addEventListener('keydown', this.handleHomeKeydown)
+        }
+
+        this.startWorldClock()
+        this.startWorldOverviewAutoRefresh()
+
         await this.bootstrapPage()
     },
 
     beforeUnmount() {
-        this.stopCarouselAutoplay()
+        if (typeof window !== 'undefined') {
+            window.removeEventListener('keydown', this.handleHomeKeydown)
+        }
+
+        if (typeof document !== 'undefined') {
+            document.body.classList.remove('no-scroll')
+        }
+
+        this.stopWorldClock()
+        this.stopWorldOverviewAutoRefresh()
+    },
+
+    watch: {
+        isCarouselPostModalOpen(isOpen) {
+            if (typeof document === 'undefined') {
+                return
+            }
+
+            document.body.classList.toggle('no-scroll', Boolean(isOpen))
+        },
+        '$route.params.locale': {
+            handler() {
+                this.loadHomeContent()
+                this.loadWorldOverview()
+            },
+        },
     },
 
     methods: {
+        resolveHomeContentLocale() {
+            return this.$route?.params?.locale === 'en' ? 'en' : 'ru'
+        },
+
         handlePreviewError(event, label = 'Preview unavailable') {
             applyImagePreviewFallback(event, label)
         },
@@ -261,8 +598,11 @@ export default {
         },
 
         async bootstrapPage() {
-            await this.loadHomeContent()
-            await this.loadCurrentUser()
+            await Promise.all([
+                this.loadHomeContent(),
+                this.loadWorldOverview(),
+                this.loadCurrentUser(),
+            ])
 
             if (this.isVerifiedUser) {
                 await Promise.all([
@@ -270,18 +610,113 @@ export default {
                     this.loadDiscover(this.discoverSort),
                 ])
             } else {
-                this.stopCarouselAutoplay()
+                this.isCarouselAutoplayPaused = false
             }
 
             this.prefillAuthorizedUser()
         },
 
-        openMedia(url, alt = 'Фото') {
-            this.$refs.mediaLightbox?.open(url, alt)
+        async loadWorldOverview() {
+            this.isWorldOverviewLoading = true
+            this.worldOverviewError = ''
+
+            try {
+                const response = await axios.get('/api/site/world-overview', {
+                    params: {
+                        locale: this.resolveHomeContentLocale(),
+                    },
+                    timeout: 12000,
+                })
+
+                const payload = response.data?.data ?? {}
+                this.worldOverviewCities = Array.isArray(payload.cities) ? payload.cities : []
+                this.worldOverviewUpdatedAt = String(payload.updated_at ?? '')
+                this.worldOverviewSource = String(payload.source ?? '')
+            } catch (error) {
+                this.worldOverviewError = this.$t('home.worldLoadError')
+            } finally {
+                this.isWorldOverviewLoading = false
+            }
+        },
+
+        startWorldClock() {
+            this.stopWorldClock()
+            this.worldClockTick = Date.now()
+            this.worldClockTimerId = window.setInterval(() => {
+                this.worldClockTick = Date.now()
+            }, 1000)
+        },
+
+        stopWorldClock() {
+            if (!this.worldClockTimerId) {
+                return
+            }
+
+            window.clearInterval(this.worldClockTimerId)
+            this.worldClockTimerId = null
+        },
+
+        startWorldOverviewAutoRefresh() {
+            this.stopWorldOverviewAutoRefresh()
+            this.worldOverviewRefreshTimerId = window.setInterval(() => {
+                this.loadWorldOverview()
+            }, 5 * 60 * 1000)
+        },
+
+        stopWorldOverviewAutoRefresh() {
+            if (!this.worldOverviewRefreshTimerId) {
+                return
+            }
+
+            window.clearInterval(this.worldOverviewRefreshTimerId)
+            this.worldOverviewRefreshTimerId = null
+        },
+
+        formatWorldCityTime(city) {
+            const timezone = String(city?.timezone ?? '').trim()
+            if (timezone === '') {
+                return '--:--:--'
+            }
+
+            try {
+                const locale = this.isEnglishLocale ? 'en-GB' : 'ru-RU'
+                return new Intl.DateTimeFormat(locale, {
+                    hour: '2-digit',
+                    minute: '2-digit',
+                    second: '2-digit',
+                    hour12: false,
+                    timeZone: timezone,
+                }).format(new Date(this.worldClockTick))
+            } catch (error) {
+                return '--:--:--'
+            }
+        },
+
+        formatWorldCityTemperature(city) {
+            const temperature = Number(city?.weather?.temperature_c)
+            if (!Number.isFinite(temperature)) {
+                return this.$t('home.naShort')
+            }
+
+            const prefix = temperature > 0 ? '+' : ''
+            return `${prefix}${temperature.toFixed(1)}°C`
+        },
+
+        formatWorldCityWind(city) {
+            const windSpeed = Number(city?.weather?.wind_speed_kmh)
+            if (!Number.isFinite(windSpeed)) {
+                return this.$t('home.windNa')
+            }
+
+            return this.$t('home.windValue', {value: windSpeed.toFixed(0)})
+        },
+
+        openMedia(url, alt = null) {
+            this.$refs.mediaLightbox?.open(url, alt || this.$t('home.mediaAlt'))
         },
 
         normalizeHomeContent(payload) {
-            const fallback = defaultHomeContent()
+            const fallback = defaultHomeContent(this.resolveHomeContentLocale())
             const featureItems = Array.isArray(payload?.feature_items)
                 ? payload.feature_items.map((item) => String(item ?? '').trim()).filter((item) => item !== '').slice(0, 8)
                 : []
@@ -297,11 +732,15 @@ export default {
         },
 
         async loadHomeContent() {
+            const locale = this.resolveHomeContentLocale()
+
             try {
-                const response = await axios.get('/api/site/home-content')
+                const response = await axios.get('/api/site/home-content', {
+                    params: {locale},
+                })
                 this.homeContent = this.normalizeHomeContent(response.data.data ?? {})
             } catch (error) {
-                this.homeContent = defaultHomeContent()
+                this.homeContent = defaultHomeContent(locale)
             }
         },
 
@@ -319,8 +758,7 @@ export default {
         async loadCarousel() {
             const response = await axios.get('/api/posts/carousel', { params: { limit: 40 } })
             this.carouselItems = response.data.data ?? []
-            this.currentSlide = 0
-            this.startCarouselAutoplay()
+            this.activeCarouselIndex = 0
         },
 
         async loadDiscover(sort) {
@@ -341,69 +779,121 @@ export default {
             }
         },
 
-        prevSlide(isManual = true) {
+        normalizeCarouselIndex(index) {
+            const length = this.carouselItems.length
+            if (length <= 0) {
+                return 0
+            }
+
+            const normalized = Number(index)
+            if (!Number.isFinite(normalized)) {
+                return 0
+            }
+
+            const floored = Math.floor(normalized)
+            return ((floored % length) + length) % length
+        },
+
+        selectCarouselItem(index) {
             if (this.carouselItems.length <= 1) {
+                this.activeCarouselIndex = 0
                 return
             }
 
-            this.currentSlide = this.currentSlide > 0
-                ? this.currentSlide - 1
-                : this.carouselItems.length - 1
+            this.activeCarouselIndex = this.normalizeCarouselIndex(index)
+        },
 
-            if (isManual) {
-                this.restartCarouselAutoplay()
+        handleCarouselCardClick(index) {
+            const normalizedIndex = this.normalizeCarouselIndex(index)
+            const wasActive = normalizedIndex === this.activeCarouselIndex
+
+            this.selectCarouselItem(normalizedIndex)
+
+            if (wasActive) {
+                this.openCarouselPostModal()
             }
         },
 
-        nextSlide(isManual = true) {
-            if (this.carouselItems.length <= 1) {
-                return
-            }
-
-            this.currentSlide = this.currentSlide < this.carouselItems.length - 1
-                ? this.currentSlide + 1
-                : 0
-
-            if (isManual) {
-                this.restartCarouselAutoplay()
-            }
+        selectPreviousCarouselItem() {
+            this.selectCarouselItem(this.activeCarouselIndex - 1)
         },
 
-        startCarouselAutoplay() {
-            this.stopCarouselAutoplay()
-
-            if (!this.isAuthenticated || this.carouselItems.length <= 1 || this.isCarouselAutoplayPaused) {
-                return
-            }
-
-            this.carouselAutoplayTimerId = window.setInterval(() => {
-                this.nextSlide(false)
-            }, CAROUSEL_AUTOPLAY_INTERVAL_MS)
-        },
-
-        stopCarouselAutoplay() {
-            if (this.carouselAutoplayTimerId) {
-                window.clearInterval(this.carouselAutoplayTimerId)
-                this.carouselAutoplayTimerId = null
-            }
-        },
-
-        restartCarouselAutoplay() {
-            if (this.isCarouselAutoplayPaused) {
-                return
-            }
-
-            this.startCarouselAutoplay()
+        selectNextCarouselItem() {
+            this.selectCarouselItem(this.activeCarouselIndex + 1)
         },
 
         pauseCarouselAutoplay() {
             this.isCarouselAutoplayPaused = true
-            this.stopCarouselAutoplay()
         },
 
         resumeCarouselAutoplay() {
             this.isCarouselAutoplayPaused = false
-            this.startCarouselAutoplay()
+        },
+
+        buildCarouselModalPost(item) {
+            if (!item?.post || typeof item.post !== 'object') {
+                return null
+            }
+
+            if (!item.post.id || !item.post.user?.id) {
+                return null
+            }
+
+            const fallbackMedia = item.url
+                ? [{
+                    id: `carousel-modal-media-${item.post.id}-${item.type || 'image'}`,
+                    type: item.type === 'video' ? 'video' : 'image',
+                    url: item.url,
+                }]
+                : []
+
+            const media = Array.isArray(item.post.media) && item.post.media.length > 0
+                ? item.post.media
+                : fallbackMedia
+
+            return {
+                ...item.post,
+                user: {
+                    ...item.post.user,
+                },
+                media,
+                likes_count: Number(item.post.likes_count ?? 0),
+                comments_count: Number(item.post.comments_count ?? 0),
+                reposted_by_posts_count: Number(item.post.reposted_by_posts_count ?? 0),
+                is_liked: Boolean(item.post.is_liked),
+                views_count: Number(item.post.views_count ?? 0),
+            }
+        },
+
+        openCarouselPostModal() {
+            const nextPost = this.buildCarouselModalPost(this.currentCarouselItem)
+            if (!nextPost) {
+                return
+            }
+
+            this.carouselModalPost = nextPost
+            this.isCarouselPostModalOpen = true
+            this.pauseCarouselAutoplay()
+        },
+
+        closeCarouselPostModal() {
+            this.isCarouselPostModalOpen = false
+            this.carouselModalPost = null
+            this.resumeCarouselAutoplay()
+        },
+
+        handleHomeKeydown(event) {
+            const key = String(event?.key || '').toLowerCase()
+            if (key !== 'escape' && key !== 'esc') {
+                return
+            }
+
+            if (!this.isCarouselPostModalOpen) {
+                return
+            }
+
+            event.preventDefault()
+            this.closeCarouselPostModal()
         },
 
         prefillAuthorizedUser() {
@@ -443,10 +933,10 @@ export default {
                     return
                 }
 
-                let message = error.response?.data?.message ?? 'Не удалось отправить сообщение. Попробуйте позже.'
+                let message = error.response?.data?.message ?? this.$t('home.feedbackSendError')
 
                 if (error.code === 'ECONNABORTED') {
-                    message = 'Сервер долго не отвечает. Проверьте подключение и попробуйте ещё раз.'
+                    message = this.$t('home.feedbackTimeoutError')
                 }
 
                 this.errors = {
@@ -460,9 +950,9 @@ export default {
 
         feedbackStatusLabel(status) {
             const labels = {
-                new: 'Получено администрацией',
-                in_progress: 'В обработке',
-                resolved: 'Решено',
+                new: this.$t('home.statusNew'),
+                in_progress: this.$t('home.statusInProgress'),
+                resolved: this.$t('home.statusResolved'),
             }
 
             return labels[status] ?? status

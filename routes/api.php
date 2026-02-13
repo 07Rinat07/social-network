@@ -18,13 +18,17 @@ use Illuminate\Support\Facades\Route;
 Route::middleware('auth:sanctum')->get('/user', function (Request $request) {
     return $request->user();
 });
+Route::middleware('auth:sanctum')->get('/media/avatars/{user}', [MediaController::class, 'showAvatar'])->name('media.avatars.show');
 
 Route::post('/feedback', [FeedbackController::class, 'store']);
 Route::get('/site/home-content', [SiteSettingController::class, 'homeContent']);
+Route::get('/site/world-overview', [SiteSettingController::class, 'worldOverview']);
 Route::get('/iptv/transcode/{session}/playlist.m3u8', [IptvController::class, 'transcodePlaylist'])->name('api.iptv.transcode.playlist');
 Route::get('/iptv/transcode/{session}/{segment}', [IptvController::class, 'transcodeSegment'])
     ->where('segment', 'segment_[0-9]{5}\.ts')
     ->name('api.iptv.transcode.segment');
+Route::get('/iptv/proxy/{session}/playlist.m3u8', [IptvController::class, 'proxyPlaylist'])->name('api.iptv.proxy.playlist');
+Route::get('/iptv/proxy/{session}/segment', [IptvController::class, 'proxySegment'])->name('api.iptv.proxy.segment');
 
 Route::middleware(['auth:sanctum', 'throttle:6,1'])->post('/auth/email/verification-notification', EmailVerificationNotificationController::class);
 
@@ -68,6 +72,8 @@ Route::middleware(['auth:sanctum', 'verified'])->group(function () {
     Route::post('/radio/favorites', [RadioController::class, 'storeFavorite']);
     Route::delete('/radio/favorites/{stationUuid}', [RadioController::class, 'destroyFavorite']);
     Route::post('/iptv/playlist/fetch', [IptvController::class, 'fetchPlaylist']);
+    Route::post('/iptv/proxy/start', [IptvController::class, 'startProxy'])->name('api.iptv.proxy.start');
+    Route::delete('/iptv/proxy/{session}', [IptvController::class, 'stopProxy'])->name('api.iptv.proxy.stop');
     Route::get('/iptv/transcode/capabilities', [IptvController::class, 'transcodeCapabilities'])->name('api.iptv.transcode.capabilities');
     Route::post('/iptv/transcode/start', [IptvController::class, 'startTranscode'])->name('api.iptv.transcode.start');
     Route::delete('/iptv/transcode/{session}', [IptvController::class, 'stopTranscode'])->name('api.iptv.transcode.stop');

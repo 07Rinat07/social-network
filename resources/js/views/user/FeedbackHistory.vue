@@ -3,50 +3,50 @@
         <section class="section-card">
             <div style="display: flex; justify-content: space-between; align-items: center; gap: 0.7rem; flex-wrap: wrap;">
                 <div>
-                    <h1 class="section-title">Мои обращения</h1>
-                    <p class="section-subtitle">Здесь отображаются ваши сообщения в администрацию и текущий статус обработки.</p>
+                    <h1 class="section-title">{{ $t('feedbackHistory.title') }}</h1>
+                    <p class="section-subtitle">{{ $t('feedbackHistory.subtitle') }}</p>
                 </div>
                 <button class="btn btn-outline" type="button" @click="loadFeedback" :disabled="isLoading">
-                    {{ isLoading ? 'Обновление...' : 'Обновить' }}
+                    {{ isLoading ? $t('feedbackHistory.refreshing') : $t('feedbackHistory.refresh') }}
                 </button>
             </div>
 
             <div class="feature-list" style="margin-top: 0;">
                 <div class="feature-item">
-                    <strong>Всего:</strong> {{ total }}
+                    <strong>{{ $t('feedbackHistory.total') }}</strong> {{ total }}
                 </div>
                 <div class="feature-item">
-                    <strong>Новые:</strong> {{ statusCounts.new }}
+                    <strong>{{ $t('feedbackHistory.newCount') }}</strong> {{ statusCounts.new }}
                 </div>
                 <div class="feature-item">
-                    <strong>В обработке:</strong> {{ statusCounts.in_progress }}
+                    <strong>{{ $t('feedbackHistory.inProgressCount') }}</strong> {{ statusCounts.in_progress }}
                 </div>
                 <div class="feature-item">
-                    <strong>Решено:</strong> {{ statusCounts.resolved }}
+                    <strong>{{ $t('feedbackHistory.resolvedCount') }}</strong> {{ statusCounts.resolved }}
                 </div>
             </div>
         </section>
 
         <section class="section-card">
-            <p v-if="isLoading" class="muted">Загрузка обращений...</p>
+            <p v-if="isLoading" class="muted">{{ $t('feedbackHistory.loading') }}</p>
             <p v-else-if="errorMessage" class="error-text">{{ errorMessage }}</p>
-            <p v-else-if="items.length === 0" class="muted">У вас пока нет обращений в администрацию.</p>
+            <p v-else-if="items.length === 0" class="muted">{{ $t('feedbackHistory.empty') }}</p>
 
             <div v-else class="feature-list" style="margin-top: 0;">
                 <article v-for="item in items" :key="`my-feedback-${item.id}`" class="feature-item">
                     <div style="display: flex; justify-content: space-between; align-items: center; gap: 0.7rem; flex-wrap: wrap;">
-                        <strong>Обращение #{{ item.id }}</strong>
+                        <strong>{{ $t('feedbackHistory.requestNumber', {id: item.id}) }}</strong>
                         <span class="badge">{{ statusLabel(item.status) }}</span>
                     </div>
 
                     <p class="muted" style="margin: 0.45rem 0 0;">
-                        Отправлено: {{ formatDate(item.created_at) }}
+                        {{ $t('feedbackHistory.sentAt') }} {{ formatDate(item.created_at) }}
                     </p>
 
                     <p style="margin: 0.55rem 0 0; white-space: pre-wrap;">{{ item.message }}</p>
 
                     <div v-if="item.admin_note" style="margin-top: 0.6rem; padding: 0.55rem 0.7rem; border-radius: 10px; border: 1px solid var(--line); background: #fff;">
-                        <p class="muted" style="margin: 0 0 0.35rem;">Ответ администрации:</p>
+                        <p class="muted" style="margin: 0 0 0.35rem;">{{ $t('feedbackHistory.adminReply') }}</p>
                         <p style="margin: 0; white-space: pre-wrap;">{{ item.admin_note }}</p>
                     </div>
                 </article>
@@ -121,7 +121,7 @@ export default {
                 this.items = response.data.data ?? []
                 this.total = response.data.total ?? response.data.meta?.total ?? this.items.length
             } catch (error) {
-                this.errorMessage = error.response?.data?.message ?? 'Не удалось загрузить обращения.'
+                this.errorMessage = error.response?.data?.message ?? this.$t('feedbackHistory.loadError')
             } finally {
                 this.isLoading = false
             }
@@ -174,9 +174,9 @@ export default {
 
         statusLabel(status) {
             const labels = {
-                new: 'Новое',
-                in_progress: 'В обработке',
-                resolved: 'Решено',
+                new: this.$t('feedbackHistory.statusNew'),
+                in_progress: this.$t('feedbackHistory.statusInProgress'),
+                resolved: this.$t('feedbackHistory.statusResolved'),
             }
 
             return labels[status] ?? status
@@ -187,7 +187,8 @@ export default {
                 return '—'
             }
 
-            return new Date(dateValue).toLocaleString('ru-RU')
+            const locale = this.$route?.params?.locale === 'en' ? 'en-GB' : 'ru-RU'
+            return new Date(dateValue).toLocaleString(locale)
         },
     }
 }

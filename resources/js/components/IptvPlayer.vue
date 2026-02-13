@@ -88,6 +88,7 @@ export default {
             activeBufferProfile: 'balanced',
             streamCodecs: [],
             hlsMinVideoLevel: 0,
+            hlsAutoPreferredLevel: -1,
             hlsNativeFallbackAttempted: false,
             hlsLastSourceUrl: '',
             stabilityState: {
@@ -97,6 +98,7 @@ export default {
             retryState: {
                 network: 0,
                 media: 0,
+                levelSwitch: 0,
             },
             playbackWatchdogTimer: null,
             watchdogRecoveryAttempts: 0,
@@ -104,8 +106,10 @@ export default {
             videoFrameMonitorState: {
                 lastFrameCount: -1,
                 stagnantTicks: 0,
+                lastPlaybackTime: 0,
             },
             fullscreenEscapeHandler: null,
+            fullscreenStateHandler: null,
         }
     },
 
@@ -134,12 +138,15 @@ export default {
     mounted() {
         this.bindVideoEvents()
         this.bindFullscreenEscapeHandler()
+        this.bindFullscreenStateListeners()
         this.initPlayer()
+        this.normalizeFullscreenClasses()
     },
 
     beforeUnmount() {
         this.unbindVideoEvents()
         this.unbindFullscreenEscapeHandler()
+        this.unbindFullscreenStateListeners()
         this.destroyPlayer()
     },
 
@@ -251,29 +258,32 @@ export default {
             this.destroyHls()
             this.destroyDash()
             this.destroyMpegts()
+            this.exitPictureInPicture()
+            this.clearVideoElementSource()
 
-            if (!this.player) {
-                return
+            if (this.player) {
+                this.exitFullscreen()
+                this.player.destroy()
+                this.player = null
             }
 
-            this.exitFullscreen()
-
-            this.player.destroy()
-            this.player = null
             this.sourceUrl = ''
-            this.playerState = 'idle'
+            this.setStatus('idle')
             this.playerMessage = ''
             this.lastError = ''
+            this.qualityOptions = []
             this.activeEngine = 'idle'
             this.activeBufferProfile = 'balanced'
             this.streamCodecs = []
             this.hlsMinVideoLevel = 0
+            this.hlsAutoPreferredLevel = -1
             this.hlsNativeFallbackAttempted = false
             this.hlsLastSourceUrl = ''
             this.stabilityState = {
                 totalEvents: 0,
                 lastRecoveryAt: 0,
             }
+            this.$emit('qualities-change', [])
             this.emitDiagnostics()
         },
 
@@ -378,6 +388,10 @@ export default {
 
                 if (status === 'idle' || status === 'ready' || status === 'playing' || status === 'paused') {
                     this.watchdogRecoveryAttempts = 0
+
+                    if (status === 'ready' || status === 'playing') {
+                        this.retryState.levelSwitch = 0
+                    }
                 }
             }
 
@@ -414,6 +428,7 @@ export default {
             this.retryState = {
                 network: 0,
                 media: 0,
+                levelSwitch: 0,
             }
             this.watchdogRecoveryAttempts = 0
             this.lastError = ''
@@ -463,7 +478,13 @@ export default {
             }
 
             if (this.isMixedContentBlocked(sourceUrl)) {
-                this.setError('Браузер блокирует HTTP-поток внутри HTTPS-страницы. Откройте поток в новой вкладке или используйте HTTPS-источник.')
+                this.setError(
+                    'Браузер блокирует HTTP-поток внутри HTTPS-страницы. Нужен HTTPS-источник или совместимый режим FFmpeg.',
+                    {
+                        type: 'mixed-content-blocked',
+                        details: 'http-stream-on-https-page',
+                    }
+                )
                 return
             }
 
@@ -597,6 +618,7 @@ export default {
                 const levels = Array.isArray(data?.levels) ? data.levels : hls.levels
                 const firstVideoLevel = this.findFirstVideoLevel(levels)
                 this.hlsMinVideoLevel = firstVideoLevel >= 0 ? firstVideoLevel : 0
+                this.hlsAutoPreferredLevel = this.pickPreferredAutoLevel(levels, this.hlsMinVideoLevel)
 
                 if (firstVideoLevel > 0) {
                     const startLevel = Number(hls.startLevel)
@@ -613,6 +635,7 @@ export default {
                 this.syncQualityOptions(levels)
                 this.setStreamCodecs(this.extractHlsCodecs(levels))
                 this.applySelectedQuality()
+                this.applyAutoPreferredLevel()
                 this.tryAutoplay(video)
                 this.setStatus('ready')
             })
@@ -764,6 +787,37 @@ export default {
                     this.setStatus('buffering', 'Поток буферизуется...')
                 }
 
+                const responseCode = this.extractHlsResponseCode(data)
+                if (
+                    this.isHlsSegmentIssueDetails(data?.details)
+                    && (responseCode === 403 || responseCode === 404)
+                ) {
+                    this.retryState.network = Number(this.retryState.network || 0) + 1
+
+                    if (this.retryState.network >= 3) {
+                        this.setError(
+                            'Источник отклоняет сегменты для встроенного плеера. Откройте поток в новой вкладке или включите режим прокси.',
+                            {
+                                type: 'hls-origin-blocked',
+                                details: this.buildHlsErrorDetails(data),
+                            }
+                        )
+                        this.destroyHls()
+                        return
+                    }
+
+                    this.setStatus(
+                        'loading',
+                        `Сегменты недоступны (${responseCode}), пробуем переподключить поток... (${this.retryState.network}/3)`
+                    )
+                    this.hls?.startLoad(-1)
+                    return
+                }
+
+                if (this.tryFailoverHlsLevel(data)) {
+                    return
+                }
+
                 if (data?.details === Hls.ErrorDetails.BUFFER_STALLED_ERROR || data?.type === Hls.ErrorTypes.NETWORK_ERROR) {
                     this.tryAdaptiveRecovery('hls-non-fatal')
                 }
@@ -771,6 +825,10 @@ export default {
             }
 
             if (this.trySwitchToNativeHls(data)) {
+                return
+            }
+
+            if (this.tryFailoverHlsLevel(data)) {
                 return
             }
 
@@ -792,9 +850,85 @@ export default {
 
             this.setError(this.getReadableHlsError(data), {
                 type: data?.type || '',
-                details: data?.details || '',
+                details: this.buildHlsErrorDetails(data),
             })
             this.destroyHls()
+        },
+
+        tryFailoverHlsLevel(data) {
+            if (!this.hls || !data) {
+                return false
+            }
+
+            // Respect manual quality lock set by user.
+            if (Number(this.selectedQuality) >= 0) {
+                return false
+            }
+
+            const details = String(data?.details || '').toLowerCase()
+            const isSegmentIssue = this.isHlsSegmentIssueDetails(details)
+
+            if (!isSegmentIssue) {
+                return false
+            }
+
+            const levels = Array.isArray(this.hls.levels) ? this.hls.levels : []
+            if (levels.length < 2) {
+                return false
+            }
+
+            if (Number(this.retryState.levelSwitch || 0) >= 3) {
+                this.setError(
+                    'Сегменты канала недоступны на текущих профилях качества. Попробуйте другой канал или режим прокси/совместимости.',
+                    {
+                        type: 'hls-segment-exhausted',
+                        details: this.buildHlsErrorDetails(data),
+                    }
+                )
+                this.destroyHls()
+                return true
+            }
+
+            let currentLevel = Number(this.hls.currentLevel)
+            if (!Number.isFinite(currentLevel) || currentLevel < 0) {
+                currentLevel = Number(this.hls.nextLoadLevel)
+            }
+            if (!Number.isFinite(currentLevel) || currentLevel < 0) {
+                currentLevel = Number(this.hls.loadLevel)
+            }
+            if (!Number.isFinite(currentLevel) || currentLevel < 0) {
+                currentLevel = 0
+            }
+
+            const candidates = levels
+                .map((_item, index) => index)
+                .filter((index) => index >= Number(this.hlsMinVideoLevel || 0) && index !== currentLevel)
+
+            if (candidates.length === 0) {
+                return false
+            }
+
+            const failoverStep = Number(this.retryState.levelSwitch || 0)
+            const targetLevel = candidates[Math.min(failoverStep, candidates.length - 1)]
+            this.retryState.levelSwitch = failoverStep + 1
+
+            if (typeof this.hls.nextLoadLevel === 'number') {
+                this.hls.nextLoadLevel = targetLevel
+            }
+            if (typeof this.hls.currentLevel === 'number') {
+                this.hls.currentLevel = targetLevel
+            }
+            if (typeof this.hls.loadLevel === 'number') {
+                this.hls.loadLevel = targetLevel
+            }
+
+            this.setStatus('loading', 'Битый сегмент канала, переключаем профиль качества...')
+            this.emitDiagnostics({
+                recoveryReason: details || 'hls-segment-failover',
+                recoveryAction: `switch-hls-level:${currentLevel}->${targetLevel}`,
+            })
+            this.hls.startLoad(-1)
+            return true
         },
 
         shouldSwitchToNativeHls(data) {
@@ -812,6 +946,85 @@ export default {
                 || reason.includes('cors')
                 || reason.includes('cross-origin')
                 || reason.includes('access-control-allow-origin')
+        },
+
+        isMobileViewport() {
+            if (typeof window === 'undefined' || !window.matchMedia) {
+                return false
+            }
+
+            return window.matchMedia('(max-width: 980px)').matches
+        },
+
+        pickPreferredAutoLevel(levels, minLevel = 0) {
+            if (!Array.isArray(levels) || levels.length === 0) {
+                return -1
+            }
+
+            if (!this.isMobileViewport()) {
+                return -1
+            }
+
+            const isAutoQuality = !Number.isFinite(Number(this.selectedQuality)) || Number(this.selectedQuality) < 0
+            if (!isAutoQuality) {
+                return -1
+            }
+
+            const candidates = levels
+                .map((level, index) => {
+                    const height = Number(level?.height || 0)
+                    const bitrate = Number(level?.bitrate || 0)
+                    const codec = String(level?.videoCodec || level?.codecs || level?.attrs?.CODECS || '').toLowerCase()
+                    const hevcLike = codec.includes('hev') || codec.includes('hvc')
+                    return {
+                        index,
+                        height,
+                        bitrate,
+                        hevcLike,
+                    }
+                })
+                .filter((item) => item.index >= Number(minLevel || 0))
+
+            if (candidates.length === 0) {
+                return -1
+            }
+
+            const balanced = candidates.filter((item) => !item.hevcLike && item.height >= 360 && item.height <= 720)
+            if (balanced.length > 0) {
+                return balanced[Math.floor(balanced.length / 2)].index
+            }
+
+            const nonHevc = candidates.filter((item) => !item.hevcLike)
+            if (nonHevc.length > 0) {
+                return nonHevc[Math.max(0, nonHevc.length - 1)].index
+            }
+
+            return candidates[Math.max(0, candidates.length - 1)].index
+        },
+
+        applyAutoPreferredLevel() {
+            if (!this.hls) {
+                return
+            }
+
+            if (Number(this.selectedQuality) >= 0) {
+                return
+            }
+
+            const target = Number(this.hlsAutoPreferredLevel)
+            if (!Number.isFinite(target) || target < 0 || target >= this.hls.levels.length) {
+                return
+            }
+
+            if (typeof this.hls.nextLoadLevel === 'number') {
+                this.hls.nextLoadLevel = target
+            }
+            if (typeof this.hls.currentLevel === 'number') {
+                this.hls.currentLevel = target
+            }
+            if (typeof this.hls.loadLevel === 'number') {
+                this.hls.loadLevel = target
+            }
         },
 
         trySwitchToNativeHls(data) {
@@ -847,8 +1060,68 @@ export default {
             return true
         },
 
+        isHlsSegmentIssueDetails(details) {
+            const normalized = String(details || '').toLowerCase()
+            return normalized.includes('frag_load_error')
+                || normalized.includes('fragloaderror')
+                || normalized.includes('frag_load_timeout')
+                || normalized.includes('fragloadtimeout')
+                || normalized.includes('level_load_error')
+                || normalized.includes('levelloaderror')
+                || normalized.includes('level_load_timeout')
+                || normalized.includes('levelloadtimeout')
+                || normalized.includes('key_load_error')
+                || normalized.includes('keyloaderror')
+                || normalized.includes('key_load_timeout')
+                || normalized.includes('keyloadtimeout')
+        },
+
+        extractHlsResponseCode(data) {
+            const code = Number(data?.response?.code ?? data?.response?.status ?? 0)
+            return Number.isFinite(code) ? code : 0
+        },
+
+        extractHlsErrorUrl(data) {
+            return String(
+                data?.response?.url
+                || data?.frag?.url
+                || data?.url
+                || data?.context?.url
+                || ''
+            ).trim()
+        },
+
+        buildHlsErrorDetails(data) {
+            const parts = []
+            const type = String(data?.type || '').trim()
+            const details = String(data?.details || '').trim()
+            const code = this.extractHlsResponseCode(data)
+            const failedUrl = this.extractHlsErrorUrl(data)
+
+            if (type !== '') {
+                parts.push(`type=${type}`)
+            }
+            if (details !== '') {
+                parts.push(`detail=${details}`)
+            }
+            if (code > 0) {
+                parts.push(`code=${code}`)
+            }
+            if (failedUrl !== '') {
+                parts.push(`url=${failedUrl}`)
+            }
+
+            return parts.join('; ')
+        },
+
         getReadableHlsError(data) {
             const details = String(data?.details || '')
+            const responseCode = this.extractHlsResponseCode(data)
+            const isSegmentIssue = this.isHlsSegmentIssueDetails(details)
+
+            if (isSegmentIssue && (responseCode === 403 || responseCode === 404)) {
+                return 'Источник отклоняет загрузку сегментов во встроенном плеере (часто это Origin/anti-hotlink). Откройте поток в новой вкладке или включите режим прокси.'
+            }
 
             if (details === Hls.ErrorDetails.MANIFEST_LOAD_ERROR || details === Hls.ErrorDetails.MANIFEST_LOAD_TIMEOUT) {
                 return 'Не удалось загрузить HLS-манифест канала. Частая причина: недоступный сервер или блокировка CORS.'
@@ -1161,6 +1434,7 @@ export default {
             this.videoFrameMonitorState = {
                 lastFrameCount: -1,
                 stagnantTicks: 0,
+                lastPlaybackTime: 0,
             }
         },
 
@@ -1202,9 +1476,22 @@ export default {
 
             const currentTime = Number(video.currentTime || 0)
             const canEvaluate = !video.paused && currentTime >= 4
+            const hasVisibleVideoSignal = Number(video.videoWidth || 0) > 0 && Number(video.videoHeight || 0) > 0
 
             if (!canEvaluate) {
                 this.scheduleVideoFrameMonitor()
+                return
+            }
+
+            if (frameCount <= 0 && hasVisibleVideoSignal) {
+                // Some browsers report unstable frame counters for MSE streams.
+                // When actual video dimensions are present, avoid false "no frames" alerts.
+                this.videoFrameMonitorState = {
+                    lastFrameCount: frameCount,
+                    stagnantTicks: 0,
+                    lastPlaybackTime: currentTime,
+                }
+                this.scheduleVideoFrameMonitor(4500)
                 return
             }
 
@@ -1215,6 +1502,28 @@ export default {
 
             let stagnantTicks = Number(this.videoFrameMonitorState.stagnantTicks || 0)
             const previousFrameCount = Number(this.videoFrameMonitorState.lastFrameCount || 0)
+            const previousPlaybackTime = Number(this.videoFrameMonitorState.lastPlaybackTime || 0)
+            const playbackAdvanced = currentTime > (previousPlaybackTime + 1.4)
+
+            if (
+                hasVisibleVideoSignal
+                && frameCount > 0
+                && previousFrameCount > 0
+                && frameCount === previousFrameCount
+                && playbackAdvanced
+            ) {
+                // Browser counter may be stale while video is actually rendering.
+                this.videoFrameMonitorState = {
+                    lastFrameCount: frameCount,
+                    stagnantTicks: 0,
+                    lastPlaybackTime: currentTime,
+                }
+                this.emitDiagnostics({
+                    frameCounterUnreliable: true,
+                })
+                this.scheduleVideoFrameMonitor(4500)
+                return
+            }
 
             if (frameCount <= 0 || (previousFrameCount >= 0 && frameCount <= previousFrameCount)) {
                 stagnantTicks += 1
@@ -1225,6 +1534,7 @@ export default {
             this.videoFrameMonitorState = {
                 lastFrameCount: frameCount,
                 stagnantTicks,
+                lastPlaybackTime: currentTime,
             }
 
             if (stagnantTicks >= 3) {
@@ -1246,20 +1556,26 @@ export default {
                 return null
             }
 
+            const counters = []
+
             if (typeof video.getVideoPlaybackQuality === 'function') {
                 const quality = video.getVideoPlaybackQuality()
                 const totalFrames = Number(quality?.totalVideoFrames)
                 if (Number.isFinite(totalFrames) && totalFrames >= 0) {
-                    return totalFrames
+                    counters.push(totalFrames)
                 }
             }
 
             const webkitDecodedFrames = Number(video.webkitDecodedFrameCount)
             if (Number.isFinite(webkitDecodedFrames) && webkitDecodedFrames >= 0) {
-                return webkitDecodedFrames
+                counters.push(webkitDecodedFrames)
             }
 
-            return null
+            if (counters.length === 0) {
+                return null
+            }
+
+            return Math.max(...counters)
         },
 
         hasLikelyVideoCodec() {
@@ -1623,6 +1939,42 @@ export default {
             return this.$refs.videoElement || null
         },
 
+        clearVideoElementSource() {
+            const video = this.getVideoElement()
+            if (!video) {
+                return
+            }
+
+            try {
+                video.pause()
+            } catch (_error) {
+                // ignore pause errors
+            }
+
+            try {
+                video.currentTime = 0
+            } catch (_error) {
+                // ignore seek errors
+            }
+
+            if ('srcObject' in video) {
+                try {
+                    video.srcObject = null
+                } catch (_error) {
+                    // ignore srcObject errors
+                }
+            }
+
+            video.removeAttribute('src')
+            video.querySelectorAll('source').forEach((sourceNode) => sourceNode.remove())
+
+            try {
+                video.load()
+            } catch (_error) {
+                // ignore load errors
+            }
+        },
+
         getFullscreenTarget() {
             return this.$refs.playerShell || this.getVideoElement()
         },
@@ -1659,10 +2011,34 @@ export default {
 
             if (this.isFullscreenActive()) {
                 this.exitFullscreen()
+                if (typeof window !== 'undefined') {
+                    window.setTimeout(() => this.normalizeFullscreenClasses(), 140)
+                }
                 return
             }
 
             this.requestFullscreen(fullscreenTarget)
+        },
+
+        exitPictureInPicture() {
+            const video = this.getVideoElement()
+
+            if (typeof document !== 'undefined' && document.pictureInPictureElement && typeof document.exitPictureInPicture === 'function') {
+                const promise = document.exitPictureInPicture()
+                if (promise && typeof promise.catch === 'function') {
+                    promise.catch(() => {})
+                }
+            }
+
+            if (video && typeof video.webkitSetPresentationMode === 'function') {
+                try {
+                    if (video.webkitPresentationMode === 'picture-in-picture') {
+                        video.webkitSetPresentationMode('inline')
+                    }
+                } catch (_error) {
+                    // ignore picture-in-picture exit errors
+                }
+            }
         },
 
         isFullscreenActive() {
@@ -1750,6 +2126,48 @@ export default {
 
             document.removeEventListener('keydown', this.fullscreenEscapeHandler, true)
             this.fullscreenEscapeHandler = null
+        },
+
+        bindFullscreenStateListeners() {
+            if (typeof document === 'undefined') {
+                return
+            }
+
+            this.unbindFullscreenStateListeners()
+            this.fullscreenStateHandler = () => {
+                this.normalizeFullscreenClasses()
+            }
+
+            document.addEventListener('fullscreenchange', this.fullscreenStateHandler, true)
+            document.addEventListener('webkitfullscreenchange', this.fullscreenStateHandler, true)
+        },
+
+        unbindFullscreenStateListeners() {
+            if (typeof document === 'undefined' || !this.fullscreenStateHandler) {
+                return
+            }
+
+            document.removeEventListener('fullscreenchange', this.fullscreenStateHandler, true)
+            document.removeEventListener('webkitfullscreenchange', this.fullscreenStateHandler, true)
+            this.fullscreenStateHandler = null
+        },
+
+        normalizeFullscreenClasses() {
+            if (this.isFullscreenActive()) {
+                return
+            }
+
+            const shell = this.$refs.playerShell
+            if (!(shell instanceof HTMLElement)) {
+                return
+            }
+
+            shell.classList.remove('plyr--fullscreen-fallback')
+
+            const plyrNode = shell.querySelector('.plyr')
+            if (plyrNode instanceof HTMLElement) {
+                plyrNode.classList.remove('plyr--fullscreen-fallback')
+            }
         },
 
         guessMimeType(url) {

@@ -11,6 +11,8 @@ use App\Services\SiteSettingService;
 use Carbon\Carbon;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Storage;
 use Laravel\Sanctum\Sanctum;
 use Tests\TestCase;
@@ -84,16 +86,100 @@ class SiteSettingsAndDiscoveryFeatureTest extends TestCase
             ->assertOk()
             ->assertJsonStructure([
                 'data' => [
+                    'locale',
                     'badge',
                     'hero_title',
                     'hero_note',
                     'feature_items',
                     'feedback_title',
                     'feedback_subtitle',
+                    'locales' => [
+                        'ru' => [
+                            'badge',
+                            'hero_title',
+                            'hero_note',
+                            'feature_items',
+                            'feedback_title',
+                            'feedback_subtitle',
+                        ],
+                        'en' => [
+                            'badge',
+                            'hero_title',
+                            'hero_note',
+                            'feature_items',
+                            'feedback_title',
+                            'feedback_subtitle',
+                        ],
+                    ],
                 ],
             ])
+            ->assertJsonPath('data.locale', 'ru')
             ->assertJsonCount(3, 'data.feature_items')
-            ->assertJsonPath('data.badge', 'Социальная сеть SPA');
+            ->assertJsonPath('data.badge', 'Социальная сеть SPA')
+            ->assertJsonPath('data.locales.en.badge', 'Social Network SPA');
+    }
+
+    public function test_guest_can_fetch_home_page_content_by_english_locale(): void
+    {
+        $response = $this->getJson('/api/site/home-content?locale=en');
+
+        $response
+            ->assertOk()
+            ->assertJsonPath('data.locale', 'en')
+            ->assertJsonPath('data.badge', 'Social Network SPA')
+            ->assertJsonPath('data.feedback_title', 'Feedback for administration')
+            ->assertJsonPath('data.locales.ru.badge', 'Социальная сеть SPA');
+    }
+
+    public function test_guest_can_fetch_world_overview_widget_data(): void
+    {
+        Cache::flush();
+
+        Http::fake([
+            'https://api.open-meteo.com/v1/forecast*' => Http::response([
+                'current' => [
+                    'temperature_2m' => 12.4,
+                    'weather_code' => 2,
+                    'wind_speed_10m' => 18.1,
+                ],
+            ], 200),
+        ]);
+
+        $response = $this->getJson('/api/site/world-overview?locale=en');
+
+        $response
+            ->assertOk()
+            ->assertJsonPath('data.locale', 'en')
+            ->assertJsonPath('data.source', 'open-meteo.com')
+            ->assertJsonCount(6, 'data.cities')
+            ->assertJsonPath('data.cities.0.id', 'new_york')
+            ->assertJsonPath('data.cities.0.name', 'New York')
+            ->assertJsonPath('data.cities.1.name', 'Moscow')
+            ->assertJsonPath('data.cities.5.name', 'Uralsk')
+            ->assertJsonPath('data.cities.0.weather.temperature_c', 12.4)
+            ->assertJsonPath('data.cities.0.weather.wind_speed_kmh', 18.1)
+            ->assertJsonPath('data.cities.0.weather.description', 'Partly cloudy');
+    }
+
+    public function test_guest_world_overview_gracefully_handles_weather_provider_failure(): void
+    {
+        Cache::flush();
+
+        Http::fake([
+            'https://api.open-meteo.com/v1/forecast*' => Http::response([], 500),
+        ]);
+
+        $response = $this->getJson('/api/site/world-overview?locale=ru');
+
+        $response
+            ->assertOk()
+            ->assertJsonPath('data.locale', 'ru')
+            ->assertJsonCount(6, 'data.cities')
+            ->assertJsonPath('data.cities.0.name', 'Нью-Йорк')
+            ->assertJsonPath('data.cities.0.weather.available', false)
+            ->assertJsonPath('data.cities.0.weather.temperature_c', null)
+            ->assertJsonPath('data.cities.0.weather.wind_speed_kmh', null)
+            ->assertJsonPath('data.cities.0.weather.description', 'Нет данных о погоде');
     }
 
     public function test_admin_can_update_and_reset_home_page_content(): void
@@ -184,6 +270,55 @@ class SiteSettingsAndDiscoveryFeatureTest extends TestCase
         $response
             ->assertStatus(422)
             ->assertJsonValidationErrors(['badge', 'feature_items.0']);
+    }
+
+    public function test_admin_can_update_home_page_content_for_both_locales(): void
+    {
+        $admin = User::factory()->create(['is_admin' => true]);
+        Sanctum::actingAs($admin);
+
+        $payload = [
+            'locale' => 'en',
+            'locales' => [
+                'ru' => [
+                    'badge' => 'RU Бейдж',
+                    'hero_title' => 'RU Заголовок',
+                    'hero_note' => 'RU Описание',
+                    'feature_items' => ['RU Пункт 1', 'RU Пункт 2'],
+                    'feedback_title' => 'RU Обратная связь',
+                    'feedback_subtitle' => 'RU Подпись',
+                ],
+                'en' => [
+                    'badge' => 'EN Badge',
+                    'hero_title' => 'EN Hero title',
+                    'hero_note' => 'EN Hero note',
+                    'feature_items' => ['EN Feature 1', 'EN Feature 2', 'EN Feature 3'],
+                    'feedback_title' => 'EN Feedback title',
+                    'feedback_subtitle' => 'EN Feedback subtitle',
+                ],
+            ],
+        ];
+
+        $updateResponse = $this->patchJson('/api/admin/settings/home-content', $payload);
+
+        $updateResponse
+            ->assertOk()
+            ->assertJsonPath('data.locale', 'en')
+            ->assertJsonPath('data.badge', 'EN Badge')
+            ->assertJsonPath('data.locales.ru.badge', 'RU Бейдж')
+            ->assertJsonPath('data.locales.en.feature_items.2', 'EN Feature 3');
+
+        $this->getJson('/api/site/home-content?locale=ru')
+            ->assertOk()
+            ->assertJsonPath('data.locale', 'ru')
+            ->assertJsonPath('data.badge', 'RU Бейдж')
+            ->assertJsonPath('data.feedback_title', 'RU Обратная связь');
+
+        $this->getJson('/api/site/home-content?locale=en')
+            ->assertOk()
+            ->assertJsonPath('data.locale', 'en')
+            ->assertJsonPath('data.badge', 'EN Badge')
+            ->assertJsonPath('data.feedback_title', 'EN Feedback title');
     }
 
     public function test_user_storage_preference_requires_user_choice_mode(): void

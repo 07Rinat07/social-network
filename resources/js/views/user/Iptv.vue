@@ -3,7 +3,7 @@
         <section class="section-card">
             <h2 class="section-title">IPTV</h2>
             <p class="section-subtitle">
-                Загрузите IPTV-плейлист по ссылке или файлом, выберите канал и смотрите его прямо на сайте.
+                {{ $t('iptv.subtitle') }}
             </p>
 
             <form class="form-grid" @submit.prevent="loadPlaylistFromUrl">
@@ -15,7 +15,7 @@
                         placeholder="https://example.com/playlist.m3u"
                     >
                     <button class="btn btn-primary" type="submit" :disabled="isLoadingPlaylist">
-                        {{ isLoadingPlaylist ? 'Загрузка...' : 'Загрузить URL' }}
+                        {{ isLoadingPlaylist ? $t('iptv.loadingPlaylist') : $t('iptv.loadUrl') }}
                     </button>
                 </div>
 
@@ -28,7 +28,7 @@
                         @change="loadPlaylistFromFile"
                     >
                     <button class="btn btn-outline" type="button" @click="clearPlaylist" :disabled="isLoadingPlaylist">
-                        Очистить
+                        {{ $t('iptv.clear') }}
                     </button>
                 </div>
 
@@ -37,18 +37,18 @@
                         class="input-field"
                         v-model.trim="directStreamUrl"
                         type="url"
-                        placeholder="Или вставьте прямую ссылку на поток (m3u8/mp4)"
+                        :placeholder="$t('iptv.directStreamPlaceholder')"
                     >
                     <button class="btn btn-outline" type="button" @click="playDirectStream">
-                        Открыть поток
+                        {{ $t('iptv.openStream') }}
                     </button>
                 </div>
             </form>
 
             <div class="iptv-seed-box">
                 <div class="iptv-seed-head">
-                    <strong>Сидеры IPTV</strong>
-                    <small class="muted">Вшитые: {{ builtinSeedSources.length }} · Пользовательские: {{ customSeedSources.length }}</small>
+                    <strong>{{ $t('iptv.seedsTitle') }}</strong>
+                    <small class="muted">{{ $t('iptv.seedCounts', { builtin: builtinSeedSources.length, custom: customSeedSources.length }) }}</small>
                 </div>
 
                 <div class="iptv-seed-grid">
@@ -72,7 +72,7 @@
                         v-model.trim="newSeedName"
                         type="text"
                         maxlength="80"
-                        placeholder="Название нового сидера"
+                        :placeholder="$t('iptv.newSeedNamePlaceholder')"
                     >
                     <input
                         class="input-field"
@@ -81,7 +81,7 @@
                         placeholder="https://example.com/playlist.m3u"
                     >
                     <button class="btn btn-outline" type="submit" :disabled="isLoadingPlaylist">
-                        Добавить сидер
+                        {{ $t('iptv.addSeed') }}
                     </button>
                 </form>
 
@@ -92,16 +92,16 @@
                             <small>{{ seed.url }}</small>
                         </div>
                         <button class="btn btn-outline btn-sm" type="button" @click="removeCustomSeedSource(seed.id)">
-                            Удалить
+                            {{ $t('common.delete') }}
                         </button>
                     </div>
                 </div>
             </div>
 
             <p class="muted" style="margin: 0;">
-                Источник:
+                {{ $t('iptv.source') }}:
                 <strong>{{ sourceLabel }}</strong>
-                <span v-if="channels.length > 0"> · {{ channels.length }} каналов</span>
+                <span v-if="channels.length > 0"> · {{ $t('iptv.channelsCount', { count: channels.length }) }}</span>
             </p>
             <p v-if="playlistError" class="error-text">{{ playlistError }}</p>
         </section>
@@ -109,7 +109,7 @@
         <section class="section-card iptv-televiso-shell">
             <aside class="iptv-tv-sidebar">
                 <div class="iptv-sidebar-head">
-                    <h3 class="section-title" style="font-size: 1rem; margin: 0;">Каналы</h3>
+                    <h3 class="section-title" style="font-size: 1rem; margin: 0;">{{ $t('iptv.channels') }}</h3>
                     <span class="badge">{{ visibleChannels.length }}</span>
                 </div>
 
@@ -120,7 +120,7 @@
                         :class="viewMode === 'all' ? 'btn-primary' : 'btn-outline'"
                         @click="setViewMode('all')"
                     >
-                        Все ({{ channels.length }})
+                        {{ $t('iptv.viewAll', { count: channels.length }) }}
                     </button>
                     <button
                         type="button"
@@ -128,7 +128,7 @@
                         :class="viewMode === 'favorites' ? 'btn-primary' : 'btn-outline'"
                         @click="setViewMode('favorites')"
                     >
-                        Избранные ({{ favoritesCount }})
+                        {{ $t('iptv.viewFavorites', { count: favoritesCount }) }}
                     </button>
                     <button
                         type="button"
@@ -136,7 +136,7 @@
                         :class="viewMode === 'recent' ? 'btn-primary' : 'btn-outline'"
                         @click="setViewMode('recent')"
                     >
-                        Недавние ({{ recentCount }})
+                        {{ $t('iptv.viewRecent', { count: recentCount }) }}
                     </button>
                 </div>
 
@@ -144,33 +144,33 @@
                     class="input-field"
                     v-model.trim="searchQuery"
                     type="search"
-                    placeholder="Поиск по названию, группе или домену"
+                    :placeholder="$t('iptv.searchPlaceholder')"
                 >
 
                 <div class="iptv-sidebar-filters">
                     <select class="input-field iptv-select" v-model="selectedGroup">
-                        <option value="all">Все группы</option>
+                        <option value="all">{{ $t('iptv.allGroups') }}</option>
                         <option v-for="group in groupOptions" :key="`group-${group}`" :value="group">
                             {{ group }}
                         </option>
                     </select>
 
                     <select class="input-field iptv-select" v-model="sortMode" :disabled="viewMode === 'recent'">
-                        <option value="group">Сортировка: группа</option>
-                        <option value="name">Сортировка: название</option>
+                        <option value="group">{{ $t('iptv.sortGroup') }}</option>
+                        <option value="name">{{ $t('iptv.sortName') }}</option>
                     </select>
 
                     <label class="iptv-toggle">
                         <input type="checkbox" v-model="secureOnly">
-                        Только HTTPS
+                        {{ $t('iptv.onlyHttps') }}
                     </label>
                 </div>
 
                 <p v-if="channels.length === 0" class="muted" style="margin: 0;">
-                    Загрузите плейлист для отображения каналов.
+                    {{ $t('iptv.loadPlaylistHint') }}
                 </p>
                 <p v-else-if="visibleChannels.length === 0" class="muted" style="margin: 0;">
-                    По текущему фильтру каналы не найдены.
+                    {{ $t('iptv.emptyByFilter') }}
                 </p>
 
                 <div v-else class="iptv-channel-list">
@@ -183,10 +183,12 @@
                         @click="playChannel(channel.id)"
                     >
                         <img
-                            v-if="channel.logo"
+                            v-if="!hideListLogosOnMobile && channel.logo"
                             :src="channel.logo"
                             alt="logo"
                             class="radio-station-icon"
+                            loading="lazy"
+                            referrerpolicy="no-referrer"
                             @error="hideBrokenIcon"
                         >
                         <span v-else class="avatar avatar-sm avatar-placeholder">TV</span>
@@ -201,7 +203,7 @@
                             <button
                                 type="button"
                                 class="iptv-star-btn"
-                                :title="isFavorite(channel.id) ? 'Убрать из избранного' : 'Добавить в избранное'"
+                                :title="isFavorite(channel.id) ? $t('iptv.removeFromFavorites') : $t('iptv.addToFavorites')"
                                 @click.stop="toggleFavorite(channel.id)"
                             >
                                 {{ isFavorite(channel.id) ? '★' : '☆' }}
@@ -220,6 +222,8 @@
                                 :src="currentChannel.logo"
                                 alt="channel logo"
                                 class="radio-station-icon"
+                                loading="lazy"
+                                referrerpolicy="no-referrer"
                                 @error="hideBrokenIcon"
                             >
                             <span v-else class="avatar avatar-sm avatar-placeholder">TV</span>
@@ -231,117 +235,135 @@
                             </div>
                         </div>
 
-                        <span class="badge iptv-status-badge" :class="`iptv-status-badge--${playerStatus}`">
-                            {{ playerStatusLabel }}
-                        </span>
+                        <div class="iptv-player-head-badges">
+                            <span class="badge iptv-mode-badge" :class="`iptv-mode-badge--${playbackMode}`">
+                                {{ playbackModeLabel }}
+                            </span>
+                            <span class="badge iptv-status-badge" :class="`iptv-status-badge--${playerStatus}`">
+                                {{ playerStatusLabel }}
+                            </span>
+                        </div>
                     </div>
 
-                    <div class="iptv-toolbar">
-                        <button class="btn btn-outline btn-sm" type="button" @click="playPreviousChannel">← Предыдущий</button>
-                        <button class="btn btn-outline btn-sm" type="button" @click="playNextChannel">Следующий →</button>
+                    <details class="iptv-tech-panel">
+                        <summary class="iptv-tech-panel-summary">
+                            <span>{{ $t('iptv.techPanelTitle') }}</span>
+                            <small>{{ $t('iptv.techPanelHint') }}</small>
+                        </summary>
 
-                        <button class="btn btn-outline btn-sm" type="button" @click="toggleFavorite(currentChannel.id)">
-                            {{ isFavorite(currentChannel.id) ? 'В избранном ★' : 'В избранное ☆' }}
-                        </button>
+                        <div class="iptv-tech-panel-body">
+                            <div class="iptv-toolbar">
+                                <button class="btn btn-outline btn-sm" type="button" @click="playPreviousChannel">{{ $t('iptv.previous') }}</button>
+                                <button class="btn btn-outline btn-sm" type="button" @click="playNextChannel">{{ $t('iptv.next') }}</button>
 
-                        <button class="btn btn-outline btn-sm" type="button" @click="copyStreamUrl(currentChannel)">
-                            {{ copiedChannelId === currentChannel.id ? 'Скопировано' : 'Копировать URL' }}
-                        </button>
-                    </div>
+                                <button class="btn btn-outline btn-sm" type="button" @click="toggleFavorite(currentChannel.id)">
+                                    {{ isFavorite(currentChannel.id) ? $t('iptv.inFavorites') : $t('iptv.toFavorites') }}
+                                </button>
 
-                    <div class="iptv-toolbar">
-                        <select class="input-field iptv-select" v-model.number="selectedQuality" :disabled="qualityOptions.length === 0">
-                            <option :value="-1">Авто-качество</option>
-                            <option v-for="option in qualityOptions" :key="`quality-${option.value}`" :value="option.value">
-                                {{ option.label }}
-                            </option>
-                        </select>
+                                <button class="btn btn-outline btn-sm" type="button" @click="copyStreamUrl(currentChannel)">
+                                    {{ copiedChannelId === currentChannel.id ? $t('iptv.copied') : $t('iptv.copyUrl') }}
+                                </button>
+                            </div>
 
-                        <select class="input-field iptv-select" v-model="bufferingMode">
-                            <option value="auto">Буфер: авто по сети</option>
-                            <option value="fast">Буфер: быстрый старт</option>
-                            <option value="balanced">Буфер: сбалансированный</option>
-                            <option value="stable">Буфер: устойчивый</option>
-                        </select>
+                            <div class="iptv-toolbar">
+                                <select class="input-field iptv-select" v-model.number="selectedQuality" :disabled="qualityOptions.length === 0">
+                                    <option :value="-1">{{ $t('iptv.autoQuality') }}</option>
+                                    <option v-for="option in qualityOptions" :key="`quality-${option.value}`" :value="option.value">
+                                        {{ option.label }}
+                                    </option>
+                                </select>
 
-                        <select class="input-field iptv-select" v-model="fitMode">
-                            <option value="contain">Экран: целиком</option>
-                            <option value="cover">Экран: заполнить</option>
-                            <option value="fill">Экран: растянуть</option>
-                        </select>
+                                <select class="input-field iptv-select" v-model="bufferingMode">
+                                    <option value="auto">{{ $t('iptv.bufferAuto') }}</option>
+                                    <option value="fast">{{ $t('iptv.bufferFast') }}</option>
+                                    <option value="balanced">{{ $t('iptv.bufferBalanced') }}</option>
+                                    <option value="stable">{{ $t('iptv.bufferStable') }}</option>
+                                </select>
 
-                        <label class="iptv-toggle">
-                            <input type="checkbox" v-model="preferHttpsUpgrade">
-                            Пробовать HTTPS
-                        </label>
+                                <select class="input-field iptv-select" v-model="fitMode">
+                                    <option value="contain">{{ $t('iptv.fitContain') }}</option>
+                                    <option value="cover">{{ $t('iptv.fitCover') }}</option>
+                                    <option value="fill">{{ $t('iptv.fitFill') }}</option>
+                                </select>
 
-                        <label class="iptv-toggle">
-                            <input type="checkbox" v-model="keyboardEnabled">
-                            Горячие клавиши
-                        </label>
+                                <label class="iptv-toggle">
+                                    <input type="checkbox" v-model="preferHttpsUpgrade">
+                                    {{ $t('iptv.tryHttps') }}
+                                </label>
 
-                        <label class="iptv-toggle">
-                            <input type="checkbox" v-model="autoStability">
-                            Авто-стабилизация
-                        </label>
+                                <label class="iptv-toggle">
+                                    <input type="checkbox" v-model="keyboardEnabled">
+                                    {{ $t('iptv.hotkeys') }}
+                                </label>
 
-                        <label class="iptv-toggle" :title="canUseServerTranscode ? 'При ошибке декодирования автоматически включит FFmpeg-совместимость' : 'Нужно установить FFmpeg на сервере'">
-                            <input type="checkbox" v-model="autoCompatOnCodecError" :disabled="!canUseServerTranscode">
-                            Авто-совместимость (codec)
-                        </label>
+                                <label class="iptv-toggle">
+                                    <input type="checkbox" v-model="autoStability">
+                                    {{ $t('iptv.autoStability') }}
+                                </label>
 
-                        <select class="input-field iptv-select" v-model="compatProfile" :disabled="transcodeBusy || !canUseServerTranscode">
-                            <option value="fast">FFmpeg: быстрый</option>
-                            <option value="balanced">FFmpeg: сбалансированный</option>
-                            <option value="stable">FFmpeg: устойчивый</option>
-                        </select>
+                                <label class="iptv-toggle" :title="canUseServerTranscode ? $t('iptv.compatTitleEnabled') : $t('iptv.compatTitleDisabled')">
+                                    <input type="checkbox" v-model="autoCompatOnCodecError" :disabled="!canUseServerTranscode">
+                                    {{ $t('iptv.autoCompat') }}
+                                </label>
 
-                        <label class="iptv-volume">
-                            Громкость
-                            <input
-                                type="range"
-                                min="0"
-                                max="1"
-                                step="0.05"
-                                :value="volumeLevel"
-                                @input="handleVolumeSlider"
-                            >
-                        </label>
+                                <select class="input-field iptv-select" v-model="compatProfile" :disabled="transcodeBusy || !canUseServerTranscode">
+                                    <option value="fast">{{ $t('iptv.compatFast') }}</option>
+                                    <option value="balanced">{{ $t('iptv.compatBalanced') }}</option>
+                                    <option value="stable">{{ $t('iptv.compatStable') }}</option>
+                                </select>
 
-                        <button class="btn btn-outline btn-sm" type="button" @click="toggleMuteAction">
-                            {{ muted ? 'Без звука' : 'Звук' }}
-                        </button>
-                    </div>
+                                <label class="iptv-volume">
+                                    {{ $t('iptv.volume') }}
+                                    <input
+                                        type="range"
+                                        min="0"
+                                        max="1"
+                                        step="0.05"
+                                        :value="volumeLevel"
+                                        @input="handleVolumeSlider"
+                                    >
+                                </label>
 
-                    <p v-if="videoMetaLabel" class="muted" style="margin: 0; font-size: 0.8rem;">
-                        Видео: {{ videoMetaLabel }}
-                    </p>
-                    <p v-if="playerDiagnosticsEngineLine" class="muted" style="margin: 0; font-size: 0.8rem;">
-                        {{ playerDiagnosticsEngineLine }}
-                    </p>
-                    <p v-if="playerDiagnosticsModulesLine" class="muted" style="margin: 0; font-size: 0.8rem;">
-                        {{ playerDiagnosticsModulesLine }}
-                    </p>
-                    <p v-if="playerDiagnosticsBufferLine" class="muted" style="margin: 0; font-size: 0.8rem;">
-                        {{ playerDiagnosticsBufferLine }}
-                    </p>
-                    <p v-if="playerDiagnosticsCodecsLine" class="muted" style="margin: 0; font-size: 0.8rem;">
-                        {{ playerDiagnosticsCodecsLine }}
-                    </p>
-                    <p v-if="playerMpegtsFeaturesLine" class="muted" style="margin: 0; font-size: 0.8rem;">
-                        {{ playerMpegtsFeaturesLine }}
-                    </p>
-                    <p v-if="playerStreamCodecsLine" class="muted" style="margin: 0; font-size: 0.8rem;">
-                        {{ playerStreamCodecsLine }}
-                    </p>
-                    <p v-if="playerHint" class="muted" style="margin: 0; font-size: 0.8rem;">
-                        {{ playerHint }}
-                    </p>
-                    <p v-if="compatStatusLine" class="muted" style="margin: 0; font-size: 0.8rem;">
-                        {{ compatStatusLine }}
-                    </p>
-                    <p v-if="playerError" class="error-text" style="margin: 0;">{{ playerError }}</p>
-                    <p v-if="transcodeError" class="error-text" style="margin: 0;">{{ transcodeError }}</p>
+                                <button class="btn btn-outline btn-sm" type="button" @click="toggleMuteAction">
+                                    {{ muted ? $t('iptv.unmute') : $t('iptv.mute') }}
+                                </button>
+                            </div>
+
+                            <p v-if="videoMetaLabel" class="muted" style="margin: 0; font-size: 0.8rem;">
+                                {{ $t('iptv.video') }}: {{ videoMetaLabel }}
+                            </p>
+                            <p v-if="playerDiagnosticsEngineLine" class="muted" style="margin: 0; font-size: 0.8rem;">
+                                {{ playerDiagnosticsEngineLine }}
+                            </p>
+                            <p v-if="playerDiagnosticsModulesLine" class="muted" style="margin: 0; font-size: 0.8rem;">
+                                {{ playerDiagnosticsModulesLine }}
+                            </p>
+                            <p v-if="playerDiagnosticsBufferLine" class="muted" style="margin: 0; font-size: 0.8rem;">
+                                {{ playerDiagnosticsBufferLine }}
+                            </p>
+                            <p v-if="playerDiagnosticsCodecsLine" class="muted" style="margin: 0; font-size: 0.8rem;">
+                                {{ playerDiagnosticsCodecsLine }}
+                            </p>
+                            <p v-if="playerMpegtsFeaturesLine" class="muted" style="margin: 0; font-size: 0.8rem;">
+                                {{ playerMpegtsFeaturesLine }}
+                            </p>
+                            <p v-if="playerStreamCodecsLine" class="muted" style="margin: 0; font-size: 0.8rem;">
+                                {{ playerStreamCodecsLine }}
+                            </p>
+                            <p v-if="playerHint" class="muted" style="margin: 0; font-size: 0.8rem;">
+                                {{ playerHint }}
+                            </p>
+                            <p v-if="compatStatusLine" class="muted" style="margin: 0; font-size: 0.8rem;">
+                                {{ compatStatusLine }}
+                            </p>
+                            <p v-if="proxyStatusLine" class="muted" style="margin: 0; font-size: 0.8rem;">
+                                {{ proxyStatusLine }}
+                            </p>
+                            <p v-if="playerError" class="error-text" style="margin: 0;">{{ playerError }}</p>
+                            <p v-if="transcodeError" class="error-text" style="margin: 0;">{{ transcodeError }}</p>
+                            <p v-if="proxyError" class="error-text" style="margin: 0;">{{ proxyError }}</p>
+                        </div>
+                    </details>
 
                     <IptvPlayer
                         ref="iptvPlayerRef"
@@ -362,13 +384,23 @@
                     ></IptvPlayer>
 
                     <div class="iptv-player-actions">
+                        <a
+                            v-if="openInNewTabUrl !== ''"
+                            class="btn btn-outline btn-sm"
+                            :href="openInNewTabUrl"
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            @click="playlistError = ''"
+                        >
+                            {{ $t('iptv.openInNewTab') }}
+                        </a>
                         <button
+                            v-else
                             class="btn btn-outline btn-sm"
                             type="button"
-                            :disabled="openInNewTabUrl === ''"
-                            @click="openCurrentStreamInNewTab"
+                            disabled
                         >
-                            Открыть поток в новой вкладке
+                            {{ $t('iptv.openInNewTab') }}
                         </button>
                         <button
                             class="btn btn-outline btn-sm"
@@ -376,22 +408,22 @@
                             :disabled="transcodeBusy || !canUseServerTranscode"
                             @click="toggleCompatibilityMode"
                         >
-                            {{ compatModeEnabled ? 'Выключить совместимый режим' : 'Включить совместимый режим (FFmpeg)' }}
+                            {{ compatModeEnabled ? $t('iptv.compatOff') : $t('iptv.compatOn') }}
                         </button>
                         <button class="btn btn-outline btn-sm" type="button" @click="toggleFullscreenAction">
-                            Полный экран (F)
+                            {{ $t('iptv.fullscreen') }}
                         </button>
                     </div>
 
                     <p class="muted iptv-shortcuts" v-if="keyboardEnabled">
-                        Горячие клавиши: Space (Play/Pause) · ←/→ (каналы) · F (fullscreen) · M (mute)
+                        {{ $t('iptv.shortcutsHelp') }}
                     </p>
                 </template>
 
                 <div v-else class="iptv-empty-stage">
-                    <h3 class="section-title" style="font-size: 1rem; margin-bottom: 0.4rem;">Плеер готов</h3>
+                    <h3 class="section-title" style="font-size: 1rem; margin-bottom: 0.4rem;">{{ $t('iptv.playerReady') }}</h3>
                     <p class="muted" style="margin: 0;">
-                        Выберите канал слева или вставьте прямую ссылку, чтобы начать просмотр.
+                        {{ $t('iptv.playerReadyHint') }}
                     </p>
                 </div>
             </div>
@@ -402,29 +434,29 @@
 <script>
 import IptvPlayer from '../../components/IptvPlayer.vue'
 
-const IPTV_STATE_STORAGE_KEY = 'solid-social:iptv-player-state:v2'
+const IPTV_STATE_STORAGE_KEY = 'solid-social:iptv-player-state:v3'
 const IPTV_CUSTOM_SEEDS_STORAGE_KEY = 'solid-social:iptv-custom-seeds:v1'
 const IPTV_RECENT_LIMIT = 40
 const IPTV_CUSTOM_SEEDS_LIMIT = 60
 const IPTV_BUILTIN_SEED_SOURCES = [
     {
         id: 'dimonovich-tv',
-        name: 'Плейлист ТВ',
+        nameKey: 'iptv.seedPlaylistTv',
         url: 'https://raw.githubusercontent.com/Dimonovich/TV/Dimonovich/FREE/TV',
     },
     {
         id: 'dimonovich-camera',
-        name: 'Веб-камеры',
+        nameKey: 'iptv.seedWebcams',
         url: 'https://raw.githubusercontent.com/Dimonovich/TV/Dimonovich/FREE/CAMERA',
     },
     {
         id: 'dimonovich-zarub',
-        name: 'Зарубежные каналы',
+        nameKey: 'iptv.seedInternational',
         url: 'https://raw.githubusercontent.com/Dimonovich/TV/Dimonovich/FREE/ZARUB',
     },
     {
         id: 'voxlist-tv',
-        name: 'Vox list TV',
+        nameKey: 'iptv.seedVoxlist',
         url: 'https://raw.githubusercontent.com/Voxlist/voxlist/refs/heads/main/voxlist.m3u',
     },
 ]
@@ -445,7 +477,7 @@ export default {
             currentChannelId: '',
             isLoadingPlaylist: false,
             playlistError: '',
-            sourceLabel: 'не выбран',
+            sourceLabel: this.$t('iptv.sourceNotSelected'),
             activeSeedId: '',
             newSeedName: '',
             newSeedUrl: '',
@@ -463,17 +495,27 @@ export default {
             autoStability: true,
             compatModeEnabled: false,
             compatProfile: 'stable',
-            autoCompatOnCodecError: true,
+            autoCompatOnCodecError: false,
             transcodeSessionId: '',
             transcodePlaybackUrl: '',
             transcodeBusy: false,
             transcodeError: '',
+            transcodeUnavailableSourceUrls: [],
+            proxyModeEnabled: false,
+            proxySessionId: '',
+            proxyPlaybackUrl: '',
+            proxyBusy: false,
+            proxyError: '',
+            hideListLogosOnMobile: false,
             transcodeCapabilities: {
                 checked: false,
                 ffmpegAvailable: false,
                 ffmpegVersion: '',
             },
             autoCompatLastAttemptUrl: '',
+            autoCompatLastAttemptAt: 0,
+            autoProxyLastAttemptUrl: '',
+            autoProxyLastAttemptAt: 0,
             compatRecoveryState: {
                 sourceUrl: '',
                 attempts: 0,
@@ -495,6 +537,7 @@ export default {
             favoriteChannelIds: [],
             recentChannelIds: [],
             copiedChannelId: '',
+            exitCleanupDone: false,
         }
     },
 
@@ -508,7 +551,11 @@ export default {
         },
 
         builtinSeedSources() {
-            return IPTV_BUILTIN_SEED_SOURCES
+            return IPTV_BUILTIN_SEED_SOURCES.map((seed) => ({
+                id: seed.id,
+                url: seed.url,
+                name: this.$t(seed.nameKey),
+            }))
         },
 
         seedSources() {
@@ -554,6 +601,10 @@ export default {
                 return this.transcodePlaybackUrl
             }
 
+            if (this.proxyModeEnabled) {
+                return this.proxyPlaybackUrl || ''
+            }
+
             return this.playbackUrl
         },
 
@@ -584,20 +635,38 @@ export default {
 
         compatStatusLine() {
             if (!this.transcodeCapabilities.checked) {
-                return 'Проверка FFmpeg на сервере...'
+                return this.$t('iptv.compatChecking')
             }
 
             if (!this.canUseServerTranscode) {
-                return 'Совместимый режим недоступен: на сервере нет FFmpeg.'
+                return this.$t('iptv.compatUnavailableNoFfmpeg')
             }
 
             if (this.compatModeEnabled) {
-                const source = this.transcodeSessionId ? `Сессия: ${this.transcodeSessionId}` : 'Подготовка...'
+                const source = this.transcodeSessionId
+                    ? this.$t('iptv.compatSession', { id: this.transcodeSessionId })
+                    : this.$t('iptv.compatPreparing')
                 const version = this.transcodeCapabilities.ffmpegVersion ? ` · ${this.transcodeCapabilities.ffmpegVersion}` : ''
-                return `Совместимый режим включен (${this.compatProfile}) · ${source}${version}`
+                return this.$t('iptv.compatEnabledLine', {
+                    profile: this.compatProfile,
+                    source,
+                    version,
+                })
             }
 
             return ''
+        },
+
+        proxyStatusLine() {
+            if (!this.proxyModeEnabled) {
+                return ''
+            }
+
+            const source = this.proxySessionId
+                ? this.$t('iptv.proxySession', { id: this.proxySessionId })
+                : this.$t('iptv.proxyPreparing')
+
+            return this.$t('iptv.proxyEnabledLine', { source })
         },
 
         groupOptions() {
@@ -684,16 +753,38 @@ export default {
 
         playerStatusLabel() {
             const dictionary = {
-                idle: 'Ожидание',
-                loading: 'Загрузка',
-                buffering: 'Буферизация',
-                ready: 'Готов',
-                playing: 'В эфире',
-                paused: 'Пауза',
-                error: 'Ошибка',
+                idle: this.$t('iptv.statusIdle'),
+                loading: this.$t('iptv.statusLoading'),
+                buffering: this.$t('iptv.statusBuffering'),
+                ready: this.$t('iptv.statusReady'),
+                playing: this.$t('iptv.statusPlaying'),
+                paused: this.$t('iptv.statusPaused'),
+                error: this.$t('iptv.statusError'),
             }
 
-            return dictionary[this.playerStatus] || 'Ожидание'
+            return dictionary[this.playerStatus] || this.$t('iptv.statusIdle')
+        },
+
+        playbackMode() {
+            if (this.compatModeEnabled && this.transcodePlaybackUrl) {
+                return 'ffmpeg'
+            }
+
+            if (this.proxyModeEnabled && this.proxyPlaybackUrl) {
+                return 'proxy'
+            }
+
+            return 'direct'
+        },
+
+        playbackModeLabel() {
+            const dictionary = {
+                direct: this.$t('iptv.modeDirect'),
+                proxy: this.$t('iptv.modeProxy'),
+                ffmpeg: this.$t('iptv.modeFfmpeg'),
+            }
+
+            return dictionary[this.playbackMode] || this.$t('iptv.modeDirect')
         },
 
         videoMetaLabel() {
@@ -715,16 +806,18 @@ export default {
 
             const sourceType = String(this.playerDiagnostics?.sourceType || '')
             const labels = {
-                'idle': 'ожидание',
+                'idle': this.$t('iptv.engineIdle'),
                 'hls.js': 'HLS.js',
-                'native-hls': 'Нативный HLS',
+                'native-hls': this.$t('iptv.engineNativeHls'),
                 'dash.js': 'dash.js',
                 'mpegts.js': 'mpegts.js',
-                'native': 'Нативный HTML5',
+                'native': this.$t('iptv.engineNativeHtml5'),
             }
 
             const engineLabel = labels[engine] || engine
-            return sourceType ? `Движок: ${engineLabel} · Тип потока: ${sourceType}` : `Движок: ${engineLabel}`
+            return sourceType
+                ? this.$t('iptv.engineLineWithType', { engine: engineLabel, type: sourceType })
+                : this.$t('iptv.engineLine', { engine: engineLabel })
         },
 
         playerDiagnosticsModulesLine() {
@@ -733,7 +826,14 @@ export default {
                 return ''
             }
 
-            return `Модули: native-hls=${this.boolLabel(modules.nativeHls)}, hls.js=${this.boolLabel(modules.hlsjs)}, dash.js=${this.boolLabel(modules.dashjs)} (${this.boolLabel(modules.dashjsLoaded)} загружен), mpegts.js=${this.boolLabel(modules.mpegtsjs)} (${this.boolLabel(modules.mpegtsjsLoaded)} загружен)`
+            return this.$t('iptv.modulesLine', {
+                nativeHls: this.boolLabel(modules.nativeHls),
+                hlsjs: this.boolLabel(modules.hlsjs),
+                dashjs: this.boolLabel(modules.dashjs),
+                dashjsLoaded: this.boolLabel(modules.dashjsLoaded),
+                mpegtsjs: this.boolLabel(modules.mpegtsjs),
+                mpegtsjsLoaded: this.boolLabel(modules.mpegtsjsLoaded),
+            })
         },
 
         playerDiagnosticsBufferLine() {
@@ -748,7 +848,12 @@ export default {
 
             const requestedLabel = requested || 'auto'
             const activeLabel = activeProfile || 'balanced'
-            return `Буфер: ${requestedLabel} → ${activeLabel} · Авто-стабилизация: ${this.boolLabel(autoStability)} · Восстановлений: ${stabilityEvents}`
+            return this.$t('iptv.bufferLine', {
+                requested: requestedLabel,
+                active: activeLabel,
+                autoStability: this.boolLabel(autoStability),
+                recoveries: stabilityEvents,
+            })
         },
 
         playerDiagnosticsCodecsLine() {
@@ -757,7 +862,12 @@ export default {
                 return ''
             }
 
-            return `Кодеки браузера: H264=${this.boolLabel(codecs.h264)}, H265=${this.boolLabel(codecs.h265)}, AV1=${this.boolLabel(codecs.av1)}, AAC=${this.boolLabel(codecs.aac)}`
+            return this.$t('iptv.browserCodecsLine', {
+                h264: this.boolLabel(codecs.h264),
+                h265: this.boolLabel(codecs.h265),
+                av1: this.boolLabel(codecs.av1),
+                aac: this.boolLabel(codecs.aac),
+            })
         },
 
         playerMpegtsFeaturesLine() {
@@ -775,13 +885,13 @@ export default {
                 return ''
             }
 
-            return `Кодеки потока: ${streamCodecs.join(', ')}`
+            return this.$t('iptv.streamCodecsLine', { codecs: streamCodecs.join(', ') })
         },
 
         currentChannelPositionLabel() {
             const position = this.visibleChannels.findIndex((channel) => channel.id === this.currentChannelId)
             if (position < 0) {
-                return `${this.visibleChannels.length} каналов`
+                return this.$t('iptv.channelsCount', { count: this.visibleChannels.length })
             }
 
             return `${position + 1}/${this.visibleChannels.length}`
@@ -791,11 +901,11 @@ export default {
             const originalUrl = String(this.currentChannel?.url || '').trim()
 
             if (originalUrl !== '' && this.isPageHttps && this.isHttpUrl(originalUrl) && !this.preferHttpsUpgrade) {
-                return 'HTTP-поток на HTTPS-странице может блокироваться браузером. Включите "Пробовать HTTPS" или откройте ссылку отдельно.'
+                return this.$t('iptv.httpOnHttpsHint')
             }
 
             if (originalUrl !== '' && this.shouldUpgradeToHttps(originalUrl)) {
-                return `Пробуем защищенную версию потока: ${this.playbackUrl}`
+                return this.$t('iptv.tryingSecureStream', { url: this.playbackUrl })
             }
 
             return this.playerStatus === 'error' ? '' : this.playerStatusMessage
@@ -866,6 +976,9 @@ export default {
         },
         playbackUrl(nextUrl, previousUrl) {
             this.autoCompatLastAttemptUrl = ''
+            this.autoCompatLastAttemptAt = 0
+            this.autoProxyLastAttemptUrl = ''
+            this.autoProxyLastAttemptAt = 0
             this.compatRecoveryState = {
                 sourceUrl: String(nextUrl || ''),
                 attempts: 0,
@@ -873,7 +986,12 @@ export default {
 
             if (nextUrl === '') {
                 this.stopServerTranscodeSession()
+                this.stopServerProxySession()
                 return
+            }
+
+            if (this.proxyModeEnabled && nextUrl !== previousUrl) {
+                this.startServerProxyForCurrentChannel()
             }
 
             if (this.compatModeEnabled && nextUrl !== previousUrl) {
@@ -884,19 +1002,177 @@ export default {
 
     mounted() {
         this.preferHttpsUpgrade = this.isPageHttps
+        this.hideListLogosOnMobile = this.isMobileViewport()
         this.loadCustomSeedSources()
         this.loadPersistedState()
+
         this.loadTranscodeCapabilities()
+        window.addEventListener('pagehide', this.handlePageHide)
+        window.addEventListener('beforeunload', this.handleBeforeUnload)
         window.addEventListener('keydown', this.handleGlobalKeydown)
+        window.addEventListener('resize', this.handleViewportChange)
     },
 
     beforeUnmount() {
-        this.stopServerTranscodeSession()
+        this.teardownPlaybackOnExit()
+        window.removeEventListener('pagehide', this.handlePageHide)
+        window.removeEventListener('beforeunload', this.handleBeforeUnload)
         window.removeEventListener('keydown', this.handleGlobalKeydown)
+        window.removeEventListener('resize', this.handleViewportChange)
         this.persistPlayerState()
     },
 
+    beforeRouteLeave(_to, _from, next) {
+        this.teardownPlaybackOnExit()
+        next()
+    },
+
     methods: {
+        handlePageHide() {
+            this.teardownPlaybackOnExit({ useKeepalive: true })
+        },
+
+        handleBeforeUnload() {
+            this.teardownPlaybackOnExit({ useKeepalive: true })
+        },
+
+        teardownPlaybackOnExit(options = {}) {
+            if (this.exitCleanupDone) {
+                return
+            }
+
+            this.exitCleanupDone = true
+
+            const player = this.playerRef()
+            if (player && typeof player.destroyPlayer === 'function') {
+                player.destroyPlayer()
+            }
+
+            this.currentChannelId = ''
+            this.selectedQuality = -1
+            this.qualityOptions = []
+            this.playerError = ''
+            this.playerStatus = 'idle'
+            this.playerStatusMessage = ''
+            this.playerDiagnostics = null
+            this.videoMeta = {
+                width: 0,
+                height: 0,
+            }
+
+            this.stopServerTranscodeSession({
+                useKeepalive: Boolean(options?.useKeepalive),
+            })
+            this.stopServerProxySession({
+                useKeepalive: Boolean(options?.useKeepalive),
+            })
+        },
+
+        resolveCsrfToken() {
+            if (typeof document === 'undefined') {
+                return ''
+            }
+
+            const token = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content')
+            return String(token || '').trim()
+        },
+
+        sendStopTranscodeKeepalive(sessionId) {
+            const normalizedSessionId = String(sessionId || '').trim()
+            if (normalizedSessionId === '') {
+                return
+            }
+
+            const url = `/api/iptv/transcode/${encodeURIComponent(normalizedSessionId)}`
+            const csrfToken = this.resolveCsrfToken()
+
+            if (typeof window !== 'undefined' && typeof window.fetch === 'function') {
+                try {
+                    const headers = {
+                        'Accept': 'application/json',
+                    }
+
+                    if (csrfToken !== '') {
+                        headers['X-CSRF-TOKEN'] = csrfToken
+                    }
+
+                    window.fetch(url, {
+                        method: 'DELETE',
+                        credentials: 'same-origin',
+                        keepalive: true,
+                        headers,
+                    })
+                    return
+                } catch (_error) {
+                    // fallback to beacon
+                }
+            }
+
+            if (typeof navigator === 'undefined' || typeof navigator.sendBeacon !== 'function') {
+                return
+            }
+
+            try {
+                const payload = new FormData()
+                payload.append('_method', 'DELETE')
+                if (csrfToken !== '') {
+                    payload.append('_token', csrfToken)
+                }
+
+                navigator.sendBeacon(url, payload)
+            } catch (_error) {
+                // ignore beacon failures
+            }
+        },
+
+        sendStopProxyKeepalive(sessionId) {
+            const normalizedSessionId = String(sessionId || '').trim()
+            if (normalizedSessionId === '') {
+                return
+            }
+
+            const url = `/api/iptv/proxy/${encodeURIComponent(normalizedSessionId)}`
+            const csrfToken = this.resolveCsrfToken()
+
+            if (typeof window !== 'undefined' && typeof window.fetch === 'function') {
+                try {
+                    const headers = {
+                        'Accept': 'application/json',
+                    }
+
+                    if (csrfToken !== '') {
+                        headers['X-CSRF-TOKEN'] = csrfToken
+                    }
+
+                    window.fetch(url, {
+                        method: 'DELETE',
+                        credentials: 'same-origin',
+                        keepalive: true,
+                        headers,
+                    })
+                    return
+                } catch (_error) {
+                    // fallback to beacon
+                }
+            }
+
+            if (typeof navigator === 'undefined' || typeof navigator.sendBeacon !== 'function') {
+                return
+            }
+
+            try {
+                const payload = new FormData()
+                payload.append('_method', 'DELETE')
+                if (csrfToken !== '') {
+                    payload.append('_token', csrfToken)
+                }
+
+                navigator.sendBeacon(url, payload)
+            } catch (_error) {
+                // ignore beacon failures
+            }
+        },
+
         setViewMode(mode) {
             if (!['all', 'favorites', 'recent'].includes(mode)) {
                 return
@@ -1020,7 +1296,7 @@ export default {
 
                 if (!this.transcodeCapabilities.ffmpegAvailable && this.compatModeEnabled) {
                     this.compatModeEnabled = false
-                    this.transcodeError = 'Совместимый режим отключен: FFmpeg не найден на сервере.'
+                    this.transcodeError = this.$t('iptv.compatDisabledNoFfmpeg')
                 }
             } catch (_error) {
                 this.transcodeCapabilities = {
@@ -1028,29 +1304,115 @@ export default {
                     ffmpegAvailable: false,
                     ffmpegVersion: '',
                 }
-                this.transcodeError = 'Не удалось проверить доступность FFmpeg на сервере.'
+                this.transcodeError = this.$t('iptv.compatCheckFailed')
             }
         },
 
         isCodecCompatibilityError(message) {
             const text = String(message || '').toLowerCase()
-            return text.includes('кодек')
+            return text.includes('codec')
                 || text.includes('decode')
-                || text.includes('декод')
-                || text.includes('не удалось декодировать')
                 || text.includes('unsupported')
                 || text.includes('not supported')
                 || text.includes('bufferaddcodecerror')
                 || text.includes('m2v')
                 || text.includes('mpeg-2')
                 || text.includes('mpeg2')
-                || text.includes('cors')
+        },
+
+        isCorsLikeError(message) {
+            const text = String(message || '').toLowerCase()
+            return text.includes('cors')
                 || text.includes('cross-origin')
                 || text.includes('cross origin')
                 || text.includes('access-control-allow-origin')
-                || text.includes('mixed content')
-                || text.includes('err_failed')
+                || text.includes('blocked by cors policy')
+                || text.includes('networkerror')
+                || text.includes('network_error')
+                || text.includes('manifestloaderror')
+                || text.includes('manifest_load_error')
+                || text.includes('manifestloadtimeout')
+                || text.includes('manifest_load_timeout')
+                || text.includes('fragloaderror')
+                || text.includes('frag_load_error')
+                || text.includes('fragloadtimeout')
+                || text.includes('frag_load_timeout')
+                || text.includes('levelloaderror')
+                || text.includes('level_load_error')
+                || text.includes('levelloadtimeout')
+                || text.includes('level_load_timeout')
                 || text.includes('net::err_failed')
+                || text.includes('err_failed')
+        },
+
+        isOriginBlockedLikeError(message) {
+            const text = String(message || '').toLowerCase()
+            const hasSegmentError = text.includes('fragloaderror')
+                || text.includes('frag_load_error')
+                || text.includes('levelloaderror')
+                || text.includes('level_load_error')
+                || text.includes('keyloaderror')
+                || text.includes('key_load_error')
+                || text.includes('hls-origin-blocked')
+                || text.includes('hls-segment-exhausted')
+
+            if (!hasSegmentError) {
+                return false
+            }
+
+            return text.includes('code=403')
+                || text.includes('code=404')
+                || text.includes('forbidden')
+                || text.includes('not found')
+                || text.includes('origin')
+                || text.includes('anti-hotlink')
+        },
+
+        isMobileViewport() {
+            if (typeof window === 'undefined' || !window.matchMedia) {
+                return false
+            }
+
+            return window.matchMedia('(max-width: 980px)').matches
+        },
+
+        handleViewportChange() {
+            this.hideListLogosOnMobile = this.isMobileViewport()
+        },
+
+        sourceKey(url) {
+            return String(url || '').trim().toLowerCase()
+        },
+
+        isTranscodeUnavailableForSource(url) {
+            const key = this.sourceKey(url)
+            if (key === '') {
+                return false
+            }
+
+            return this.transcodeUnavailableSourceUrls.includes(key)
+        },
+
+        rememberTranscodeUnavailableForSource(url) {
+            const key = this.sourceKey(url)
+            if (key === '') {
+                return
+            }
+
+            if (this.transcodeUnavailableSourceUrls.includes(key)) {
+                return
+            }
+
+            this.transcodeUnavailableSourceUrls = [key, ...this.transcodeUnavailableSourceUrls].slice(0, 300)
+        },
+
+        clearTranscodeUnavailableForSource(url) {
+            const key = this.sourceKey(url)
+            if (key === '') {
+                return
+            }
+
+            this.transcodeUnavailableSourceUrls = this.transcodeUnavailableSourceUrls.filter((item) => item !== key)
         },
 
         async toggleCompatibilityMode() {
@@ -1059,17 +1421,26 @@ export default {
                 return
             }
 
-            await this.startCompatibilityMode()
+            await this.startCompatibilityMode({ force: true })
         },
 
-        async startCompatibilityMode() {
+        async startCompatibilityMode(options = {}) {
+            const force = Boolean(options?.force)
             if (!this.canUseServerTranscode) {
-                this.transcodeError = 'Совместимый режим недоступен: FFmpeg отсутствует на сервере.'
+                this.transcodeError = this.$t('iptv.compatUnavailableNoFfmpeg')
                 return
             }
 
+            if (force) {
+                this.clearTranscodeUnavailableForSource(this.playbackUrl)
+            }
+
+            if (this.proxyModeEnabled) {
+                await this.stopProxyMode()
+            }
+
             this.compatModeEnabled = true
-            await this.startServerTranscodeForCurrentChannel()
+            await this.startServerTranscodeForCurrentChannel({ force })
         },
 
         async stopCompatibilityMode() {
@@ -1077,18 +1448,111 @@ export default {
             await this.stopServerTranscodeSession()
         },
 
-        async startServerTranscodeForCurrentChannel() {
-            if (!this.compatModeEnabled || !this.canUseServerTranscode) {
-                return
+        async startProxyMode() {
+            this.proxyModeEnabled = true
+            return await this.startServerProxyForCurrentChannel()
+        },
+
+        async stopProxyMode() {
+            this.proxyModeEnabled = false
+            await this.stopServerProxySession()
+        },
+
+        async startServerProxyForCurrentChannel() {
+            if (!this.proxyModeEnabled) {
+                return false
             }
 
             const sourceUrl = String(this.playbackUrl || '').trim()
             if (sourceUrl === '') {
-                return
+                return false
+            }
+
+            if (this.proxyBusy) {
+                return false
+            }
+
+            this.proxyBusy = true
+            this.proxyError = ''
+
+            try {
+                await this.stopServerProxySession({ preserveMode: true, preserveError: true })
+
+                const response = await axios.post('/api/iptv/proxy/start', {
+                    url: sourceUrl,
+                })
+
+                this.proxySessionId = String(response.data?.data?.session_id || '')
+                this.proxyPlaybackUrl = String(response.data?.data?.playlist_url || '')
+
+                if (this.proxySessionId === '' || this.proxyPlaybackUrl === '') {
+                    throw new Error('Empty proxy session payload')
+                }
+
+                return true
+            } catch (error) {
+                this.proxySessionId = ''
+                this.proxyPlaybackUrl = ''
+                this.proxyModeEnabled = false
+                this.proxyError = error.response?.data?.message || this.$t('iptv.proxyStartFailed')
+                return false
+            } finally {
+                this.proxyBusy = false
+            }
+        },
+
+        async stopServerProxySession(options = {}) {
+            const preserveMode = Boolean(options?.preserveMode)
+            const preserveError = Boolean(options?.preserveError)
+            const useKeepalive = Boolean(options?.useKeepalive)
+            const sessionId = String(this.proxySessionId || '')
+
+            if (sessionId !== '') {
+                if (useKeepalive) {
+                    this.sendStopProxyKeepalive(sessionId)
+                } else {
+                    try {
+                        await axios.delete(`/api/iptv/proxy/${encodeURIComponent(sessionId)}`)
+                    } catch (_error) {
+                        // ignore stop errors
+                    }
+                }
+            }
+
+            this.proxySessionId = ''
+            this.proxyPlaybackUrl = ''
+            this.proxyBusy = false
+            this.autoProxyLastAttemptUrl = ''
+            this.autoProxyLastAttemptAt = 0
+
+            if (!preserveMode) {
+                this.proxyModeEnabled = false
+            }
+
+            if (!preserveError) {
+                this.proxyError = ''
+            }
+        },
+
+        async startServerTranscodeForCurrentChannel(options = {}) {
+            const force = Boolean(options?.force)
+            if (!this.compatModeEnabled || !this.canUseServerTranscode) {
+                return false
+            }
+
+            const sourceUrl = String(this.playbackUrl || '').trim()
+            if (sourceUrl === '') {
+                return false
+            }
+
+            if (!force && this.isTranscodeUnavailableForSource(sourceUrl)) {
+                this.compatModeEnabled = false
+                this.transcodeError = this.$t('iptv.compatUnavailableForChannel')
+                return false
             }
 
             if (this.transcodeBusy) {
-                return
+                return false
             }
 
             this.transcodeBusy = true
@@ -1112,11 +1576,20 @@ export default {
                 if (this.transcodeSessionId === '' || this.transcodePlaybackUrl === '') {
                     throw new Error('Empty transcode session payload')
                 }
+                return true
             } catch (error) {
                 this.transcodeSessionId = ''
                 this.transcodePlaybackUrl = ''
                 this.compatModeEnabled = false
-                this.transcodeError = error.response?.data?.message || 'Не удалось запустить совместимый режим FFmpeg.'
+                this.rememberTranscodeUnavailableForSource(sourceUrl)
+                const statusCode = Number(error?.response?.status || 0)
+                if (statusCode === 503 && this.autoCompatOnCodecError) {
+                    this.autoCompatOnCodecError = false
+                    this.transcodeError = `${error.response?.data?.message || this.$t('iptv.compatStartFailed')} ${this.$t('iptv.autoCompatDisabledAfterFail')}`
+                } else {
+                    this.transcodeError = error.response?.data?.message || this.$t('iptv.compatStartFailed')
+                }
+                return false
             } finally {
                 this.transcodeBusy = false
             }
@@ -1125,13 +1598,18 @@ export default {
         async stopServerTranscodeSession(options = {}) {
             const preserveMode = Boolean(options?.preserveMode)
             const preserveError = Boolean(options?.preserveError)
+            const useKeepalive = Boolean(options?.useKeepalive)
             const sessionId = String(this.transcodeSessionId || '')
 
             if (sessionId !== '') {
-                try {
-                    await axios.delete(`/api/iptv/transcode/${encodeURIComponent(sessionId)}`)
-                } catch (_error) {
-                    // ignore stop errors
+                if (useKeepalive) {
+                    this.sendStopTranscodeKeepalive(sessionId)
+                } else {
+                    try {
+                        await axios.delete(`/api/iptv/transcode/${encodeURIComponent(sessionId)}`)
+                    } catch (_error) {
+                        // ignore stop errors
+                    }
                 }
             }
 
@@ -1139,6 +1617,7 @@ export default {
             this.transcodePlaybackUrl = ''
             this.transcodeBusy = false
             this.autoCompatLastAttemptUrl = ''
+            this.autoCompatLastAttemptAt = 0
             this.compatRecoveryState = {
                 sourceUrl: '',
                 attempts: 0,
@@ -1219,9 +1698,9 @@ export default {
             try {
                 const parsed = new URL(String(url || '').trim())
                 const slug = parsed.pathname.split('/').filter(Boolean).pop()
-                return slug ? `Сидер ${slug}` : parsed.host
+                return slug ? this.$t('iptv.seedWithSlug', { slug }) : parsed.host
             } catch (_error) {
-                return 'Пользовательский сидер'
+                return this.$t('iptv.customSeed')
             }
         },
 
@@ -1240,13 +1719,13 @@ export default {
             const name = String(this.newSeedName || '').trim() || this.guessSeedName(url)
 
             if (!this.isHttpUrl(url) && !this.isHttpsUrl(url)) {
-                this.playlistError = 'Ссылка сидера должна быть в формате http/https.'
+                this.playlistError = this.$t('iptv.seedUrlInvalid')
                 return
             }
 
             const duplicateByUrl = this.findSeedByUrl(url)
             if (duplicateByUrl) {
-                this.playlistError = 'Такой сидер уже добавлен.'
+                this.playlistError = this.$t('iptv.seedAlreadyAdded')
                 this.activeSeedId = duplicateByUrl.id
                 return
             }
@@ -1291,7 +1770,7 @@ export default {
         },
 
         boolLabel(value) {
-            return value ? 'да' : 'нет'
+            return value ? this.$t('iptv.yes') : this.$t('iptv.no')
         },
 
         handleGlobalKeydown(event) {
@@ -1371,24 +1850,6 @@ export default {
             this.playerRef()?.toggleFullscreen?.()
         },
 
-        openCurrentStreamInNewTab() {
-            const url = String(this.openInNewTabUrl || '').trim()
-            if (url === '') {
-                this.playlistError = 'Ссылка потока недоступна для открытия.'
-                return
-            }
-
-            if (typeof window === 'undefined' || typeof window.open !== 'function') {
-                this.playlistError = 'Браузер не поддерживает открытие новой вкладки.'
-                return
-            }
-
-            const popup = window.open(url, '_blank', 'noopener,noreferrer')
-            if (!popup) {
-                this.playlistError = 'Браузер заблокировал новую вкладку. Разрешите pop-up для сайта.'
-            }
-        },
-
         hideBrokenIcon(event) {
             const image = event?.target
             if (!(image instanceof HTMLImageElement)) {
@@ -1409,7 +1870,7 @@ export default {
                 parts.push(channel.domain)
             }
 
-            return parts.length > 0 ? parts.join(' · ') : 'Без метаданных'
+            return parts.length > 0 ? parts.join(' · ') : this.$t('iptv.noMetadata')
         },
 
         isFavorite(channelId) {
@@ -1509,16 +1970,26 @@ export default {
         },
 
         async handlePlayerError(payload) {
-            this.playerError = String(payload?.message || 'Ошибка воспроизведения потока.')
+            this.playerError = String(payload?.message || this.$t('iptv.playbackError'))
             const errorMessage = String(payload?.message || '')
             const errorDetails = String(payload?.details || '')
             const errorType = String(payload?.type || '')
             const sourceUrl = String(this.playbackUrl || '').trim()
 
+            const isCorsLikeError = this.isCorsLikeError(errorMessage)
+                || this.isCorsLikeError(errorDetails)
+                || this.isCorsLikeError(errorType)
+            const isOriginBlockedError = this.isOriginBlockedLikeError(errorMessage)
+                || this.isOriginBlockedLikeError(errorDetails)
+                || this.isOriginBlockedLikeError(errorType)
+            const shouldUseProxyFallback = isCorsLikeError || isOriginBlockedError
+
             const isCompatibilityLikeError = this.isCodecCompatibilityError(errorMessage)
                 || this.isCodecCompatibilityError(errorDetails)
                 || this.isCodecCompatibilityError(errorType)
                 || errorType === 'video-frame-timeout'
+                || errorType === 'mixed-content-blocked'
+            const shouldAutoCompatFallback = isCompatibilityLikeError && errorType !== 'video-frame-timeout'
 
             if (this.compatModeEnabled) {
                 if (!isCompatibilityLikeError || sourceUrl === '' || this.transcodeBusy) {
@@ -1539,7 +2010,7 @@ export default {
                         sourceUrl,
                         attempts: 1,
                     }
-                    this.transcodeError = 'Видео не пришло в совместимом режиме. Перезапускаем FFmpeg с профилем "устойчивый"...'
+                    this.transcodeError = this.$t('iptv.compatRetryStable')
                     this.compatProfile = 'stable'
                     return
                 }
@@ -1549,11 +2020,54 @@ export default {
                         sourceUrl,
                         attempts: 2,
                     }
-                    this.transcodeError = 'Совместимый режим не дал видео. Возвращаемся к прямому потоку канала.'
+                    this.transcodeError = this.$t('iptv.compatNoVideoFallback')
                     await this.stopCompatibilityMode()
                 }
 
                 return
+            }
+
+            if (this.proxyModeEnabled && shouldUseProxyFallback && sourceUrl !== '') {
+                await this.stopProxyMode()
+                this.proxyError = this.$t('iptv.proxyFailedFallbackDirect')
+                return
+            }
+
+            if (this.proxyModeEnabled && shouldAutoCompatFallback && this.autoCompatOnCodecError && this.canUseServerTranscode && !this.transcodeBusy && sourceUrl !== '') {
+                const now = Date.now()
+                if ((now - Number(this.autoCompatLastAttemptAt || 0)) < 20000) {
+                    return
+                }
+
+                if (this.isTranscodeUnavailableForSource(sourceUrl)) {
+                    this.transcodeError = this.$t('iptv.compatUnavailableForChannel')
+                    return
+                }
+
+                this.transcodeError = this.$t('iptv.compatAutoEnableCodec')
+                this.autoCompatLastAttemptAt = now
+                await this.startCompatibilityMode()
+                return
+            }
+
+            if (
+                shouldUseProxyFallback
+                && !this.proxyModeEnabled
+                && !this.proxyBusy
+                && sourceUrl !== ''
+                && (
+                    this.autoProxyLastAttemptUrl !== sourceUrl
+                    || (Date.now() - Number(this.autoProxyLastAttemptAt || 0)) > 12000
+                )
+            ) {
+                this.autoProxyLastAttemptUrl = sourceUrl
+                this.autoProxyLastAttemptAt = Date.now()
+                this.proxyError = this.$t('iptv.proxyAutoEnable')
+                const proxyStarted = await this.startProxyMode()
+                if (proxyStarted) {
+                    this.proxyError = ''
+                    return
+                }
             }
 
             if (!this.autoCompatOnCodecError || !this.canUseServerTranscode) {
@@ -1564,14 +2078,25 @@ export default {
                 return
             }
 
-            const shouldFallback = isCompatibilityLikeError
+            const shouldFallback = shouldAutoCompatFallback
 
             if (!shouldFallback) {
                 return
             }
 
+            if (this.isTranscodeUnavailableForSource(sourceUrl)) {
+                this.transcodeError = this.$t('iptv.compatUnavailableForChannel')
+                return
+            }
+
+            const now = Date.now()
+            if ((now - Number(this.autoCompatLastAttemptAt || 0)) < 20000) {
+                return
+            }
+
             this.autoCompatLastAttemptUrl = sourceUrl
-            this.transcodeError = 'Обнаружен неподдерживаемый кодек. Включаем совместимый режим FFmpeg...'
+            this.autoCompatLastAttemptAt = now
+            this.transcodeError = this.$t('iptv.compatAutoEnableCodec')
             await this.startCompatibilityMode()
         },
 
@@ -1616,12 +2141,12 @@ export default {
         async fetchPlaylistByUrl(url, sourceLabel = '', seedId = '') {
             const normalizedUrl = String(url || '').trim()
             if (normalizedUrl === '') {
-                this.playlistError = 'Укажите ссылку на IPTV-плейлист.'
+                this.playlistError = this.$t('iptv.playlistUrlRequired')
                 return
             }
 
             if (!this.isHttpUrl(normalizedUrl) && !this.isHttpsUrl(normalizedUrl)) {
-                this.playlistError = 'Ссылка на плейлист должна быть в формате http/https.'
+                this.playlistError = this.$t('iptv.playlistUrlInvalid')
                 return
             }
 
@@ -1640,7 +2165,7 @@ export default {
                 const resolvedSourceLabel = String(sourceLabel || matchedSeed?.name || normalizedUrl)
                 this.applyParsedChannels(playlist, resolvedSourceLabel)
             } catch (error) {
-                this.playlistError = error.response?.data?.message || 'Не удалось загрузить плейлист.'
+                this.playlistError = error.response?.data?.message || this.$t('iptv.playlistLoadFailed')
             } finally {
                 this.isLoadingPlaylist = false
             }
@@ -1663,10 +2188,10 @@ export default {
 
             try {
                 const playlist = await file.text()
-                this.applyParsedChannels(playlist, file.name || 'локальный файл')
+                this.applyParsedChannels(playlist, file.name || this.$t('iptv.localFile'))
                 this.activeSeedId = ''
             } catch (_error) {
-                this.playlistError = 'Не удалось прочитать файл плейлиста.'
+                this.playlistError = this.$t('iptv.playlistReadFailed')
             } finally {
                 this.isLoadingPlaylist = false
                 if (input) {
@@ -1679,23 +2204,23 @@ export default {
             const url = String(this.directStreamUrl || '').trim()
 
             if (!this.isHttpUrl(url) && !this.isHttpsUrl(url)) {
-                this.playlistError = 'Прямая ссылка должна быть в формате http/https.'
+                this.playlistError = this.$t('iptv.directUrlInvalid')
                 return
             }
 
             this.playlistError = ''
 
             const channel = this.createChannel({
-                name: 'Прямой поток',
+                name: this.$t('iptv.directStreamName'),
                 url,
-                group: 'Ручной запуск',
+                group: this.$t('iptv.manualGroup'),
                 logo: '',
             }, this.channels.length)
 
             const withoutDuplicate = this.channels.filter((item) => item.id !== channel.id)
             this.channels = [channel, ...withoutDuplicate]
             this.currentChannelId = channel.id
-            this.sourceLabel = 'прямая ссылка'
+            this.sourceLabel = this.$t('iptv.directLinkSource')
             this.activeSeedId = ''
             this.selectedGroup = 'all'
             this.selectedQuality = -1
@@ -1704,11 +2229,13 @@ export default {
         },
 
         clearPlaylist() {
+            this.stopServerTranscodeSession()
+            this.stopServerProxySession()
             this.channels = []
             this.currentChannelId = ''
             this.playlistError = ''
             this.searchQuery = ''
-            this.sourceLabel = 'не выбран'
+            this.sourceLabel = this.$t('iptv.sourceNotSelected')
             this.activeSeedId = ''
             this.selectedGroup = 'all'
             this.selectedQuality = -1
@@ -1731,13 +2258,13 @@ export default {
             if (parsedChannels.length === 0) {
                 this.channels = []
                 this.currentChannelId = ''
-                this.playlistError = 'Не найдено валидных каналов в плейлисте.'
-                this.sourceLabel = sourceLabel || 'не выбран'
+                this.playlistError = this.$t('iptv.noValidChannels')
+                this.sourceLabel = sourceLabel || this.$t('iptv.sourceNotSelected')
                 return
             }
 
             this.channels = parsedChannels
-            this.sourceLabel = sourceLabel || 'неизвестный источник'
+            this.sourceLabel = sourceLabel || this.$t('iptv.unknownSource')
             this.selectedGroup = 'all'
             this.selectedQuality = -1
             this.playerError = ''
@@ -1829,7 +2356,7 @@ export default {
             }
 
             return {
-                name: titlePart || attributes['tvg-name'] || 'Без названия',
+                name: titlePart || attributes['tvg-name'] || this.$t('iptv.untitledChannel'),
                 group: attributes['group-title'] || fallbackGroup || '',
                 logo: attributes['tvg-logo'] || '',
             }
@@ -1838,7 +2365,7 @@ export default {
         createChannel(meta, index) {
             const url = String(meta?.url || '').trim()
             const parsed = this.parseUrlParts(url)
-            const name = String(meta?.name || '').trim() || `Канал ${index + 1}`
+            const name = String(meta?.name || '').trim() || this.$t('iptv.channelWithIndex', { index: index + 1 })
             const protocol = parsed.protocol
 
             return {
@@ -1846,11 +2373,28 @@ export default {
                 name,
                 url,
                 group: String(meta?.group || '').trim(),
-                logo: String(meta?.logo || '').trim(),
+                logo: this.normalizeLogoUrl(meta?.logo),
                 domain: parsed.domain,
                 protocol,
                 isSecure: protocol === 'https',
             }
+        },
+
+        normalizeLogoUrl(value) {
+            const logoUrl = String(value || '').trim()
+            if (logoUrl === '') {
+                return ''
+            }
+
+            if (!this.isHttpUrl(logoUrl) && !this.isHttpsUrl(logoUrl)) {
+                return ''
+            }
+
+            if (this.isPageHttps && this.isHttpUrl(logoUrl)) {
+                return ''
+            }
+
+            return logoUrl
         },
 
         buildStableChannelId(url) {
@@ -1918,7 +2462,7 @@ export default {
                     }
                 }, 1200)
             } catch (_error) {
-                this.playlistError = 'Не удалось скопировать ссылку в буфер. Проверьте разрешения браузера.'
+                this.playlistError = this.$t('iptv.copyFailed')
             }
         },
     },

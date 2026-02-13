@@ -1,15 +1,15 @@
 <template>
     <div class="page-wrap grid-layout">
         <section class="section-card">
-            <h1 class="section-title">Личный кабинет</h1>
-            <p class="section-subtitle">Создавайте публикации с большими фото и видео, добавляйте эмодзи и публикуйте в ленту.</p>
+            <h1 class="section-title">{{ $t('personal.title') }}</h1>
+            <p class="section-subtitle">{{ $t('personal.subtitle') }}</p>
 
             <Stat :stats="stats"></Stat>
         </section>
 
         <section class="section-card">
-            <h2 class="section-title" style="font-size: 1.2rem;">Профиль для постов и чатов</h2>
-            <p class="section-subtitle">Настройте никнейм и аватар. Ник будет отображаться как имя автора в постах и чатах.</p>
+            <h2 class="section-title" style="font-size: 1.2rem;">{{ $t('personal.profileTitle') }}</h2>
+            <p class="section-subtitle">{{ $t('personal.profileSubtitle') }}</p>
 
             <div class="form-grid">
                 <div style="display: flex; align-items: center; gap: 0.8rem; flex-wrap: wrap;">
@@ -29,16 +29,16 @@
                             v-model.trim="profileForm.name"
                             class="input-field"
                             type="text"
-                            placeholder="Ваше имя"
+                            :placeholder="$t('personal.namePlaceholder')"
                         >
                         <input
                             v-model.trim="profileForm.nickname"
                             class="input-field"
                             type="text"
-                            placeholder="Никнейм (например, cool_user)"
+                            :placeholder="$t('personal.nicknamePlaceholder')"
                         >
                         <p class="muted" style="margin: 0; font-size: 0.8rem;">
-                            Текущее отображаемое имя: <strong>{{ profileDisplayName }}</strong>
+                            {{ $t('personal.currentDisplayName') }} <strong>{{ profileDisplayName }}</strong>
                         </p>
                     </div>
                 </div>
@@ -53,17 +53,17 @@
 
                 <div style="display: flex; gap: 0.5rem; flex-wrap: wrap;">
                     <button class="btn btn-outline" @click.prevent="openProfileAvatarPicker" :disabled="isSavingProfile">
-                        Выбрать аватар
+                        {{ $t('personal.chooseAvatar') }}
                     </button>
                     <button
                         class="btn btn-danger"
                         @click.prevent="removeProfileAvatar"
                         :disabled="isSavingProfile || !hasAnyAvatar"
                     >
-                        Удалить аватар
+                        {{ $t('personal.deleteAvatar') }}
                     </button>
                     <button class="btn btn-primary" @click.prevent="saveProfile()" :disabled="isSavingProfile">
-                        {{ isSavingProfile ? 'Сохранение...' : 'Сохранить профиль' }}
+                        {{ isSavingProfile ? $t('personal.saving') : $t('personal.saveProfile') }}
                     </button>
                 </div>
 
@@ -83,48 +83,48 @@
         </section>
 
         <section class="section-card">
-            <h2 class="section-title" style="font-size: 1.2rem;">Новый пост</h2>
+            <h2 class="section-title" style="font-size: 1.2rem;">{{ $t('personal.newPostTitle') }}</h2>
 
             <div class="form-grid">
                 <input
                     v-model.trim="title"
                     class="input-field"
                     type="text"
-                    placeholder="Заголовок"
+                    :placeholder="$t('personal.postTitlePlaceholder')"
                 >
                 <textarea
                     v-model.trim="content"
                     class="textarea-field"
-                    placeholder="Текст поста"
+                    :placeholder="$t('personal.postBodyPlaceholder')"
                 ></textarea>
 
                 <div class="form-grid" style="background: #fff; border: 1px solid var(--line); border-radius: 12px; padding: 0.65rem;">
                     <label class="muted" style="display: flex; align-items: center; gap: 0.45rem;">
                         <input type="checkbox" v-model="postOptions.is_public">
-                        Пост публичный
+                        {{ $t('personal.postPublic') }}
                     </label>
 
                     <label class="muted" style="display: flex; align-items: center; gap: 0.45rem;">
                         <input type="checkbox" v-model="postOptions.show_in_feed" :disabled="!postOptions.is_public">
-                        Показывать в общей ленте на главной
+                        {{ $t('personal.postShowInFeed') }}
                     </label>
 
                     <label class="muted" style="display: flex; align-items: center; gap: 0.45rem;">
                         <input type="checkbox" v-model="postOptions.show_in_carousel" :disabled="!postOptions.is_public">
-                        Показывать в карусели фото/видео на главной
+                        {{ $t('personal.postShowInCarousel') }}
                     </label>
                 </div>
 
                 <div class="form-grid" v-if="siteConfig.allow_user_storage_choice" style="background: #fff; border: 1px solid var(--line); border-radius: 12px; padding: 0.65rem;">
-                    <label class="muted">Где сохранять ваши фото/видео</label>
+                    <label class="muted">{{ $t('personal.storageWhere') }}</label>
                     <select class="select-field" v-model="storagePreference" @change="saveStoragePreference">
-                        <option value="server_local">Сервер сайта</option>
-                        <option value="cloud">Облако</option>
+                        <option value="server_local">{{ $t('personal.storageServer') }}</option>
+                        <option value="cloud">{{ $t('personal.storageCloud') }}</option>
                     </select>
                 </div>
 
                 <p class="muted" style="margin: 0; font-size: 0.82rem;">
-                    Текущий режим хранения: {{ readableStorageMode }}
+                    {{ $t('personal.storageCurrent') }} {{ readableStorageMode }}
                 </p>
 
                 <div class="emoji-row">
@@ -135,8 +135,8 @@
 
                 <div style="display: flex; gap: 0.6rem; flex-wrap: wrap; align-items: center;">
                     <input @change="uploadMedia" ref="file" type="file" class="hidden" multiple accept="image/*,video/*">
-                    <button class="btn btn-outline" @click.prevent="selectFile">Загрузить фото/видео</button>
-                    <span class="muted" style="font-size: 0.84rem;">Поддерживаются большие файлы, включая видео.</span>
+                    <button class="btn btn-outline" @click.prevent="selectFile">{{ $t('personal.uploadMedia') }}</button>
+                    <span class="muted" style="font-size: 0.84rem;">{{ $t('personal.uploadHint') }}</span>
                 </div>
 
                 <div class="media-grid" v-if="uploadedMedia.length > 0">
@@ -156,7 +156,7 @@
                             >
                         </button>
                         <MediaPlayer v-else type="video" :src="media.url" player-class="media-video"></MediaPlayer>
-                        <button class="btn btn-danger btn-sm" style="margin-top: 0.5rem;" @click.prevent="removeMedia(media.id)">Убрать</button>
+                        <button class="btn btn-danger btn-sm" style="margin-top: 0.5rem;" @click.prevent="removeMedia(media.id)">{{ $t('personal.removeMedia') }}</button>
                     </div>
                 </div>
 
@@ -171,14 +171,14 @@
                 </div>
 
                 <button class="btn btn-primary" @click.prevent="store" :disabled="isPublishing || isUploading">
-                    {{ isPublishing ? 'Публикация...' : 'Опубликовать' }}
+                    {{ isPublishing ? $t('personal.publishing') : $t('personal.publish') }}
                 </button>
             </div>
         </section>
 
         <section class="section-card">
-            <h2 class="section-title" style="font-size: 1.2rem;">Мои посты</h2>
-            <p class="section-subtitle" v-if="posts.length === 0">Пока нет постов. Опубликуйте первый пост выше.</p>
+            <h2 class="section-title" style="font-size: 1.2rem;">{{ $t('personal.myPostsTitle') }}</h2>
+            <p class="section-subtitle" v-if="posts.length === 0">{{ $t('personal.myPostsEmpty') }}</p>
             <div class="post-list">
                 <Post v-for="post in posts" :key="post.id" :post="post"></Post>
             </div>
@@ -240,15 +240,15 @@ export default {
         readableStorageMode() {
             const mode = this.siteConfig.media_storage_mode
             if (mode === 'cloud') {
-                return 'облако'
+                return this.$t('personal.storageCloudValue')
             }
             if (mode === 'user_choice') {
                 return this.storagePreference === 'cloud'
-                    ? 'вы выбрали облако'
-                    : 'вы выбрали сервер сайта'
+                    ? this.$t('personal.storageCloudChosen')
+                    : this.$t('personal.storageServerChosen')
             }
 
-            return 'сервер сайта'
+            return this.$t('personal.storageServerValue')
         },
 
         profileAvatarUrl() {
@@ -261,7 +261,7 @@ export default {
                 return nickname
             }
 
-            return (this.profileForm.name || this.currentUser?.name || 'Пользователь').trim()
+            return (this.profileForm.name || this.currentUser?.name || this.$t('common.user')).trim()
         },
 
         profileInitials() {
@@ -287,8 +287,9 @@ export default {
     },
 
     methods: {
-        openMedia(url, alt = 'Фото') {
-            this.$refs.mediaLightbox?.open(url, alt)
+        openMedia(url, alt = null) {
+            const safeAlt = alt || this.$t('personal.mediaAlt')
+            this.$refs.mediaLightbox?.open(url, safeAlt)
         },
 
         async loadCurrentUser() {
@@ -334,7 +335,7 @@ export default {
                     media_storage_preference: this.storagePreference,
                 })
             } catch (error) {
-                alert(error.response?.data?.message ?? 'Не удалось обновить выбор хранилища.')
+                alert(error.response?.data?.message ?? this.$t('personal.storageUpdateError'))
                 await this.loadSiteConfig()
             }
         },
@@ -401,7 +402,7 @@ export default {
                 this.$emit('auth-changed')
             } catch (error) {
                 this.profileErrors = error.response?.data?.errors ?? {
-                    general: ['Не удалось обновить профиль.']
+                    general: [this.$t('personal.profileUpdateError')]
                 }
             } finally {
                 this.isSavingProfile = false
@@ -442,7 +443,7 @@ export default {
                 await this.getStats()
             } catch (error) {
                 this.errors = error.response?.data?.errors ?? {
-                    general: ['Не удалось опубликовать пост.']
+                    general: [this.$t('personal.publishError')]
                 }
             } finally {
                 this.isPublishing = false
@@ -480,7 +481,7 @@ export default {
                 } catch (error) {
                     URL.revokeObjectURL(localPreviewUrl)
                     this.errors = error.response?.data?.errors ?? {
-                        media: ['Ошибка загрузки файла.']
+                        media: [this.$t('personal.uploadError')]
                     }
                     break
                 }

@@ -100,9 +100,9 @@ class IptvTranscodeService
                 $ffmpegBinary
             );
             $pid = $this->spawnFfmpegProcess($commandParts, $logPath);
-        } catch (RuntimeException) {
+        } catch (RuntimeException $exception) {
             $this->deleteDirectory($sessionDir);
-            throw new RuntimeException('Не удалось запустить FFmpeg-процесс для транскодирования.');
+            throw new RuntimeException('Не удалось запустить FFmpeg-процесс для транскодирования: ' . $exception->getMessage());
         }
 
         if ($pid <= 1) {
@@ -318,8 +318,14 @@ class IptvTranscodeService
 
         foreach ($this->ffmpegBinaryCandidates() as $candidate) {
             $probe = new Process([$candidate, '-version']);
-            $probe->setTimeout(5);
-            $probe->run();
+            $probe->setTimeout(20);
+            $probe->setIdleTimeout(20);
+
+            try {
+                $probe->run();
+            } catch (Throwable) {
+                continue;
+            }
 
             if (!$probe->isSuccessful()) {
                 continue;
@@ -399,36 +405,314 @@ class IptvTranscodeService
      */
     private function spawnFfmpegProcessOnWindows(array $commandParts, string $logPath): int
     {
-        $escaped = implode(' ', array_map(static fn (string $part): string => escapeshellarg($part), $commandParts));
-        $cmdCommand = $escaped . ' > ' . escapeshellarg($logPath) . ' 2>&1';
+        $commandParts = array_map([$this, 'normalizeWindowsCommandPart'], $commandParts);
+        $directDiagnostics = '';
+        $directPid = $this->trySpawnWindowsProcessDirect($commandParts, $directDiagnostics);
+        if ($directPid > 1) {
+            return $directPid;
+        }
 
-        $powerShellScript = '$p = Start-Process -FilePath "cmd.exe" '
-            . '-ArgumentList @("/c", ' . $this->escapePowerShellString($cmdCommand) . ') '
-            . '-WindowStyle Hidden -PassThru; $p.Id';
+        $wmicDiagnostics = '';
+        $wmicPid = $this->trySpawnWindowsProcessViaWmic($commandParts, $wmicDiagnostics);
+        if ($wmicPid > 1) {
+            return $wmicPid;
+        }
+
+        $existingPids = $this->listWindowsFfmpegPids();
+        $escapedCommand = implode(' ', array_map([$this, 'escapeWindowsCmdArgument'], $commandParts));
+        // Windows cmd redirection (1>/2>) can break with strict quoting in some environments.
+        // Run without shell redirection to keep spawn syntax robust.
+        $startCommand = 'start "" /B ' . $escapedCommand;
+        $cmdBinary = $this->resolveWindowsSystemBinary('cmd.exe') ?? 'cmd.exe';
 
         $process = new Process([
-            'powershell',
-            '-NoProfile',
-            '-NonInteractive',
-            '-ExecutionPolicy',
-            'Bypass',
-            '-Command',
-            $powerShellScript,
+            $cmdBinary,
+            '/V:OFF',
+            '/S',
+            '/C',
+            '"' . $startCommand . '"',
         ]);
 
-        $process->setTimeout(25);
+        $process->setTimeout(15);
         $process->run();
 
         if (!$process->isSuccessful()) {
-            throw new RuntimeException('FFmpeg windows spawn failed.');
+            $details = trim($process->getErrorOutput() ?: $process->getOutput());
+            $directPart = $directDiagnostics !== '' ? ' direct=' . $directDiagnostics : '';
+            $wmicPart = $wmicDiagnostics !== '' ? ' wmic=' . $wmicDiagnostics : '';
+            throw new RuntimeException('FFmpeg windows spawn failed.' . $directPart . $wmicPart . ' cmd=' . $startCommand . ($details !== '' ? ' ' . $details : ''));
         }
 
-        return (int) trim($process->getOutput());
+        $pid = $this->waitForNewWindowsFfmpegPid($existingPids, 8000);
+        if ($pid <= 1) {
+            $directPart = $directDiagnostics !== '' ? ' direct=' . $directDiagnostics : '';
+            $wmicPart = $wmicDiagnostics !== '' ? ' wmic=' . $wmicDiagnostics : '';
+            throw new RuntimeException('FFmpeg windows spawn returned invalid PID.' . $directPart . $wmicPart . ' Не удалось определить PID ffmpeg через tasklist.');
+        }
+
+        return $pid;
     }
 
-    private function escapePowerShellString(string $value): string
+    /**
+     * @param string[] $commandParts
+     */
+    private function trySpawnWindowsProcessDirect(array $commandParts, string &$diagnostics): int
     {
-        return "'" . str_replace("'", "''", $value) . "'";
+        $diagnostics = '';
+        $existingPids = $this->listWindowsFfmpegPids();
+
+        $process = new Process($commandParts);
+        $process->disableOutput();
+        $process->setTimeout(15);
+        $process->setIdleTimeout(15);
+        $process->setOptions([
+            'create_new_console' => true,
+            'create_process_group' => true,
+        ]);
+
+        try {
+            $process->start();
+        } catch (Throwable $exception) {
+            $diagnostics = 'direct-exception: ' . trim($exception->getMessage());
+            return 0;
+        }
+
+        usleep(350000);
+
+        if (!$process->isRunning()) {
+            $exitCode = $process->getExitCode();
+            $diagnostics = 'direct-exit=' . ($exitCode === null ? 'unknown' : (string) $exitCode);
+            return 0;
+        }
+
+        $pid = (int) ($process->getPid() ?? 0);
+        if ($pid > 1) {
+            return $pid;
+        }
+
+        $pid = $this->waitForNewWindowsFfmpegPid($existingPids, 5000);
+        if ($pid > 1) {
+            return $pid;
+        }
+
+        $diagnostics = 'direct-no-pid';
+        return 0;
+    }
+
+    private function escapeWindowsCmdArgument(string $value): string
+    {
+        $escaped = str_replace(['^', '%', '"'], ['^^', '^%', '""'], $value);
+        return '"' . $escaped . '"';
+    }
+
+    private function normalizeWindowsCommandPart(string $value): string
+    {
+        $trimmed = trim($value);
+        if ($trimmed === '') {
+            return $value;
+        }
+
+        if (preg_match('/^[A-Za-z]:[\\\\\\/]/', $trimmed) === 1 || str_starts_with($trimmed, '\\\\')) {
+            return str_replace('/', '\\', $trimmed);
+        }
+
+        return $value;
+    }
+
+    /**
+     * @param string[] $commandParts
+     */
+    private function trySpawnWindowsProcessViaWmic(array $commandParts, string &$diagnostics): int
+    {
+        $diagnostics = '';
+        $existingPids = $this->listWindowsFfmpegPids();
+        $wmicBinary = $this->resolveWindowsSystemBinary('wbem\\wmic.exe')
+            ?? $this->resolveWindowsSystemBinary('wmic.exe');
+
+        if ($wmicBinary === null) {
+            $diagnostics = 'wmic-not-found';
+            return 0;
+        }
+
+        $commandLine = implode(' ', array_map([$this, 'escapeWindowsWmicArgument'], $commandParts));
+        $process = new Process([$wmicBinary, 'process', 'call', 'create', $commandLine]);
+        $process->setTimeout(20);
+        $process->setIdleTimeout(20);
+
+        try {
+            $process->run();
+        } catch (Throwable $exception) {
+            $diagnostics = 'wmic-exception: ' . trim($exception->getMessage());
+            return 0;
+        }
+
+        $combinedOutput = $this->normalizeWindowsProcessOutput($process->getOutput() . "\n" . $process->getErrorOutput());
+        $combinedOutput = trim($combinedOutput);
+        if (!$process->isSuccessful()) {
+            $diagnostics = 'wmic-failed: ' . $combinedOutput;
+            return 0;
+        }
+
+        if (preg_match('/ReturnValue\s*=\s*(\d+)/i', $combinedOutput, $returnValueMatch) === 1) {
+            $returnValue = (int) $returnValueMatch[1];
+            if ($returnValue !== 0) {
+                $diagnostics = 'wmic-return=' . $returnValue . ': ' . $combinedOutput;
+                return 0;
+            }
+        }
+
+        if (preg_match('/ProcessId\s*=\s*(\d+)/i', $combinedOutput, $processIdMatch) === 1) {
+            $pid = (int) $processIdMatch[1];
+            if ($pid > 1) {
+                return $pid;
+            }
+        }
+
+        $pid = $this->waitForNewWindowsFfmpegPid($existingPids, 5000);
+        if ($pid > 1) {
+            return $pid;
+        }
+
+        $diagnostics = 'wmic-no-pid: ' . $combinedOutput;
+        return 0;
+    }
+
+    private function escapeWindowsWmicArgument(string $value): string
+    {
+        $escaped = str_replace('"', '\"', $value);
+        return '"' . $escaped . '"';
+    }
+
+    private function normalizeWindowsProcessOutput(string $output): string
+    {
+        if ($output === '') {
+            return '';
+        }
+
+        if (str_contains($output, "\0")) {
+            $decoded = @iconv('UTF-16LE', 'UTF-8//IGNORE', $output);
+            if (is_string($decoded) && $decoded !== '') {
+                return $decoded;
+            }
+
+            return str_replace("\0", '', $output);
+        }
+
+        return $output;
+    }
+
+    /**
+     * @return int[]
+     */
+    private function listWindowsFfmpegPids(): array
+    {
+        $tasklistBinary = $this->resolveWindowsSystemBinary('tasklist.exe') ?? 'tasklist';
+        $process = new Process([$tasklistBinary, '/FI', 'IMAGENAME eq ffmpeg.exe', '/NH', '/FO', 'CSV']);
+        $process->setTimeout(4);
+        $process->setIdleTimeout(4);
+
+        try {
+            $process->run();
+        } catch (Throwable) {
+            return [];
+        }
+
+        if (!$process->isSuccessful()) {
+            return [];
+        }
+
+        $pids = [];
+        $lines = preg_split('/\R/', trim($process->getOutput())) ?: [];
+        foreach ($lines as $line) {
+            $row = str_getcsv(trim($line));
+            if (!is_array($row) || count($row) < 2) {
+                continue;
+            }
+
+            $pid = (int) trim((string) $row[1], "\" \t\n\r\0\x0B");
+            if ($pid > 1) {
+                $pids[] = $pid;
+            }
+        }
+
+        return array_values(array_unique($pids));
+    }
+
+    /**
+     * @param int[] $existingPids
+     */
+    private function waitForNewWindowsFfmpegPid(array $existingPids, int $timeoutMs): int
+    {
+        $known = array_fill_keys(array_map('intval', $existingPids), true);
+        $deadline = microtime(true) + (max(1000, $timeoutMs) / 1000);
+
+        while (microtime(true) < $deadline) {
+            $current = $this->listWindowsFfmpegPids();
+            foreach ($current as $pid) {
+                if (!isset($known[$pid])) {
+                    return $pid;
+                }
+            }
+
+            usleep(200000);
+        }
+
+        return 0;
+    }
+
+    private function resolveWindowsSystemBinary(string $binaryName): ?string
+    {
+        if (DIRECTORY_SEPARATOR !== '\\') {
+            return null;
+        }
+
+        $systemRoot = rtrim((string) (getenv('SystemRoot') ?: getenv('WINDIR') ?: 'C:\\Windows'), '\\/');
+        $candidates = [];
+
+        if (strtolower($binaryName) === 'cmd.exe') {
+            $comSpec = trim((string) (getenv('ComSpec') ?: getenv('COMSPEC') ?: ''));
+            if ($comSpec !== '') {
+                $candidates[] = $comSpec;
+            }
+        }
+
+        $candidates[] = $systemRoot . '\\System32\\' . $binaryName;
+        $candidates[] = $systemRoot . '\\Sysnative\\' . $binaryName;
+        $candidates[] = $systemRoot . '\\SysWOW64\\' . $binaryName;
+        $candidates[] = $binaryName;
+
+        $checked = [];
+        foreach ($candidates as $candidate) {
+            $binary = trim((string) $candidate);
+            if ($binary === '' || in_array($binary, $checked, true)) {
+                continue;
+            }
+
+            $checked[] = $binary;
+            if (str_contains($binary, '\\') || str_contains($binary, '/')) {
+                if (is_file($binary)) {
+                    return $binary;
+                }
+
+                continue;
+            }
+
+            $probe = new Process([$binary, '/?']);
+            $probe->setTimeout(2);
+            $probe->setIdleTimeout(2);
+
+            try {
+                $probe->run();
+            } catch (Throwable) {
+                continue;
+            }
+
+            if ($probe->isSuccessful()) {
+                return $binary;
+            }
+        }
+
+        return null;
     }
 
     private function enforceSessionLimit(): void
@@ -585,7 +869,8 @@ class IptvTranscodeService
         }
 
         if (DIRECTORY_SEPARATOR === '\\') {
-            $process = Process::fromShellCommandline('taskkill /F /PID ' . (int) $pid);
+            $taskkillBinary = $this->resolveWindowsSystemBinary('taskkill.exe') ?? 'taskkill';
+            $process = new Process([$taskkillBinary, '/F', '/PID', (string) (int) $pid]);
             $process->setTimeout(4);
             $process->run();
             return;
@@ -612,7 +897,8 @@ class IptvTranscodeService
         }
 
         if (DIRECTORY_SEPARATOR === '\\') {
-            $process = Process::fromShellCommandline('tasklist /FI "PID eq ' . (int) $pid . '" /NH');
+            $tasklistBinary = $this->resolveWindowsSystemBinary('tasklist.exe') ?? 'tasklist';
+            $process = new Process([$tasklistBinary, '/FI', 'PID eq ' . (int) $pid, '/NH']);
             $process->setTimeout(4);
             $process->run();
 

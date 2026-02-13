@@ -1,23 +1,24 @@
 <template>
     <div class="app-shell">
         <header class="topbar glass-panel">
-            <router-link class="brand" :to="{ name: 'home' }" aria-label="Solid Social">
+            <router-link class="brand" :to="localizedRoute('home')" aria-label="Solid Social">
                 <BrandLogo />
             </router-link>
 
             <nav class="nav-links">
-                <router-link class="nav-link" :to="{ name: 'home' }">Главная</router-link>
+                <router-link class="nav-link" :to="localizedRoute('home')">{{ $t('nav.home') }}</router-link>
+                <router-link class="nav-link" :to="localizedRoute('home', {hash: '#feedback-form'})">{{ $t('nav.feedback') }}</router-link>
 
                 <template v-if="isAuthenticated">
                     <template v-if="isEmailVerified">
-                        <router-link class="nav-link" :to="{ name: 'user.index' }">Пользователи</router-link>
-                        <router-link class="nav-link" :to="{ name: 'user.feed' }">Лента</router-link>
-                        <router-link class="nav-link" :to="{ name: 'user.personal' }">Кабинет</router-link>
-                        <router-link class="nav-link" :to="{ name: 'radio.index' }">Радио</router-link>
-                        <router-link class="nav-link" :to="{ name: 'iptv.index' }">IPTV</router-link>
-                        <router-link class="nav-link" :to="{ name: 'user.feedback' }">Мои обращения</router-link>
-                        <router-link class="nav-link" :to="{ name: 'chat.index' }">
-                            Чаты
+                        <router-link class="nav-link" :to="localizedRoute('user.index')">{{ $t('nav.users') }}</router-link>
+                        <router-link class="nav-link" :to="localizedRoute('user.feed')">{{ $t('nav.feed') }}</router-link>
+                        <router-link class="nav-link" :to="localizedRoute('user.personal')">{{ $t('nav.cabinet') }}</router-link>
+                        <router-link class="nav-link" :to="localizedRoute('radio.index')">{{ $t('nav.radio') }}</router-link>
+                        <router-link class="nav-link" :to="localizedRoute('iptv.index')">{{ $t('nav.iptv') }}</router-link>
+                        <router-link class="nav-link" :to="localizedRoute('user.feedback')">{{ $t('nav.myRequests') }}</router-link>
+                        <router-link class="nav-link" :to="localizedRoute('chat.index')">
+                            {{ $t('nav.chats') }}
                             <span
                                 v-if="chatUnreadTotal > 0"
                                 class="badge"
@@ -26,25 +27,44 @@
                                 {{ chatUnreadBadge }}
                             </span>
                         </router-link>
-                        <router-link v-if="user?.is_admin" class="nav-link" :to="{ name: 'admin.index' }">Админка</router-link>
+                        <router-link v-if="user?.is_admin" class="nav-link" :to="localizedRoute('admin.index')">{{ $t('nav.admin') }}</router-link>
                     </template>
                     <template v-else>
-                        <router-link class="nav-link" :to="{ name: 'auth.verify' }">Подтвердить email</router-link>
+                        <router-link class="nav-link" :to="localizedRoute('auth.verify')">{{ $t('nav.verifyEmail') }}</router-link>
                     </template>
                 </template>
 
                 <template v-else>
-                    <router-link class="nav-link" :to="{ name: 'user.login' }">Вход</router-link>
-                    <router-link class="nav-link" :to="{ name: 'user.registration' }">Регистрация</router-link>
+                    <router-link class="nav-link" :to="localizedRoute('user.login')">{{ $t('nav.login') }}</router-link>
+                    <router-link class="nav-link" :to="localizedRoute('user.registration')">{{ $t('nav.registration') }}</router-link>
                 </template>
+
+                <div class="lang-switch" :aria-label="$t('common.languageSwitcher')">
+                    <button
+                        type="button"
+                        class="lang-switch-btn"
+                        :class="{'is-active': currentLocale === 'ru'}"
+                        @click="switchLocale('ru')"
+                    >
+                        {{ $t('lang.ru') }}
+                    </button>
+                    <button
+                        type="button"
+                        class="lang-switch-btn"
+                        :class="{'is-active': currentLocale === 'en'}"
+                        @click="switchLocale('en')"
+                    >
+                        {{ $t('lang.en') }}
+                    </button>
+                </div>
             </nav>
 
             <div class="auth-chip" v-if="isAuthenticated">
                 <img v-if="user?.avatar_url" :src="user.avatar_url" alt="avatar" class="avatar avatar-sm">
                 <span v-else class="avatar avatar-sm avatar-placeholder">{{ initials(user) }}</span>
                 <span>{{ displayName(user) }}</span>
-                <span v-if="!isEmailVerified" class="badge">Email не подтвержден</span>
-                <button class="btn btn-danger btn-sm" @click.prevent="logout">Выход</button>
+                <span v-if="!isEmailVerified" class="badge">{{ $t('auth.emailNotVerified') }}</span>
+                <button class="btn btn-danger btn-sm" @click.prevent="logout">{{ $t('auth.logout') }}</button>
             </div>
         </header>
 
@@ -92,6 +112,10 @@ export default {
             return Boolean(this.user?.email_verified_at)
         },
 
+        currentLocale() {
+            return this.$route?.params?.locale === 'en' ? 'en' : 'ru'
+        },
+
         chatUnreadBadge() {
             if (this.chatUnreadTotal <= 0) {
                 return ''
@@ -102,8 +126,23 @@ export default {
     },
 
     methods: {
+        localizedRoute(name, options = {}) {
+            const sourceParams = (options && typeof options.params === 'object' && options.params !== null)
+                ? options.params
+                : {}
+
+            return {
+                ...options,
+                name,
+                params: {
+                    ...sourceParams,
+                    locale: this.currentLocale,
+                },
+            }
+        },
+
         displayName(user) {
-            return user?.display_name || user?.name || 'Пользователь'
+            return user?.display_name || user?.name || this.$t('common.user')
         },
 
         initials(user) {
@@ -181,6 +220,32 @@ export default {
             this.chatUnreadTotal = Number.isFinite(next) ? Math.max(0, next) : 0
         },
 
+        async switchLocale(nextLocale) {
+            const normalized = nextLocale === 'en' ? 'en' : 'ru'
+            if (normalized === this.currentLocale) {
+                return
+            }
+
+            this.$setLocale?.(normalized)
+
+            if (!this.$route?.name) {
+                await this.$router.push({path: `/${normalized}`})
+                return
+            }
+
+            const routeParams = {
+                ...(this.$route.params || {}),
+                locale: normalized,
+            }
+
+            await this.$router.push({
+                name: this.$route.name,
+                params: routeParams,
+                query: this.$route.query,
+                hash: this.$route.hash,
+            })
+        },
+
         async logout() {
             try {
                 await axios.post('/logout')
@@ -190,7 +255,7 @@ export default {
                 this.chatUnreadTotal = 0
                 this.authSyncPromise = null
                 this.stopUnreadPolling()
-                await this.$router.push({ name: 'home' })
+                await this.$router.push(this.localizedRoute('home'))
             }
         }
     }

@@ -1,12 +1,12 @@
 <template>
     <div class="page-wrap grid-layout" style="max-width: 680px; margin: 0 auto;">
         <section class="section-card">
-            <h1 class="section-title">Подтверждение email</h1>
+            <h1 class="section-title">{{ $t('verifyEmail.title') }}</h1>
             <p class="section-subtitle">
-                Для доступа к кабинету, чатам и публикациям подтвердите email.
+                {{ $t('verifyEmail.subtitle') }}
             </p>
             <p class="muted" v-if="currentUser?.email">
-                Адрес: <strong>{{ currentUser.email }}</strong>
+                {{ $t('verifyEmail.emailLabel') }} <strong>{{ currentUser.email }}</strong>
             </p>
 
             <div class="form-grid">
@@ -14,15 +14,15 @@
                 <p class="error-text" v-if="errorMessage">{{ errorMessage }}</p>
 
                 <button class="btn btn-primary" :disabled="isSending" @click.prevent="resendVerificationEmail">
-                    {{ isSending ? 'Отправка...' : 'Отправить письмо повторно' }}
+                    {{ isSending ? $t('verifyEmail.resending') : $t('verifyEmail.resend') }}
                 </button>
 
                 <button class="btn btn-outline" :disabled="isChecking" @click.prevent="checkVerificationStatus">
-                    {{ isChecking ? 'Проверка...' : 'Я уже подтвердил email' }}
+                    {{ isChecking ? $t('verifyEmail.checking') : $t('verifyEmail.check') }}
                 </button>
 
                 <button class="btn btn-danger" @click.prevent="logout">
-                    Выйти
+                    {{ $t('verifyEmail.logout') }}
                 </button>
             </div>
         </section>
@@ -48,7 +48,7 @@ export default {
         await this.loadCurrentUser()
 
         if (this.$route.query.registered === '1') {
-            this.successMessage = 'Аккаунт создан. Мы отправили письмо для подтверждения email.'
+            this.successMessage = this.$t('verifyEmail.createdInfo')
         }
     },
 
@@ -60,11 +60,13 @@ export default {
 
                 if (this.currentUser?.email_verified_at) {
                     this.$emit('auth-changed')
-                    await this.$router.replace({name: 'user.personal'})
+                    const locale = this.$route?.params?.locale === 'en' ? 'en' : 'ru'
+                    await this.$router.replace({name: 'user.personal', params: {locale}})
                 }
             } catch (error) {
                 this.currentUser = null
-                await this.$router.replace({name: 'user.login'})
+                const locale = this.$route?.params?.locale === 'en' ? 'en' : 'ru'
+                await this.$router.replace({name: 'user.login', params: {locale}})
             }
         },
 
@@ -75,9 +77,9 @@ export default {
 
             try {
                 const response = await axios.post('/api/auth/email/verification-notification')
-                this.successMessage = response.data?.message || 'Письмо отправлено.'
+                this.successMessage = response.data?.message || this.$t('verifyEmail.sentInfo')
             } catch (error) {
-                this.errorMessage = error.response?.data?.message || 'Не удалось отправить письмо подтверждения.'
+                this.errorMessage = error.response?.data?.message || this.$t('verifyEmail.sendError')
             } finally {
                 this.isSending = false
             }
@@ -91,9 +93,9 @@ export default {
             try {
                 await this.loadCurrentUser()
                 if (this.currentUser?.email_verified_at) {
-                    this.successMessage = 'Email подтвержден. Переходим в кабинет.'
+                    this.successMessage = this.$t('verifyEmail.verifiedInfo')
                 } else {
-                    this.errorMessage = 'Email пока не подтвержден. Проверьте письмо и перейдите по ссылке.'
+                    this.errorMessage = this.$t('verifyEmail.notVerifiedYet')
                 }
             } finally {
                 this.isChecking = false
@@ -105,7 +107,8 @@ export default {
                 await axios.post('/logout')
             } finally {
                 this.$emit('auth-changed')
-                await this.$router.replace({name: 'home'})
+                const locale = this.$route?.params?.locale === 'en' ? 'en' : 'ru'
+                await this.$router.replace({name: 'home', params: {locale}})
             }
         },
     },

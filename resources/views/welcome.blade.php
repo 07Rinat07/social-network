@@ -1,11 +1,42 @@
 <!DOCTYPE html>
-<html lang="{{ str_replace('_', '-', app()->getLocale()) }}">
+@php
+    $rawPath = request()->getPathInfo() ?: '/';
+    $basePath = preg_replace('#^/(ru|en)(?=/|$)#i', '', $rawPath) ?? '';
+    $basePath = $basePath === '' ? '/' : $basePath;
+    $pageLocale = request()->segment(1) === 'en' ? 'en' : 'ru';
+
+    $seoByLocale = [
+        'ru' => [
+            'title' => 'Solid Social — социальная сеть с чатами, IPTV и радио',
+            'description' => 'Современная социальная сеть: публикации, realtime-чаты, IPTV, радио и гибкие настройки контента.',
+            'keywords' => 'социальная сеть, чаты онлайн, realtime чат, IPTV, интернет радио, лента публикаций, карусель медиа, личный кабинет, админ панель',
+        ],
+        'en' => [
+            'title' => 'Solid Social — social network with chats, IPTV and radio',
+            'description' => 'Modern social network with posts, realtime chats, IPTV, radio, and flexible content controls.',
+            'keywords' => 'social network, realtime chat, IPTV player, internet radio, media carousel, user profile, admin panel',
+        ],
+    ];
+
+    $seo = $seoByLocale[$pageLocale];
+    $localePathSuffix = $basePath === '/' ? '' : $basePath;
+    $canonicalUrl = url('/' . $pageLocale . $localePathSuffix);
+    $ruAltUrl = url('/ru' . $localePathSuffix);
+    $enAltUrl = url('/en' . $localePathSuffix);
+@endphp
+<html lang="{{ $pageLocale }}">
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>Solid Social</title>
-    <meta name="description" content="Solid Social — современная SPA-соцсеть: чаты, медиа, радио, лента и сообщество.">
+    <title>{{ $seo['title'] }}</title>
+    <meta name="description" content="{{ $seo['description'] }}">
+    <meta name="keywords" content="{{ $seo['keywords'] }}">
+    <meta name="robots" content="index, follow, max-image-preview:large">
     <meta name="theme-color" content="#0f6cf2">
+    <link rel="canonical" href="{{ $canonicalUrl }}">
+    <link rel="alternate" hreflang="ru" href="{{ $ruAltUrl }}">
+    <link rel="alternate" hreflang="en" href="{{ $enAltUrl }}">
+    <link rel="alternate" hreflang="x-default" href="{{ $ruAltUrl }}">
 
     <link rel="icon" type="image/svg+xml" href="{{ asset('brand/logo-mark.svg') }}">
     <link rel="icon" type="image/png" sizes="32x32" href="{{ asset('brand/favicon-32.png') }}">
@@ -14,17 +45,18 @@
 
     <meta property="og:type" content="website">
     <meta property="og:site_name" content="Solid Social">
-    <meta property="og:title" content="Solid Social">
-    <meta property="og:description" content="Чаты, медиа, радио и лента в одной SPA-соцсети.">
-    <meta property="og:url" content="{{ url('/') }}">
+    <meta property="og:locale" content="{{ $pageLocale === 'en' ? 'en_US' : 'ru_RU' }}">
+    <meta property="og:title" content="{{ $seo['title'] }}">
+    <meta property="og:description" content="{{ $seo['description'] }}">
+    <meta property="og:url" content="{{ $canonicalUrl }}">
     <meta property="og:image" content="{{ asset('brand/og-image.png') }}">
     <meta property="og:image:width" content="1200">
     <meta property="og:image:height" content="630">
     <meta property="og:image:type" content="image/png">
 
     <meta name="twitter:card" content="summary_large_image">
-    <meta name="twitter:title" content="Solid Social">
-    <meta name="twitter:description" content="Чаты, медиа, радио и лента в одной SPA-соцсети.">
+    <meta name="twitter:title" content="{{ $seo['title'] }}">
+    <meta name="twitter:description" content="{{ $seo['description'] }}">
     <meta name="twitter:image" content="{{ asset('brand/og-image.png') }}">
 
     <link rel="preconnect" href="https://fonts.googleapis.com">

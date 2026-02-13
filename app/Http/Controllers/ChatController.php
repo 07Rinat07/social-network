@@ -84,15 +84,25 @@ class ChatController extends Controller
         $viewer = $request->user();
         $perPage = max(1, min((int) $request->integer('per_page', 30), 100));
         $search = trim((string) $request->string('search', ''));
+        $searchTokens = collect(preg_split('/[\s,.;:|]+/u', $search) ?: [])
+            ->map(static fn (string $token): string => trim($token, "@ \t\n\r\0\x0B"))
+            ->filter(static fn (string $token): bool => $token !== '')
+            ->unique()
+            ->take(8)
+            ->values();
 
         $users = User::query()
             ->where('id', '!=', $viewer->id)
-            ->when($search !== '', function ($query) use ($search) {
-                $query->where(function ($builder) use ($search) {
-                    $builder
-                        ->where('name', 'like', '%' . $search . '%')
-                        ->orWhere('nickname', 'like', '%' . $search . '%')
-                        ->orWhere('email', 'like', '%' . $search . '%');
+            ->when($searchTokens->isNotEmpty(), function ($query) use ($searchTokens) {
+                $query->where(function ($builder) use ($searchTokens) {
+                    foreach ($searchTokens as $token) {
+                        $builder->where(function ($tokenQuery) use ($token) {
+                            $tokenQuery
+                                ->where('name', 'like', '%' . $token . '%')
+                                ->orWhere('nickname', 'like', '%' . $token . '%')
+                                ->orWhere('email', 'like', '%' . $token . '%');
+                        });
+                    }
                 });
             })
             ->latest()

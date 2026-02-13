@@ -1,13 +1,13 @@
 <template>
     <div class="page-wrap grid-layout">
         <section class="section-card">
-            <h1 class="section-title">Профиль пользователя</h1>
+            <h1 class="section-title">{{ $t('show.title') }}</h1>
             <Stat :stats="stats"></Stat>
         </section>
 
         <section class="section-card">
-            <h2 class="section-title" style="font-size: 1.2rem;">Публикации пользователя</h2>
-            <div v-if="posts.length === 0" class="muted">Постов пока нет.</div>
+            <h2 class="section-title" style="font-size: 1.2rem;">{{ $t('show.postsTitle') }}</h2>
+            <div v-if="posts.length === 0" class="muted">{{ $t('show.empty') }}</div>
             <div class="post-list">
                 <Post v-for="post in posts" :key="post.id" :post="post"></Post>
             </div>

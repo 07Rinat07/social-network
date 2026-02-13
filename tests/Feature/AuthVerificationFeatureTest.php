@@ -2,6 +2,7 @@
 
 namespace Tests\Feature;
 
+use App\Http\Middleware\VerifyCsrfToken;
 use App\Models\User;
 use Illuminate\Auth\Notifications\VerifyEmail;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -53,6 +54,7 @@ class AuthVerificationFeatureTest extends TestCase
     public function test_registration_requires_email_verification(): void
     {
         Notification::fake();
+        $this->withoutMiddleware(VerifyCsrfToken::class);
 
         $response = $this->postJson('/register', [
             'name' => 'Verify Candidate',

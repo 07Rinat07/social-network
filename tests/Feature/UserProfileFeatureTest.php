@@ -14,6 +14,45 @@ class UserProfileFeatureTest extends TestCase
 {
     use RefreshDatabase;
 
+    public function test_users_index_supports_search_by_name_surname_and_nickname(): void
+    {
+        $viewer = User::factory()->create(['name' => 'Viewer User']);
+        $ivanPetrov = User::factory()->create(['name' => 'Иван Петров', 'nickname' => null]);
+        $anna = User::factory()->create(['name' => 'Анна Ильина', 'nickname' => 'ann_star']);
+        $maria = User::factory()->create(['name' => 'Мария Сидорова', 'nickname' => 'maria88']);
+
+        Sanctum::actingAs($viewer);
+
+        $byName = $this->getJson('/api/users?search=Иван&per_page=50');
+        $byName
+            ->assertOk()
+            ->assertJsonCount(1, 'data')
+            ->assertJsonPath('data.0.id', $ivanPetrov->id);
+
+        $bySurname = $this->getJson('/api/users?search=Сидорова&per_page=50');
+        $bySurname
+            ->assertOk()
+            ->assertJsonCount(1, 'data')
+            ->assertJsonPath('data.0.id', $maria->id);
+
+        $byNickname = $this->getJson('/api/users?search=ann_star&per_page=50');
+        $byNickname
+            ->assertOk()
+            ->assertJsonCount(1, 'data')
+            ->assertJsonPath('data.0.id', $anna->id);
+
+        $byCombinedTokens = $this->getJson('/api/users?search=Петров Иван&per_page=50');
+        $byCombinedTokens
+            ->assertOk()
+            ->assertJsonCount(1, 'data')
+            ->assertJsonPath('data.0.id', $ivanPetrov->id);
+
+        $this->assertFalse(
+            collect($byCombinedTokens->json('data'))
+                ->contains(fn (array $item): bool => (int) ($item['id'] ?? 0) === (int) $viewer->id)
+        );
+    }
+
     public function test_guest_cannot_update_profile(): void
     {
         $response = $this->post('/api/users/profile', [
@@ -46,6 +85,13 @@ class UserProfileFeatureTest extends TestCase
             ->assertOk()
             ->assertJsonPath('data.nickname', 'chat_master')
             ->assertJsonPath('data.display_name', 'chat_master');
+
+        $avatarUrl = (string) $profileResponse->json('data.avatar_url');
+        $this->assertStringStartsWith('/api/media/avatars/', $avatarUrl);
+
+        $avatarResponse = $this->get($avatarUrl);
+        $avatarResponse->assertOk();
+        $this->assertStringStartsWith('image/', (string) $avatarResponse->headers->get('Content-Type'));
 
         $user->refresh();
 

@@ -1,7 +1,42 @@
 #### Автор проекта: **Rinat Sarmuldin** Email: [ura07srr@gmail.com](mailto:ura07srr@gmail.com)
 # Solid Social Network SPA URALSK + IPTV/Radio
+* IPTV/Radio (используются бесплатные листы самообновляемые и не нарушают юридических прав правообладателей итд.)
 
 SPA-социальная сеть на `Laravel + Vue` с чатами, realtime, медиа, IPTV/радио и админ-панелью.
+
+## Что актуально в текущей версии
+- Чаты: realtime presence-статусы (кто онлайн на сайте/в чате) и индикатор набора текста.
+- Главная: карусель медиа работает как плавный конвейер с несколькими карточками одновременно.
+- Главная: в quick-блоке под "Лента в движении" показываются время и погода по городам (Нью-Йорк, Москва, Минск, Астана, Анкара, Уральск).
+- Админка: у строки пользователя есть понятный статус сохранения (изменено/сохраняется/успех/ошибка).
+- IPTV: при уходе со страницы/закрытии вкладки/выходе из аккаунта плеер и FFmpeg-сессия корректно останавливаются.
+- Мультиязычность: поддержка `ru/en` с SEO-дружественными URL (`/ru/...`, `/en/...`) и переключателем языка в верхнем меню.
+
+## Мультиязычность (SEO URL)
+- Базовый формат URL:
+  - русский: `/ru/...`
+  - английский: `/en/...`
+- Если открыть страницу без префикса языка (например `/users/index`), роутер автоматически выполнит redirect на локализованный URL.
+- Текущий язык хранится в `localStorage` (`solid-social:locale`) и синхронизируется с префиксом в URL.
+- Файлы переводов фронта:
+  - `resources/js/i18n/messages/ru.js`
+  - `resources/js/i18n/messages/en.js`
+- Runtime-карта для legacy-строк (страницы, где ещё не заменили текст на `$t(...)`):
+  - `resources/js/i18n/runtimeTextMap.js`
+  - Поддерживаются точные фразы и regex-паттерны (`runtimeTextPatterns`).
+- Точка подключения i18n:
+  - `resources/js/i18n/index.js`
+- Runtime-i18n в `resources/js/i18n/index.js` автоматически переводит текстовые узлы/placeholder/title/aria-label и сообщения `alert/confirm` при переключении на `/en/...`.
+- В админке блок "Контент главной страницы" редактируется отдельно для `RU` и `EN`; обе версии сохраняются в `site_settings.key=home_page_content` в JSON-структуре `locales.ru / locales.en`.
+- Примеры:
+  - `http://127.0.0.1:8000/ru`
+  - `http://127.0.0.1:8000/en`
+  - `http://127.0.0.1:8000/en/users/login`
+- Как добавить новый перевод:
+  1. Добавьте ключ в `resources/js/i18n/messages/ru.js`.
+  2. Добавьте тот же ключ в `resources/js/i18n/messages/en.js`.
+  3. Используйте в Vue-шаблоне: `{{ $t('section.key') }}`.
+  4. Если строка пока не в шаблоне Vue (legacy JS/DOM), добавьте её в `resources/js/i18n/runtimeTextMap.js`.
 
 ## Стек
 - PHP 8.2+ (Docker: PHP 8.3 FPM)
@@ -11,7 +46,7 @@ SPA-социальная сеть на `Laravel + Vue` с чатами, realtime
 
 ## Главный принцип
 - Локальный режим: используйте только `.env` (из `.env.example`).
-- Docker-режим: запускается из `docker-compose.yml` без обязательного env-файла.
+- Docker-режим: запускается из `docker-compose.yml`; сервисы используют `env_file` (`.env.docker.example`), а `.env` в контейнере создается автоматически при необходимости.
 - Не смешивайте команды и переменные двух режимов.
 
 ---
@@ -40,11 +75,10 @@ SPA-социальная сеть на `Laravel + Vue` с чатами, realtime
    - `php artisan reverb:start --host=0.0.0.0 --port=6001`
 7. Откройте: `http://127.0.0.1:8000`
 
-### Быстрая проверка БД (Windows)
-- MySQL порт: `Test-NetConnection 127.0.0.1 -Port 3306`
-- PostgreSQL порт: `Test-NetConnection 127.0.0.1 -Port 5432`
-- Если у вас нестандартный порт (например `3307`), укажите его в `DB_PORT`.
-
+### Важно для локального realtime (чаты online/typing)
+- Для presence/whisper (онлайн-статусы и индикатор набора текста) **обязательно** держать запущенным Reverb:
+  - `php artisan reverb:start --host=0.0.0.0 --port=6001`
+- Если Reverb не запущен, чат откроется, но realtime-обновления `online/typing` работать не будут.
 ---
 
 ## Docker запуск
@@ -53,8 +87,17 @@ SPA-социальная сеть на `Laravel + Vue` с чатами, realtime
    - `docker compose up -d --build`
 2. Проверьте статус:
    - `docker compose ps`
-3. Откройте:
+   - в списке должен быть сервис `websocket` в статусе `Up`
+3. Дополнительно проверьте процесс Reverb:
+   - `docker compose top websocket`
+   - ожидаемый процесс: `php artisan reverb:start --host=0.0.0.0 --port=6001`
+4. Откройте:
    - `http://localhost:8080`
+
+Примечание по IPTV:
+- В Docker-образе `app` `ffmpeg` уже установлен.
+- Для стабильной работы в compose зафиксированы переменные:
+  - `IPTV_FFMPEG_BIN=/usr/bin/ffmpeg`
 
 ### Полезные Docker-команды
 - Миграции: `docker compose exec app php artisan migrate --seed`
@@ -74,7 +117,16 @@ SPA-социальная сеть на `Laravel + Vue` с чатами, realtime
 ## Тесты
 - Все тесты: `php artisan test`
 - Feature: `php artisan test --testsuite=Feature`
+- Виджет времени/погоды главной: `php artisan test tests/Feature/SiteSettingsAndDiscoveryFeatureTest.php`
+- Broadcast/channels: `php artisan test tests/Feature/BroadcastChannelsFeatureTest.php`
+- Чаты: `php artisan test tests/Feature/ChatFeatureTest.php`
 - Сборка фронта: `npm run build`
+- Быстрый check перед коммитом:
+  - `php artisan test`
+  - `npm run build`
+- Docker check:
+  - `docker compose --profile test run --rm test`
+  - `docker compose run --rm frontend-build`
 
 ---
 
@@ -83,7 +135,16 @@ SPA-социальная сеть на `Laravel + Vue` с чатами, realtime
 - Локально укажите путь при необходимости:
   - `IPTV_FFMPEG_BIN=ffmpeg`
   - пример Windows: `IPTV_FFMPEG_BIN=C:\ffmpeg\bin\ffmpeg.exe`
-- Проверка capability API: `GET /api/iptv/transcode/capabilities`
+- Проверка capability API (требуется авторизация и подтвержденный email): `GET /api/iptv/transcode/capabilities`
+- При выходе из страницы IPTV поток и transcode-сессия должны останавливаться автоматически.
+
+---
+
+## Виджет времени и погоды (главная)
+- API: `GET /api/site/world-overview?locale=ru|en`
+- Источник погоды: `https://api.open-meteo.com/v1/forecast` (серверный запрос, без CORS-ограничений браузера).
+- Время считается на клиенте по timezone каждого города и обновляется каждую секунду.
+- Погодные данные кэшируются на сервере на `5` минут и автообновляются на клиенте.
 
 ---
 
@@ -112,3 +173,15 @@ SPA-социальная сеть на `Laravel + Vue` с чатами, realtime
 - Локально: `npm run dev` должен быть запущен.
 - Docker: пересоберите фронт `docker compose run --rm frontend-build`.
 - Сделайте hard refresh (`Ctrl+F5`).
+
+### `403` на `/api/broadcasting/auth` (чаты, presence, typing)
+- Проверьте, что пользователь авторизован (cookie-сессия активна).
+- Проверьте соответствие домена/порта в `APP_URL` и фактического URL в браузере.
+- Убедитесь, что realtime сервер запущен:
+  - локально: `php artisan reverb:start --host=0.0.0.0 --port=6001`
+
+### Битая аватарка или файлы из `/storage` (локально)
+- Такое бывает после запуска в Docker, если симлинк `public/storage` остался с docker-путём.
+- Исправление:
+  - `php -r "if (is_link('public/storage')) unlink('public/storage');"`
+  - `php artisan storage:link`

@@ -31,6 +31,7 @@ services:
       DB_DATABASE: social_network
       DB_USERNAME: social
       DB_PASSWORD: social
+      IPTV_FFMPEG_BIN: /usr/bin/ffmpeg
     volumes:
       - ./:/var/www/html
       - composer_cache:/tmp/composer
@@ -73,6 +74,7 @@ services:
       - ./.env.docker.example
     environment:
       APP_KEY: base64:7ax4IsfouQ0uL8g2/9VglVdW+PzRl+Y3Q1yR1p0u8C4=
+      IPTV_FFMPEG_BIN: /usr/bin/ffmpeg
     ports:
       - "6001:6001"
     volumes:
@@ -131,6 +133,7 @@ services:
       APP_KEY: base64:7ax4IsfouQ0uL8g2/9VglVdW+PzRl+Y3Q1yR1p0u8C4=
       DB_CONNECTION: sqlite
       DB_DATABASE: ":memory:"
+      IPTV_FFMPEG_BIN: /usr/bin/ffmpeg
     volumes:
       - ./:/var/www/html
       - composer_cache:/tmp/composer

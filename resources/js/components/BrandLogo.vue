@@ -1,7 +1,7 @@
 <template>
-    <span class="brand-lockup">
+    <span class="brand-lockup" :class="{ 'brand-lockup--icon-only': iconOnly }">
         <svg
-            class="brand-lockup__icon"
+            :class="iconClassName"
             viewBox="0 0 180 180"
             role="img"
             aria-hidden="true"
@@ -108,7 +108,7 @@
             </g>
         </svg>
 
-        <span class="brand-lockup__text">
+        <span v-if="!iconOnly" class="brand-lockup__text">
             <span class="brand-lockup__title">Solid Social</span>
             <span class="brand-lockup__subtitle">connect create share</span>
         </span>
@@ -117,6 +117,23 @@
 
 <script>
 export default {
-    name: 'BrandLogo'
+    name: 'BrandLogo',
+
+    props: {
+        iconOnly: {
+            type: Boolean,
+            default: false,
+        },
+        iconClass: {
+            type: String,
+            default: '',
+        },
+    },
+
+    computed: {
+        iconClassName() {
+            return ['brand-lockup__icon', this.iconClass].filter(Boolean).join(' ')
+        },
+    },
 }
 </script>

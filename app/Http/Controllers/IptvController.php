@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Services\IptvPlaylistService;
+use App\Services\IptvProxyService;
 use App\Services\IptvTranscodeService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -14,6 +15,7 @@ class IptvController extends Controller
 {
     public function __construct(
         private readonly IptvPlaylistService $iptvPlaylistService,
+        private readonly IptvProxyService $iptvProxyService,
         private readonly IptvTranscodeService $iptvTranscodeService
     )
     {
@@ -60,6 +62,41 @@ class IptvController extends Controller
         return response()->json([
             'message' => 'Проверка режима совместимости выполнена.',
             'data' => $capabilities,
+        ]);
+    }
+
+    public function startProxy(Request $request): JsonResponse
+    {
+        $payload = $request->validate([
+            'url' => ['required', 'string', 'max:4000'],
+        ]);
+
+        try {
+            $session = $this->iptvProxyService->startSession($payload['url']);
+        } catch (InvalidArgumentException $exception) {
+            return response()->json([
+                'message' => $exception->getMessage(),
+                'data' => [],
+            ], 422);
+        } catch (RuntimeException $exception) {
+            return response()->json([
+                'message' => $exception->getMessage(),
+                'data' => [],
+            ], 503);
+        } catch (Throwable) {
+            return response()->json([
+                'message' => 'Не удалось запустить IPTV-прокси. Попробуйте позже.',
+                'data' => [],
+            ], 503);
+        }
+
+        return response()->json([
+            'message' => 'IPTV-прокси запущен.',
+            'data' => [
+                'session_id' => $session['session_id'],
+                'source_url' => $session['source_url'],
+                'playlist_url' => route('api.iptv.proxy.playlist', ['session' => $session['session_id']], false),
+            ],
         ]);
     }
 
@@ -126,6 +163,30 @@ class IptvController extends Controller
         ]);
     }
 
+    public function proxyPlaylist(string $session)
+    {
+        try {
+            $playlist = $this->iptvProxyService->getPlaylist($session);
+        } catch (RuntimeException $exception) {
+            return response()->json([
+                'message' => $exception->getMessage(),
+            ], 503);
+        }
+
+        if (!$playlist) {
+            return response()->json([
+                'message' => 'Прокси-плейлист не найден или истек.',
+            ], 404);
+        }
+
+        return response((string) ($playlist['body'] ?? ''), 200, [
+            'Content-Type' => (string) ($playlist['content_type'] ?? 'application/vnd.apple.mpegurl; charset=utf-8'),
+            'Cache-Control' => 'no-store, no-cache, must-revalidate, max-age=0',
+            'Pragma' => 'no-cache',
+            'Expires' => '0',
+        ]);
+    }
+
     public function transcodeSegment(string $session, string $segment)
     {
         $path = $this->iptvTranscodeService->getSegmentPath($session, $segment);
@@ -143,12 +204,57 @@ class IptvController extends Controller
         ]);
     }
 
+    public function proxySegment(Request $request, string $session)
+    {
+        $url = trim((string) $request->query('url', ''));
+        if ($url === '') {
+            return response()->json([
+                'message' => 'Не указан URL сегмента для прокси.',
+            ], 422);
+        }
+
+        try {
+            $segment = $this->iptvProxyService->getSegment($session, $url);
+        } catch (InvalidArgumentException $exception) {
+            return response()->json([
+                'message' => $exception->getMessage(),
+            ], 422);
+        } catch (RuntimeException $exception) {
+            return response()->json([
+                'message' => $exception->getMessage(),
+            ], 503);
+        }
+
+        if (!$segment) {
+            return response()->json([
+                'message' => 'Прокси-сегмент не найден или истек.',
+            ], 404);
+        }
+
+        return response((string) ($segment['body'] ?? ''), 200, [
+            'Content-Type' => (string) ($segment['content_type'] ?? 'application/octet-stream'),
+            'Cache-Control' => 'no-store, no-cache, must-revalidate, max-age=0',
+            'Pragma' => 'no-cache',
+            'Expires' => '0',
+        ]);
+    }
+
     public function stopTranscode(string $session): JsonResponse
     {
         $this->iptvTranscodeService->stopSession($session);
 
         return response()->json([
             'message' => 'Совместимый режим остановлен.',
+            'data' => [],
+        ]);
+    }
+
+    public function stopProxy(string $session): JsonResponse
+    {
+        $this->iptvProxyService->stopSession($session);
+
+        return response()->json([
+            'message' => 'IPTV-прокси остановлен.',
             'data' => [],
         ]);
     }

@@ -4,12 +4,29 @@ namespace App\Http\Controllers;
 
 use App\Models\ConversationMessageAttachment;
 use App\Models\PostImage;
+use App\Models\User;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
 use Symfony\Component\HttpFoundation\StreamedResponse;
 
 class MediaController extends Controller
 {
+    public function showAvatar(User $user): StreamedResponse
+    {
+        $path = trim((string) ($user->avatar_path ?? ''));
+        if ($path === '') {
+            abort(404, 'Avatar not found.');
+        }
+
+        $mimeType = null;
+        if (Storage::disk('public')->exists($path)) {
+            $detectedMimeType = Storage::disk('public')->mimeType($path);
+            $mimeType = is_string($detectedMimeType) && trim($detectedMimeType) !== '' ? $detectedMimeType : null;
+        }
+
+        return $this->streamFromDisk('public', $path, $mimeType, basename($path));
+    }
+
     public function showPostImage(PostImage $postImage, Request $request): StreamedResponse
     {
         $user = $request->user();

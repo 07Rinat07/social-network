@@ -10,7 +10,9 @@ use Throwable;
 
 class RadioController extends Controller
 {
-    public function __construct(private readonly RadioBrowserService $radioBrowserService)
+    public function __construct(
+        private readonly RadioBrowserService $radioBrowserService
+    )
     {
     }
 

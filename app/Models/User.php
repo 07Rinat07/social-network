@@ -9,7 +9,6 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
-use Illuminate\Support\Facades\Storage;
 use Laravel\Sanctum\HasApiTokens;
 
 class User extends Authenticatable implements MustVerifyEmail
@@ -137,6 +136,14 @@ class User extends Authenticatable implements MustVerifyEmail
             return null;
         }
 
-        return Storage::disk('public')->url($path);
+        $url = route('media.avatars.show', ['user' => $this->getKey()], false);
+        $version = $this->updated_at?->getTimestamp();
+
+        if (is_int($version) && $version > 0) {
+            $separator = str_contains($url, '?') ? '&' : '?';
+            $url .= $separator . 'v=' . $version;
+        }
+
+        return $url;
     }
 }

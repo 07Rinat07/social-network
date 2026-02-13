@@ -85,19 +85,32 @@ class FeedbackFeatureTest extends TestCase
 
     public function test_feedback_returns_service_unavailable_when_storage_fails(): void
     {
-        Schema::drop('feedback_messages');
+        $table = 'feedback_messages';
+        $backupTable = 'feedback_messages_test_backup';
 
-        $response = $this->postJson('/api/feedback', [
-            'name' => 'Guest Reporter',
-            'email' => 'guest@example.com',
-            'message' => 'I would like to report an issue in the feed.',
-        ]);
+        if (Schema::hasTable($backupTable)) {
+            Schema::drop($backupTable);
+        }
 
-        $response
-            ->assertStatus(503)
-            ->assertJson([
-                'message' => 'Сервис обратной связи временно недоступен. Попробуйте позже.',
+        Schema::rename($table, $backupTable);
+
+        try {
+            $response = $this->postJson('/api/feedback', [
+                'name' => 'Guest Reporter',
+                'email' => 'guest@example.com',
+                'message' => 'I would like to report an issue in the feed.',
             ]);
+
+            $response
+                ->assertStatus(503)
+                ->assertJson([
+                    'message' => 'Сервис обратной связи временно недоступен. Попробуйте позже.',
+                ]);
+        } finally {
+            if (Schema::hasTable($backupTable) && ! Schema::hasTable($table)) {
+                Schema::rename($backupTable, $table);
+            }
+        }
     }
 
     public function test_guest_cannot_access_my_feedback_endpoint(): void

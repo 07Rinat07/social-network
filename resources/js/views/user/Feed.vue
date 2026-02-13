@@ -1,10 +1,10 @@
 <template>
     <div class="page-wrap grid-layout">
         <section class="section-card">
-            <h1 class="section-title">Лента подписок</h1>
-            <p class="section-subtitle">Здесь отображаются публикации пользователей, на которых вы подписаны.</p>
+            <h1 class="section-title">{{ $t('feed.title') }}</h1>
+            <p class="section-subtitle">{{ $t('feed.subtitle') }}</p>
 
-            <div v-if="posts.length === 0" class="muted">Пока пусто. Подпишитесь на пользователей во вкладке «Пользователи».</div>
+            <div v-if="posts.length === 0" class="muted">{{ $t('feed.empty') }}</div>
             <div class="post-list">
                 <Post v-for="post in posts" :key="post.id" :post="post"></Post>
             </div>

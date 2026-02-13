@@ -24,11 +24,31 @@ class UserController extends Controller
     {
         $perPage = (int) $request->integer('per_page', 20);
         $perPage = max(1, min($perPage, 50));
+        $search = trim((string) $request->string('search', ''));
+        $searchTokens = collect(preg_split('/[\s,.;:|]+/u', $search) ?: [])
+            ->map(static fn (string $token): string => trim($token, "@ \t\n\r\0\x0B"))
+            ->filter(static fn (string $token): bool => $token !== '')
+            ->unique()
+            ->take(8)
+            ->values();
 
-        $users = User::query()
+        $usersQuery = User::query()
             ->where('id', '!=', $request->user()->id)
-            ->latest()
-            ->paginate($perPage);
+            ->latest();
+
+        if ($searchTokens->isNotEmpty()) {
+            $usersQuery->where(function ($query) use ($searchTokens) {
+                foreach ($searchTokens as $token) {
+                    $query->where(function ($tokenQuery) use ($token) {
+                        $tokenQuery
+                            ->where('name', 'like', '%' . $token . '%')
+                            ->orWhere('nickname', 'like', '%' . $token . '%');
+                    });
+                }
+            });
+        }
+
+        $users = $usersQuery->paginate($perPage)->withQueryString();
 
         $followingIds = $request->user()
             ->followings()

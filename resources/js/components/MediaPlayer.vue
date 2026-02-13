@@ -153,6 +153,39 @@ export default {
             }
         },
 
+        async play() {
+            if (!this.player || typeof this.player.play !== 'function') {
+                return false
+            }
+
+            for (let attempt = 0; attempt < 3; attempt += 1) {
+                try {
+                    const playResult = this.player.play()
+                    if (playResult && typeof playResult.then === 'function') {
+                        await playResult
+                    }
+
+                    return true
+                } catch (error) {
+                    if (attempt === 2) {
+                        return false
+                    }
+
+                    await new Promise((resolve) => setTimeout(resolve, 120))
+                }
+            }
+
+            return false
+        },
+
+        pause() {
+            if (!this.player || typeof this.player.pause !== 'function') {
+                return
+            }
+
+            this.player.pause()
+        },
+
         guessMimeType(src) {
             const normalized = String(src).toLowerCase()
 
