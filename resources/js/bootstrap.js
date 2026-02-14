@@ -12,15 +12,42 @@ const runtimeXsrfCookieName = typeof document !== 'undefined'
     ? String(document.querySelector('meta[name="xsrf-cookie"]')?.getAttribute('content') ?? '').trim()
     : '';
 const envXsrfCookieName = String(import.meta.env.VITE_XSRF_COOKIE_NAME ?? '').trim();
-const csrfToken = typeof document !== 'undefined'
-    ? String(document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') ?? '').trim()
-    : '';
 
 window.axios.defaults.xsrfCookieName = runtimeXsrfCookieName || envXsrfCookieName || 'XSRF-TOKEN';
 window.axios.defaults.xsrfHeaderName = 'X-XSRF-TOKEN';
-if (csrfToken !== '') {
-    window.axios.defaults.headers.common['X-CSRF-TOKEN'] = csrfToken;
-}
+
+const CSRF_REFRESH_ENDPOINT = '/sanctum/csrf-cookie';
+let csrfRefreshPromise = null;
+
+const requestPath = (config = {}) => {
+    const rawUrl = String(config.url ?? '').trim();
+    if (rawUrl === '') {
+        return '';
+    }
+
+    try {
+        return new URL(rawUrl, window.location.origin).pathname;
+    } catch (_error) {
+        return rawUrl.split('?')[0] || rawUrl;
+    }
+};
+
+const isCsrfRefreshRequest = (config = {}) => requestPath(config) === CSRF_REFRESH_ENDPOINT;
+
+const refreshCsrfCookie = async () => {
+    if (!csrfRefreshPromise) {
+        csrfRefreshPromise = window.axios.get(CSRF_REFRESH_ENDPOINT, {
+            withCredentials: true,
+            headers: {
+                'X-Requested-With': 'XMLHttpRequest',
+            },
+        }).finally(() => {
+            csrfRefreshPromise = null;
+        });
+    }
+
+    return csrfRefreshPromise;
+};
 
 window.Pusher = Pusher;
 window.Echo = null;
@@ -70,3 +97,24 @@ window.axios.interceptors.request.use((config) => {
 
     return config;
 });
+
+window.axios.interceptors.response.use(
+    (response) => response,
+    async (error) => {
+        const statusCode = Number(error?.response?.status || 0);
+        const originalConfig = error?.config;
+
+        if (statusCode !== 419 || !originalConfig || isCsrfRefreshRequest(originalConfig) || originalConfig.__csrfRetried) {
+            return Promise.reject(error);
+        }
+
+        originalConfig.__csrfRetried = true;
+
+        try {
+            await refreshCsrfCookie();
+            return window.axios(originalConfig);
+        } catch (_csrfRefreshError) {
+            return Promise.reject(error);
+        }
+    }
+);
