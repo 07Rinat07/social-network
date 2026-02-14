@@ -36,7 +36,7 @@ composer install --no-dev --optimize-autoloader
 Сборка фронта (если на сервере есть Node):
 
 ```bash
-curl -fsSL https://deb.nodesource.com/setup_20.x | sudo -E bash -
+curl -fsSL https://deb.nodesource.com/setup_22.x | sudo -E bash -
 sudo apt install -y nodejs
 npm ci
 npm run build
@@ -106,12 +106,18 @@ VITE_REVERB_PATH="${REVERB_PATH}"
 Дальше:
 
 ```bash
-php artisan migrate --seed
+php artisan migrate --force
 php artisan storage:link
 php artisan optimize:clear
 php artisan config:cache
 php artisan route:cache
 php artisan view:cache
+```
+
+Если нужен демо-набор пользователей (например, для стенда), запустите отдельно:
+
+```bash
+php artisan db:seed --class=UserSeeder --force
 ```
 
 ## 5. Права
