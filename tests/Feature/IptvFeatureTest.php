@@ -236,6 +236,84 @@ class IptvFeatureTest extends TestCase
             ->assertJsonPath('message', 'FFmpeg не установлен на сервере. Включите FFmpeg для режима совместимости.');
     }
 
+    public function test_relay_start_returns_relative_playlist_url_for_relay_player(): void
+    {
+        $user = User::factory()->create();
+        Sanctum::actingAs($user);
+
+        $sessionId = 'abcdefghijklmnopqrstuvwx';
+        $sourceUrl = 'https://iptv.example.com/channel.m3u8';
+
+        $this->mock(IptvTranscodeService::class, function ($mock) use ($sessionId, $sourceUrl): void {
+            $mock
+                ->shouldReceive('startRelaySession')
+                ->once()
+                ->with($sourceUrl)
+                ->andReturn([
+                    'session_id' => $sessionId,
+                    'pid' => 4321,
+                    'profile' => 'relay',
+                    'source_url' => $sourceUrl,
+                ]);
+
+            $mock
+                ->shouldReceive('waitForPlaylist')
+                ->once()
+                ->with($sessionId, 10)
+                ->andReturn(true);
+        });
+
+        $response = $this->postJson('/api/iptv/relay/start', [
+            'url' => $sourceUrl,
+        ]);
+
+        $response
+            ->assertOk()
+            ->assertJsonPath('data.session_id', $sessionId)
+            ->assertJsonPath('data.playlist_url', "/api/iptv/relay/{$sessionId}/playlist.m3u8");
+    }
+
+    public function test_relay_start_returns_service_unavailable_when_playlist_is_not_ready(): void
+    {
+        $user = User::factory()->create();
+        Sanctum::actingAs($user);
+
+        $sessionId = 'abcdefghijklmnopqrstuvwx';
+        $sourceUrl = 'https://iptv.example.com/channel.m3u8';
+
+        $this->mock(IptvTranscodeService::class, function ($mock) use ($sessionId, $sourceUrl): void {
+            $mock
+                ->shouldReceive('startRelaySession')
+                ->once()
+                ->with($sourceUrl)
+                ->andReturn([
+                    'session_id' => $sessionId,
+                    'pid' => 4321,
+                    'profile' => 'relay',
+                    'source_url' => $sourceUrl,
+                ]);
+
+            $mock
+                ->shouldReceive('waitForPlaylist')
+                ->once()
+                ->with($sessionId, 10)
+                ->andReturn(false);
+
+            $mock
+                ->shouldReceive('stopSession')
+                ->once()
+                ->with($sessionId);
+        });
+
+        $response = $this->postJson('/api/iptv/relay/start', [
+            'url' => $sourceUrl,
+        ]);
+
+        $response
+            ->assertStatus(503)
+            ->assertJsonPath('message', 'Релейный режим не успел подготовить поток. Попробуйте другой канал или вернитесь в прямой режим.');
+    }
+
     public function test_transcode_playlist_returns_not_found_for_unknown_session(): void
     {
         $user = User::factory()->create();
@@ -266,6 +344,45 @@ class IptvFeatureTest extends TestCase
             ->assertJsonPath('message', 'HLS-плейлист совместимого режима не найден или истек.');
     }
 
+    public function test_relay_playlist_returns_not_found_for_unknown_session(): void
+    {
+        $user = User::factory()->create();
+        Sanctum::actingAs($user);
+
+        $sessionId = 'zzzzzzzzzzzzzzzzzzzzzzzz';
+        $this->mock(IptvTranscodeService::class, function ($mock) use ($sessionId): void {
+            $mock
+                ->shouldReceive('getPlaylistPath')
+                ->once()
+                ->with($sessionId)
+                ->andReturn(null);
+        });
+
+        $response = $this->getJson("/api/iptv/relay/{$sessionId}/playlist.m3u8");
+
+        $response
+            ->assertStatus(404)
+            ->assertJsonPath('message', 'HLS-плейлист релейного режима не найден или истек.');
+    }
+
+    public function test_guest_can_open_relay_playlist_endpoint_without_redirect_to_login(): void
+    {
+        $sessionId = 'zzzzzzzzzzzzzzzzzzzzzzzz';
+        $this->mock(IptvTranscodeService::class, function ($mock) use ($sessionId): void {
+            $mock
+                ->shouldReceive('getPlaylistPath')
+                ->once()
+                ->with($sessionId)
+                ->andReturn(null);
+        });
+
+        $response = $this->getJson("/api/iptv/relay/{$sessionId}/playlist.m3u8");
+
+        $response
+            ->assertStatus(404)
+            ->assertJsonPath('message', 'HLS-плейлист релейного режима не найден или истек.');
+    }
+
     public function test_transcode_segment_returns_not_found_for_unknown_session(): void
     {
         $user = User::factory()->create();
@@ -285,6 +402,47 @@ class IptvFeatureTest extends TestCase
         $response
             ->assertStatus(404)
             ->assertJsonPath('message', 'HLS-сегмент не найден или истек.');
+    }
+
+    public function test_relay_segment_returns_not_found_for_unknown_session(): void
+    {
+        $user = User::factory()->create();
+        Sanctum::actingAs($user);
+
+        $sessionId = 'zzzzzzzzzzzzzzzzzzzzzzzz';
+        $segment = 'segment_00001.ts';
+        $this->mock(IptvTranscodeService::class, function ($mock) use ($sessionId, $segment): void {
+            $mock
+                ->shouldReceive('getSegmentPath')
+                ->once()
+                ->with($sessionId, $segment)
+                ->andReturn(null);
+        });
+
+        $response = $this->getJson("/api/iptv/relay/{$sessionId}/{$segment}");
+
+        $response
+            ->assertStatus(404)
+            ->assertJsonPath('message', 'HLS-сегмент релейного режима не найден или истек.');
+    }
+
+    public function test_guest_can_open_relay_segment_endpoint_without_redirect_to_login(): void
+    {
+        $sessionId = 'zzzzzzzzzzzzzzzzzzzzzzzz';
+        $segment = 'segment_00001.ts';
+        $this->mock(IptvTranscodeService::class, function ($mock) use ($sessionId, $segment): void {
+            $mock
+                ->shouldReceive('getSegmentPath')
+                ->once()
+                ->with($sessionId, $segment)
+                ->andReturn(null);
+        });
+
+        $response = $this->getJson("/api/iptv/relay/{$sessionId}/{$segment}");
+
+        $response
+            ->assertStatus(404)
+            ->assertJsonPath('message', 'HLS-сегмент релейного режима не найден или истек.');
     }
 
     public function test_proxy_segment_requires_segment_url_parameter(): void
@@ -327,5 +485,17 @@ class IptvFeatureTest extends TestCase
         $response
             ->assertOk()
             ->assertJsonPath('message', 'IPTV-прокси остановлен.');
+    }
+
+    public function test_relay_stop_returns_success_for_unknown_session(): void
+    {
+        $user = User::factory()->create();
+        Sanctum::actingAs($user);
+
+        $response = $this->deleteJson('/api/iptv/relay/abcdefghijklmnopqrstuvwx');
+
+        $response
+            ->assertOk()
+            ->assertJsonPath('message', 'Релейный режим остановлен.');
     }
 }

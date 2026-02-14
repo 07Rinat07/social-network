@@ -64,13 +64,27 @@ class IptvTranscodeService
      */
     public function startSession(string $url, string $profile = 'balanced'): array
     {
+        return $this->startSessionInternal($url, $this->normalizeProfile($profile), 'транскодирования');
+    }
+
+    /**
+     * @return array{session_id: string, pid: int, profile: string, source_url: string}
+     */
+    public function startRelaySession(string $url): array
+    {
+        return $this->startSessionInternal($url, 'relay', 'релейной ретрансляции');
+    }
+
+    /**
+     * @return array{session_id: string, pid: int, profile: string, source_url: string}
+     */
+    private function startSessionInternal(string $url, string $resolvedProfile, string $modeTitle): array
+    {
         $sourceUrl = $this->iptvPlaylistService->validateExternalUrl($url);
 
         if (!$this->isFfmpegAvailable()) {
             throw new RuntimeException('FFmpeg не установлен на сервере. Включите FFmpeg для режима совместимости.');
         }
-
-        $resolvedProfile = $this->normalizeProfile($profile);
 
         $this->ensureSessionsRootExists();
         $this->cleanupExpiredSessions();
@@ -102,7 +116,7 @@ class IptvTranscodeService
             $pid = $this->spawnFfmpegProcess($commandParts, $logPath);
         } catch (RuntimeException $exception) {
             $this->deleteDirectory($sessionDir);
-            throw new RuntimeException('Не удалось запустить FFmpeg-процесс для транскодирования: ' . $exception->getMessage());
+            throw new RuntimeException('Не удалось запустить FFmpeg-процесс для ' . $modeTitle . ': ' . $exception->getMessage());
         }
 
         if ($pid <= 1) {
@@ -262,6 +276,39 @@ class IptvTranscodeService
         string $segmentPath,
         string $ffmpegBinary
     ): array {
+        if ($profile === 'relay') {
+            return [
+                $ffmpegBinary,
+                '-hide_banner',
+                '-nostdin',
+                '-loglevel', 'warning',
+                '-analyzeduration', '20000000',
+                '-probesize', '20000000',
+                '-thread_queue_size', '1024',
+                '-fflags', '+genpts+discardcorrupt',
+                '-max_interleave_delta', '0',
+                '-reconnect', '1',
+                '-reconnect_streamed', '1',
+                '-reconnect_delay_max', '2',
+                '-rw_timeout', '15000000',
+                '-http_persistent', '0',
+                '-i', $sourceUrl,
+                '-map', '0:v:0?',
+                '-map', '0:a:0?',
+                '-sn',
+                '-dn',
+                '-c:v', 'copy',
+                '-c:a', 'copy',
+                '-max_muxing_queue_size', '2048',
+                '-f', 'hls',
+                '-hls_time', '2',
+                '-hls_list_size', '14',
+                '-hls_flags', 'delete_segments+append_list+omit_endlist+split_by_time',
+                '-hls_segment_filename', $segmentPath,
+                $playlistPath,
+            ];
+        }
+
         $settings = $this->profileSettings($profile);
 
         return [

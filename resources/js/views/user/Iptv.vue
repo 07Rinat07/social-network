@@ -359,9 +359,13 @@
                             <p v-if="proxyStatusLine" class="muted" style="margin: 0; font-size: 0.8rem;">
                                 {{ proxyStatusLine }}
                             </p>
+                            <p v-if="relayStatusLine" class="muted" style="margin: 0; font-size: 0.8rem;">
+                                {{ relayStatusLine }}
+                            </p>
                             <p v-if="playerError" class="error-text" style="margin: 0;">{{ playerError }}</p>
                             <p v-if="transcodeError" class="error-text" style="margin: 0;">{{ transcodeError }}</p>
                             <p v-if="proxyError" class="error-text" style="margin: 0;">{{ proxyError }}</p>
+                            <p v-if="relayError" class="error-text" style="margin: 0;">{{ relayError }}</p>
                         </div>
                     </details>
 
@@ -506,6 +510,11 @@ export default {
             proxyPlaybackUrl: '',
             proxyBusy: false,
             proxyError: '',
+            relayModeEnabled: false,
+            relaySessionId: '',
+            relayPlaybackUrl: '',
+            relayBusy: false,
+            relayError: '',
             hideListLogosOnMobile: false,
             transcodeCapabilities: {
                 checked: false,
@@ -516,6 +525,8 @@ export default {
             autoCompatLastAttemptAt: 0,
             autoProxyLastAttemptUrl: '',
             autoProxyLastAttemptAt: 0,
+            autoRelayLastAttemptUrl: '',
+            autoRelayLastAttemptAt: 0,
             compatRecoveryState: {
                 sourceUrl: '',
                 attempts: 0,
@@ -601,6 +612,10 @@ export default {
                 return this.transcodePlaybackUrl
             }
 
+            if (this.relayModeEnabled) {
+                return this.relayPlaybackUrl || ''
+            }
+
             if (this.proxyModeEnabled) {
                 return this.proxyPlaybackUrl || ''
             }
@@ -667,6 +682,18 @@ export default {
                 : this.$t('iptv.proxyPreparing')
 
             return this.$t('iptv.proxyEnabledLine', { source })
+        },
+
+        relayStatusLine() {
+            if (!this.relayModeEnabled) {
+                return ''
+            }
+
+            const source = this.relaySessionId
+                ? this.$t('iptv.relaySession', { id: this.relaySessionId })
+                : this.$t('iptv.relayPreparing')
+
+            return this.$t('iptv.relayEnabledLine', { source })
         },
 
         groupOptions() {
@@ -770,6 +797,10 @@ export default {
                 return 'ffmpeg'
             }
 
+            if (this.relayModeEnabled && this.relayPlaybackUrl) {
+                return 'relay'
+            }
+
             if (this.proxyModeEnabled && this.proxyPlaybackUrl) {
                 return 'proxy'
             }
@@ -781,6 +812,7 @@ export default {
             const dictionary = {
                 direct: this.$t('iptv.modeDirect'),
                 proxy: this.$t('iptv.modeProxy'),
+                relay: this.$t('iptv.modeRelay'),
                 ffmpeg: this.$t('iptv.modeFfmpeg'),
             }
 
@@ -979,6 +1011,8 @@ export default {
             this.autoCompatLastAttemptAt = 0
             this.autoProxyLastAttemptUrl = ''
             this.autoProxyLastAttemptAt = 0
+            this.autoRelayLastAttemptUrl = ''
+            this.autoRelayLastAttemptAt = 0
             this.compatRecoveryState = {
                 sourceUrl: String(nextUrl || ''),
                 attempts: 0,
@@ -987,6 +1021,7 @@ export default {
             if (nextUrl === '') {
                 this.stopServerTranscodeSession()
                 this.stopServerProxySession()
+                this.stopServerRelaySession()
                 return
             }
 
@@ -996,6 +1031,10 @@ export default {
 
             if (this.compatModeEnabled && nextUrl !== previousUrl) {
                 this.startServerTranscodeForCurrentChannel()
+            }
+
+            if (this.relayModeEnabled && nextUrl !== previousUrl) {
+                this.startServerRelayForCurrentChannel()
             }
         },
     },
@@ -1066,6 +1105,9 @@ export default {
             this.stopServerProxySession({
                 useKeepalive: Boolean(options?.useKeepalive),
             })
+            this.stopServerRelaySession({
+                useKeepalive: Boolean(options?.useKeepalive),
+            })
         },
 
         resolveCsrfToken() {
@@ -1132,6 +1174,54 @@ export default {
             }
 
             const url = `/api/iptv/proxy/${encodeURIComponent(normalizedSessionId)}`
+            const csrfToken = this.resolveCsrfToken()
+
+            if (typeof window !== 'undefined' && typeof window.fetch === 'function') {
+                try {
+                    const headers = {
+                        'Accept': 'application/json',
+                    }
+
+                    if (csrfToken !== '') {
+                        headers['X-CSRF-TOKEN'] = csrfToken
+                    }
+
+                    window.fetch(url, {
+                        method: 'DELETE',
+                        credentials: 'same-origin',
+                        keepalive: true,
+                        headers,
+                    })
+                    return
+                } catch (_error) {
+                    // fallback to beacon
+                }
+            }
+
+            if (typeof navigator === 'undefined' || typeof navigator.sendBeacon !== 'function') {
+                return
+            }
+
+            try {
+                const payload = new FormData()
+                payload.append('_method', 'DELETE')
+                if (csrfToken !== '') {
+                    payload.append('_token', csrfToken)
+                }
+
+                navigator.sendBeacon(url, payload)
+            } catch (_error) {
+                // ignore beacon failures
+            }
+        },
+
+        sendStopRelayKeepalive(sessionId) {
+            const normalizedSessionId = String(sessionId || '').trim()
+            if (normalizedSessionId === '') {
+                return
+            }
+
+            const url = `/api/iptv/relay/${encodeURIComponent(normalizedSessionId)}`
             const csrfToken = this.resolveCsrfToken()
 
             if (typeof window !== 'undefined' && typeof window.fetch === 'function') {
@@ -1428,7 +1518,7 @@ export default {
             const force = Boolean(options?.force)
             if (!this.canUseServerTranscode) {
                 this.transcodeError = this.$t('iptv.compatUnavailableNoFfmpeg')
-                return
+                return false
             }
 
             if (force) {
@@ -1438,9 +1528,12 @@ export default {
             if (this.proxyModeEnabled) {
                 await this.stopProxyMode()
             }
+            if (this.relayModeEnabled) {
+                await this.stopRelayMode()
+            }
 
             this.compatModeEnabled = true
-            await this.startServerTranscodeForCurrentChannel({ force })
+            return await this.startServerTranscodeForCurrentChannel({ force })
         },
 
         async stopCompatibilityMode() {
@@ -1449,6 +1542,12 @@ export default {
         },
 
         async startProxyMode() {
+            if (this.compatModeEnabled) {
+                await this.stopCompatibilityMode()
+            }
+            if (this.relayModeEnabled) {
+                await this.stopRelayMode()
+            }
             this.proxyModeEnabled = true
             return await this.startServerProxyForCurrentChannel()
         },
@@ -1456,6 +1555,28 @@ export default {
         async stopProxyMode() {
             this.proxyModeEnabled = false
             await this.stopServerProxySession()
+        },
+
+        async startRelayMode() {
+            if (!this.canUseServerTranscode) {
+                this.relayError = this.$t('iptv.relayUnavailableNoFfmpeg')
+                return false
+            }
+
+            if (this.compatModeEnabled) {
+                await this.stopCompatibilityMode()
+            }
+            if (this.proxyModeEnabled) {
+                await this.stopProxyMode()
+            }
+
+            this.relayModeEnabled = true
+            return await this.startServerRelayForCurrentChannel()
+        },
+
+        async stopRelayMode() {
+            this.relayModeEnabled = false
+            await this.stopServerRelaySession()
         },
 
         async startServerProxyForCurrentChannel() {
@@ -1532,6 +1653,110 @@ export default {
             if (!preserveError) {
                 this.proxyError = ''
             }
+        },
+
+        async startServerRelayForCurrentChannel() {
+            if (!this.relayModeEnabled || !this.canUseServerTranscode) {
+                return false
+            }
+
+            const sourceUrl = String(this.playbackUrl || '').trim()
+            if (sourceUrl === '') {
+                return false
+            }
+
+            if (this.relayBusy) {
+                return false
+            }
+
+            this.relayBusy = true
+            this.relayError = ''
+
+            try {
+                await this.stopServerRelaySession({ preserveMode: true, preserveError: true })
+
+                const response = await axios.post('/api/iptv/relay/start', {
+                    url: sourceUrl,
+                })
+
+                this.relaySessionId = String(response.data?.data?.session_id || '')
+                this.relayPlaybackUrl = String(response.data?.data?.playlist_url || '')
+
+                if (this.relaySessionId === '' || this.relayPlaybackUrl === '') {
+                    throw new Error('Empty relay session payload')
+                }
+
+                return true
+            } catch (error) {
+                this.relaySessionId = ''
+                this.relayPlaybackUrl = ''
+                this.relayModeEnabled = false
+                this.relayError = error.response?.data?.message || this.$t('iptv.relayStartFailed')
+                return false
+            } finally {
+                this.relayBusy = false
+            }
+        },
+
+        async stopServerRelaySession(options = {}) {
+            const preserveMode = Boolean(options?.preserveMode)
+            const preserveError = Boolean(options?.preserveError)
+            const useKeepalive = Boolean(options?.useKeepalive)
+            const sessionId = String(this.relaySessionId || '')
+
+            if (sessionId !== '') {
+                if (useKeepalive) {
+                    this.sendStopRelayKeepalive(sessionId)
+                } else {
+                    try {
+                        await axios.delete(`/api/iptv/relay/${encodeURIComponent(sessionId)}`)
+                    } catch (_error) {
+                        // ignore stop errors
+                    }
+                }
+            }
+
+            this.relaySessionId = ''
+            this.relayPlaybackUrl = ''
+            this.relayBusy = false
+
+            if (!preserveMode) {
+                this.relayModeEnabled = false
+                this.autoRelayLastAttemptUrl = ''
+                this.autoRelayLastAttemptAt = 0
+            }
+
+            if (!preserveError) {
+                this.relayError = ''
+            }
+        },
+
+        async tryAutoRelayFallback(sourceUrl) {
+            const normalizedUrl = String(sourceUrl || '').trim()
+            if (normalizedUrl === '' || !this.canUseServerTranscode || this.relayBusy) {
+                return false
+            }
+
+            const now = Date.now()
+            const sameSourceCooldown = this.autoRelayLastAttemptUrl === normalizedUrl
+                && (now - Number(this.autoRelayLastAttemptAt || 0)) < 30000
+
+            if (sameSourceCooldown) {
+                return false
+            }
+
+            this.autoRelayLastAttemptUrl = normalizedUrl
+            this.autoRelayLastAttemptAt = now
+            this.relayError = this.$t('iptv.relayAutoEnable')
+            const relayStarted = await this.startRelayMode()
+            if (relayStarted) {
+                this.relayError = ''
+                this.proxyError = ''
+                this.transcodeError = ''
+                return true
+            }
+
+            return false
         },
 
         async startServerTranscodeForCurrentChannel(options = {}) {
@@ -2022,14 +2247,35 @@ export default {
                     }
                     this.transcodeError = this.$t('iptv.compatNoVideoFallback')
                     await this.stopCompatibilityMode()
+                    await this.tryAutoRelayFallback(sourceUrl)
                 }
 
+                return
+            }
+
+            if (this.relayModeEnabled) {
+                if (sourceUrl === '' || this.relayBusy) {
+                    return
+                }
+
+                await this.stopRelayMode()
+                this.relayError = this.$t('iptv.relayFailedFallbackDirect')
                 return
             }
 
             if (this.proxyModeEnabled && shouldUseProxyFallback && sourceUrl !== '') {
                 await this.stopProxyMode()
                 this.proxyError = this.$t('iptv.proxyFailedFallbackDirect')
+
+                if (this.canUseServerTranscode && !this.transcodeBusy && !this.isTranscodeUnavailableForSource(sourceUrl)) {
+                    this.transcodeError = this.$t('iptv.compatAutoEnableAfterProxy')
+                    const compatStarted = await this.startCompatibilityMode()
+                    if (compatStarted) {
+                        return
+                    }
+                }
+
+                await this.tryAutoRelayFallback(sourceUrl)
                 return
             }
 
@@ -2046,7 +2292,10 @@ export default {
 
                 this.transcodeError = this.$t('iptv.compatAutoEnableCodec')
                 this.autoCompatLastAttemptAt = now
-                await this.startCompatibilityMode()
+                const compatStarted = await this.startCompatibilityMode()
+                if (!compatStarted) {
+                    await this.tryAutoRelayFallback(sourceUrl)
+                }
                 return
             }
 
@@ -2068,6 +2317,17 @@ export default {
                     this.proxyError = ''
                     return
                 }
+
+                if (this.canUseServerTranscode && !this.transcodeBusy && !this.isTranscodeUnavailableForSource(sourceUrl)) {
+                    this.transcodeError = this.$t('iptv.compatAutoEnableAfterProxy')
+                    const compatStarted = await this.startCompatibilityMode()
+                    if (compatStarted) {
+                        this.proxyError = ''
+                        return
+                    }
+                }
+
+                await this.tryAutoRelayFallback(sourceUrl)
             }
 
             if (!this.autoCompatOnCodecError || !this.canUseServerTranscode) {
@@ -2097,7 +2357,10 @@ export default {
             this.autoCompatLastAttemptUrl = sourceUrl
             this.autoCompatLastAttemptAt = now
             this.transcodeError = this.$t('iptv.compatAutoEnableCodec')
-            await this.startCompatibilityMode()
+            const compatStarted = await this.startCompatibilityMode()
+            if (!compatStarted) {
+                await this.tryAutoRelayFallback(sourceUrl)
+            }
         },
 
         handlePlayerDiagnostics(payload) {
@@ -2231,6 +2494,7 @@ export default {
         clearPlaylist() {
             this.stopServerTranscodeSession()
             this.stopServerProxySession()
+            this.stopServerRelaySession()
             this.channels = []
             this.currentChannelId = ''
             this.playlistError = ''
@@ -2245,6 +2509,7 @@ export default {
             this.playerStatusMessage = ''
             this.copiedChannelId = ''
             this.playerDiagnostics = null
+            this.relayError = ''
 
             const fileInput = this.$refs.fileInput
             if (fileInput) {

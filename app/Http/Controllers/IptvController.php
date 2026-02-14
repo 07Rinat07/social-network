@@ -146,6 +146,47 @@ class IptvController extends Controller
         ]);
     }
 
+    public function startRelay(Request $request): JsonResponse
+    {
+        $payload = $request->validate([
+            'url' => ['required', 'string', 'max:2000'],
+        ]);
+
+        try {
+            $session = $this->iptvTranscodeService->startRelaySession($payload['url']);
+
+            $playlistReady = $this->iptvTranscodeService->waitForPlaylist($session['session_id'], 10);
+            if (!$playlistReady) {
+                $this->iptvTranscodeService->stopSession($session['session_id']);
+                throw new RuntimeException('Релейный режим не успел подготовить поток. Попробуйте другой канал или вернитесь в прямой режим.');
+            }
+        } catch (InvalidArgumentException $exception) {
+            return response()->json([
+                'message' => $exception->getMessage(),
+                'data' => [],
+            ], 422);
+        } catch (RuntimeException $exception) {
+            return response()->json([
+                'message' => $exception->getMessage(),
+                'data' => [],
+            ], 503);
+        } catch (Throwable) {
+            return response()->json([
+                'message' => 'Не удалось запустить релейный режим IPTV. Попробуйте позже.',
+                'data' => [],
+            ], 503);
+        }
+
+        return response()->json([
+            'message' => 'Релейный режим запущен.',
+            'data' => [
+                'session_id' => $session['session_id'],
+                'source_url' => $session['source_url'],
+                'playlist_url' => route('api.iptv.relay.playlist', ['session' => $session['session_id']], false),
+            ],
+        ]);
+    }
+
     public function transcodePlaylist(string $session)
     {
         $path = $this->iptvTranscodeService->getPlaylistPath($session);
@@ -187,12 +228,46 @@ class IptvController extends Controller
         ]);
     }
 
+    public function relayPlaylist(string $session)
+    {
+        $path = $this->iptvTranscodeService->getPlaylistPath($session);
+        if (!$path) {
+            return response()->json([
+                'message' => 'HLS-плейлист релейного режима не найден или истек.',
+            ], 404);
+        }
+
+        return response()->file($path, [
+            'Content-Type' => 'application/vnd.apple.mpegurl',
+            'Cache-Control' => 'no-store, no-cache, must-revalidate, max-age=0',
+            'Pragma' => 'no-cache',
+            'Expires' => '0',
+        ]);
+    }
+
     public function transcodeSegment(string $session, string $segment)
     {
         $path = $this->iptvTranscodeService->getSegmentPath($session, $segment);
         if (!$path) {
             return response()->json([
                 'message' => 'HLS-сегмент не найден или истек.',
+            ], 404);
+        }
+
+        return response()->file($path, [
+            'Content-Type' => 'video/mp2t',
+            'Cache-Control' => 'no-store, no-cache, must-revalidate, max-age=0',
+            'Pragma' => 'no-cache',
+            'Expires' => '0',
+        ]);
+    }
+
+    public function relaySegment(string $session, string $segment)
+    {
+        $path = $this->iptvTranscodeService->getSegmentPath($session, $segment);
+        if (!$path) {
+            return response()->json([
+                'message' => 'HLS-сегмент релейного режима не найден или истек.',
             ], 404);
         }
 
@@ -255,6 +330,16 @@ class IptvController extends Controller
 
         return response()->json([
             'message' => 'IPTV-прокси остановлен.',
+            'data' => [],
+        ]);
+    }
+
+    public function stopRelay(string $session): JsonResponse
+    {
+        $this->iptvTranscodeService->stopSession($session);
+
+        return response()->json([
+            'message' => 'Релейный режим остановлен.',
             'data' => [],
         ]);
     }

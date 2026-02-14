@@ -86,6 +86,9 @@ export default {
             qualityOptions: [],
             activeEngine: 'idle',
             activeBufferProfile: 'balanced',
+            runtimeBufferProfileOverride: '',
+            runtimeBufferEscalationCount: 0,
+            lastRuntimeBufferEscalationAt: 0,
             streamCodecs: [],
             hlsMinVideoLevel: 0,
             hlsAutoPreferredLevel: -1,
@@ -108,6 +111,7 @@ export default {
                 stagnantTicks: 0,
                 lastPlaybackTime: 0,
             },
+            lastWaitingEventAt: 0,
             fullscreenEscapeHandler: null,
             fullscreenStateHandler: null,
         }
@@ -274,11 +278,15 @@ export default {
             this.qualityOptions = []
             this.activeEngine = 'idle'
             this.activeBufferProfile = 'balanced'
+            this.runtimeBufferProfileOverride = ''
+            this.runtimeBufferEscalationCount = 0
+            this.lastRuntimeBufferEscalationAt = 0
             this.streamCodecs = []
             this.hlsMinVideoLevel = 0
             this.hlsAutoPreferredLevel = -1
             this.hlsNativeFallbackAttempted = false
             this.hlsLastSourceUrl = ''
+            this.lastWaitingEventAt = 0
             this.stabilityState = {
                 totalEvents: 0,
                 lastRecoveryAt: 0,
@@ -350,10 +358,25 @@ export default {
         },
 
         handleWaiting() {
-            if (this.playerState !== 'error') {
-                this.setStatus('buffering', 'Буферизация потока...')
-                this.tryAdaptiveRecovery('waiting')
+            if (this.playerState === 'error') {
+                return
             }
+
+            const video = this.getVideoElement()
+            const bufferedAheadSeconds = this.getBufferedAheadSeconds(video)
+            const now = Date.now()
+
+            if (
+                bufferedAheadSeconds >= 2.2
+                && (now - Number(this.lastWaitingEventAt || 0)) < 1200
+            ) {
+                this.setStatus('buffering', 'Короткий сетевой лаг, удерживаем текущий буфер...')
+                return
+            }
+
+            this.lastWaitingEventAt = now
+            this.setStatus('buffering', 'Буферизация потока...')
+            this.tryAdaptiveRecovery('waiting')
         },
 
         handleNativeError() {
@@ -439,6 +462,7 @@ export default {
             this.hlsLastSourceUrl = ''
             this.activeEngine = 'idle'
             this.activeBufferProfile = 'balanced'
+            this.lastWaitingEventAt = 0
             this.stabilityState = {
                 totalEvents: 0,
                 lastRecoveryAt: 0,
@@ -457,7 +481,15 @@ export default {
                 return
             }
 
-            this.sourceUrl = String(this.src || '').trim()
+            const incomingSourceUrl = String(this.src || '').trim()
+            const sourceChanged = incomingSourceUrl !== String(this.sourceUrl || '').trim()
+            if (sourceChanged) {
+                this.runtimeBufferProfileOverride = ''
+                this.runtimeBufferEscalationCount = 0
+                this.lastRuntimeBufferEscalationAt = 0
+            }
+
+            this.sourceUrl = incomingSourceUrl
             const sourceUrl = this.sourceUrl
             const sourceLoadToken = ++this.sourceLoadToken
 
@@ -602,12 +634,22 @@ export default {
                 lowLatencyMode: false,
                 backBufferLength: Number(hlsProfile.backBufferLength ?? 90),
                 maxBufferLength: Number(hlsProfile.maxBufferLength ?? 30),
+                maxBufferHole: Number(hlsProfile.maxBufferHole ?? 0.5),
+                maxSeekHole: Number(hlsProfile.maxSeekHole ?? 2),
                 capLevelToPlayerSize: false,
+                manifestLoadingTimeOut: Number(hlsProfile.manifestLoadingTimeOut ?? 18000),
+                levelLoadingTimeOut: Number(hlsProfile.levelLoadingTimeOut ?? 18000),
+                fragLoadingTimeOut: Number(hlsProfile.fragLoadingTimeOut ?? 20000),
                 manifestLoadingMaxRetry: Number(hlsProfile.manifestLoadingMaxRetry ?? 3),
                 levelLoadingMaxRetry: Number(hlsProfile.levelLoadingMaxRetry ?? 3),
                 fragLoadingMaxRetry: Number(hlsProfile.fragLoadingMaxRetry ?? 3),
+                manifestLoadingRetryDelay: Number(hlsProfile.manifestLoadingRetryDelay ?? 500),
+                levelLoadingRetryDelay: Number(hlsProfile.levelLoadingRetryDelay ?? 500),
                 fragLoadingRetryDelay: Number(hlsProfile.fragLoadingRetryDelay ?? 500),
                 fragLoadingMaxRetryTimeout: Number(hlsProfile.fragLoadingMaxRetryTimeout ?? 20000),
+                liveSyncDurationCount: Number(hlsProfile.liveSyncDurationCount ?? 4),
+                liveMaxLatencyDurationCount: Number(hlsProfile.liveMaxLatencyDurationCount ?? 10),
+                maxLiveSyncPlaybackRate: Number(hlsProfile.maxLiveSyncPlaybackRate ?? 1.15),
             })
 
             hls.on(Hls.Events.MEDIA_ATTACHED, () => {
@@ -729,6 +771,10 @@ export default {
                 liveBufferLatencyChasing: true,
                 enableStashBuffer: Boolean(mpegtsProfile.enableStashBuffer ?? true),
                 stashInitialSize: Number(mpegtsProfile.stashInitialSize ?? 384 * 1024),
+                autoCleanupSourceBuffer: Boolean(mpegtsProfile.autoCleanupSourceBuffer ?? true),
+                autoCleanupMaxBackwardDuration: Number(mpegtsProfile.autoCleanupMaxBackwardDuration ?? 60),
+                autoCleanupMinBackwardDuration: Number(mpegtsProfile.autoCleanupMinBackwardDuration ?? 30),
+                fixAudioTimestampGap: true,
             })
 
             if (mpegtsLibrary.Events?.MEDIA_INFO) {
@@ -1269,6 +1315,11 @@ export default {
         },
 
         resolveBufferingProfile() {
+            const runtimeOverride = this.normalizeBufferProfile(this.runtimeBufferProfileOverride, '')
+            if (runtimeOverride !== '') {
+                return runtimeOverride
+            }
+
             const requested = String(this.bufferingMode || 'auto').toLowerCase()
             if (requested !== 'auto') {
                 return ['fast', 'balanced', 'stable'].includes(requested) ? requested : 'balanced'
@@ -1305,13 +1356,23 @@ export default {
             const presets = {
                 fast: {
                     hls: {
-                        maxBufferLength: 18,
-                        backBufferLength: 45,
+                        maxBufferLength: 16,
+                        backBufferLength: 40,
+                        maxBufferHole: 0.35,
+                        maxSeekHole: 1,
+                        manifestLoadingTimeOut: 12000,
+                        levelLoadingTimeOut: 12000,
+                        fragLoadingTimeOut: 15000,
                         manifestLoadingMaxRetry: 2,
                         levelLoadingMaxRetry: 2,
                         fragLoadingMaxRetry: 2,
+                        manifestLoadingRetryDelay: 300,
+                        levelLoadingRetryDelay: 300,
                         fragLoadingRetryDelay: 350,
                         fragLoadingMaxRetryTimeout: 9000,
+                        liveSyncDurationCount: 3,
+                        liveMaxLatencyDurationCount: 7,
+                        maxLiveSyncPlaybackRate: 1.1,
                     },
                     dash: {
                         stableBufferTime: 8,
@@ -1321,17 +1382,30 @@ export default {
                     mpegts: {
                         enableStashBuffer: false,
                         stashInitialSize: 192 * 1024,
+                        autoCleanupSourceBuffer: true,
+                        autoCleanupMaxBackwardDuration: 30,
+                        autoCleanupMinBackwardDuration: 15,
                     },
                 },
                 balanced: {
                     hls: {
                         maxBufferLength: 30,
                         backBufferLength: 90,
+                        maxBufferHole: 0.5,
+                        maxSeekHole: 2,
+                        manifestLoadingTimeOut: 18000,
+                        levelLoadingTimeOut: 18000,
+                        fragLoadingTimeOut: 22000,
                         manifestLoadingMaxRetry: 3,
                         levelLoadingMaxRetry: 3,
                         fragLoadingMaxRetry: 3,
+                        manifestLoadingRetryDelay: 500,
+                        levelLoadingRetryDelay: 500,
                         fragLoadingRetryDelay: 500,
                         fragLoadingMaxRetryTimeout: 20000,
+                        liveSyncDurationCount: 4,
+                        liveMaxLatencyDurationCount: 10,
+                        maxLiveSyncPlaybackRate: 1.15,
                     },
                     dash: {
                         stableBufferTime: 12,
@@ -1340,18 +1414,31 @@ export default {
                     },
                     mpegts: {
                         enableStashBuffer: true,
-                        stashInitialSize: 384 * 1024,
+                        stashInitialSize: 512 * 1024,
+                        autoCleanupSourceBuffer: true,
+                        autoCleanupMaxBackwardDuration: 60,
+                        autoCleanupMinBackwardDuration: 30,
                     },
                 },
                 stable: {
                     hls: {
-                        maxBufferLength: 60,
-                        backBufferLength: 180,
+                        maxBufferLength: 90,
+                        backBufferLength: 240,
+                        maxBufferHole: 0.8,
+                        maxSeekHole: 3,
+                        manifestLoadingTimeOut: 25000,
+                        levelLoadingTimeOut: 25000,
+                        fragLoadingTimeOut: 30000,
                         manifestLoadingMaxRetry: 5,
                         levelLoadingMaxRetry: 5,
                         fragLoadingMaxRetry: 5,
+                        manifestLoadingRetryDelay: 900,
+                        levelLoadingRetryDelay: 900,
                         fragLoadingRetryDelay: 1000,
                         fragLoadingMaxRetryTimeout: 30000,
+                        liveSyncDurationCount: 6,
+                        liveMaxLatencyDurationCount: 14,
+                        maxLiveSyncPlaybackRate: 1.25,
                     },
                     dash: {
                         stableBufferTime: 20,
@@ -1360,7 +1447,10 @@ export default {
                     },
                     mpegts: {
                         enableStashBuffer: true,
-                        stashInitialSize: 1024 * 1024,
+                        stashInitialSize: 1536 * 1024,
+                        autoCleanupSourceBuffer: true,
+                        autoCleanupMaxBackwardDuration: 120,
+                        autoCleanupMinBackwardDuration: 60,
                     },
                 },
             }
@@ -1381,6 +1471,25 @@ export default {
             this.stabilityState = {
                 totalEvents: Number(this.stabilityState.totalEvents || 0) + 1,
                 lastRecoveryAt: now,
+            }
+
+            if (
+                this.autoStability
+                && this.activeBufferProfile !== 'stable'
+                && this.stabilityState.totalEvents >= 3
+                && this.sourceUrl !== ''
+                && (now - Number(this.lastRuntimeBufferEscalationAt || 0)) > 120000
+            ) {
+                this.runtimeBufferProfileOverride = 'stable'
+                this.runtimeBufferEscalationCount = Number(this.runtimeBufferEscalationCount || 0) + 1
+                this.lastRuntimeBufferEscalationAt = now
+                this.emitDiagnostics({
+                    recoveryReason: reason,
+                    recoveryAction: 'escalate-buffer-profile:stable',
+                })
+                this.setStatus('loading', 'Сильная нестабильность, усиливаем буферизацию и перезапускаем поток...')
+                this.applySource()
+                return true
             }
 
             const downgraded = this.tryDowngradeHlsLevel() || this.tryDowngradeDashQuality()
@@ -1412,7 +1521,19 @@ export default {
                 return
             }
 
-            const timeoutMs = this.activeEngine === 'native-hls' ? 10000 : 18000
+            const activeProfile = this.normalizeBufferProfile(this.activeBufferProfile || this.resolveBufferingProfile(), 'balanced')
+            let timeoutMs = this.activeEngine === 'native-hls' ? 10000 : 18000
+
+            if (activeProfile === 'fast') {
+                timeoutMs = Math.max(8000, timeoutMs - 2000)
+            } else if (activeProfile === 'stable') {
+                timeoutMs += this.activeEngine === 'native-hls' ? 6000 : 11000
+            }
+
+            if (this.activeEngine === 'mpegts.js') {
+                timeoutMs += activeProfile === 'stable' ? 5000 : 1500
+            }
+
             this.playbackWatchdogTimer = window.setTimeout(() => {
                 this.handlePlaybackWatchdog()
             }, timeoutMs)
@@ -1590,6 +1711,17 @@ export default {
             this.playbackWatchdogTimer = null
 
             if (this.playerState !== 'loading' && this.playerState !== 'buffering') {
+                return
+            }
+
+            const bufferedAheadSeconds = this.getBufferedAheadSeconds(this.getVideoElement())
+            if (bufferedAheadSeconds >= 2.4 && this.watchdogRecoveryAttempts < 2) {
+                this.setStatus('buffering', 'Источник медленный, ожидаем заполнение буфера...')
+                this.emitDiagnostics({
+                    recoveryReason: 'watchdog-timeout',
+                    recoveryAction: 'wait-for-buffer',
+                    watchdogBufferedAhead: bufferedAheadSeconds,
+                })
                 return
             }
 
@@ -1886,12 +2018,16 @@ export default {
         emitDiagnostics(extra = {}) {
             const video = this.getVideoElement()
             const mpegtsFeatures = this.getMpegtsFeatureList()
+            const bufferedAheadSeconds = this.getBufferedAheadSeconds(video)
             const diagnostics = {
                 engine: this.activeEngine,
                 sourceType: this.detectSourceType(this.sourceUrl),
                 streamCodecs: [...this.streamCodecs],
                 requestedBufferingMode: this.bufferingMode,
                 activeBufferProfile: this.activeBufferProfile,
+                runtimeBufferProfileOverride: this.runtimeBufferProfileOverride || null,
+                runtimeBufferEscalationCount: Number(this.runtimeBufferEscalationCount || 0),
+                bufferedAheadSeconds,
                 autoStability: Boolean(this.autoStability),
                 modules: {
                     hlsjs: Hls.isSupported(),
@@ -1933,6 +2069,47 @@ export default {
             }
 
             return Math.min(1, Math.max(0, numeric))
+        },
+
+        normalizeBufferProfile(profile, fallback = 'balanced') {
+            const normalized = String(profile || '').toLowerCase()
+            if (['fast', 'balanced', 'stable'].includes(normalized)) {
+                return normalized
+            }
+
+            const fallbackRaw = String(fallback ?? '')
+            if (fallbackRaw === '') {
+                return ''
+            }
+
+            const fallbackNormalized = fallbackRaw.toLowerCase()
+            if (['fast', 'balanced', 'stable'].includes(fallbackNormalized)) {
+                return fallbackNormalized
+            }
+
+            return 'balanced'
+        },
+
+        getBufferedAheadSeconds(video) {
+            const element = video || this.getVideoElement()
+            if (!element || !element.buffered) {
+                return 0
+            }
+
+            const currentTime = Number(element.currentTime || 0)
+            const ranges = element.buffered
+
+            for (let index = 0; index < ranges.length; index += 1) {
+                const start = Number(ranges.start(index))
+                const end = Number(ranges.end(index))
+
+                if (currentTime >= (start - 0.05) && currentTime <= end) {
+                    const ahead = Math.max(0, end - currentTime)
+                    return Number(ahead.toFixed(2))
+                }
+            }
+
+            return 0
         },
 
         getVideoElement() {

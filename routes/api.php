@@ -27,6 +27,10 @@ Route::get('/iptv/transcode/{session}/playlist.m3u8', [IptvController::class, 't
 Route::get('/iptv/transcode/{session}/{segment}', [IptvController::class, 'transcodeSegment'])
     ->where('segment', 'segment_[0-9]{5}\.ts')
     ->name('api.iptv.transcode.segment');
+Route::get('/iptv/relay/{session}/playlist.m3u8', [IptvController::class, 'relayPlaylist'])->name('api.iptv.relay.playlist');
+Route::get('/iptv/relay/{session}/{segment}', [IptvController::class, 'relaySegment'])
+    ->where('segment', 'segment_[0-9]{5}\.ts')
+    ->name('api.iptv.relay.segment');
 Route::get('/iptv/proxy/{session}/playlist.m3u8', [IptvController::class, 'proxyPlaylist'])->name('api.iptv.proxy.playlist');
 Route::get('/iptv/proxy/{session}/segment', [IptvController::class, 'proxySegment'])->name('api.iptv.proxy.segment');
 
@@ -77,6 +81,8 @@ Route::middleware(['auth:sanctum', 'verified'])->group(function () {
     Route::get('/iptv/transcode/capabilities', [IptvController::class, 'transcodeCapabilities'])->name('api.iptv.transcode.capabilities');
     Route::post('/iptv/transcode/start', [IptvController::class, 'startTranscode'])->name('api.iptv.transcode.start');
     Route::delete('/iptv/transcode/{session}', [IptvController::class, 'stopTranscode'])->name('api.iptv.transcode.stop');
+    Route::post('/iptv/relay/start', [IptvController::class, 'startRelay'])->name('api.iptv.relay.start');
+    Route::delete('/iptv/relay/{session}', [IptvController::class, 'stopRelay'])->name('api.iptv.relay.stop');
 
     Route::get('/chats', [ChatController::class, 'index']);
     Route::get('/chats/unread-summary', [ChatController::class, 'unreadSummary']);
