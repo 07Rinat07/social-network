@@ -15,6 +15,13 @@ $app = new Illuminate\Foundation\Application(
     $_ENV['APP_BASE_PATH'] ?? dirname(__DIR__)
 );
 
+// Allow Docker services to force a dedicated env file
+// so local `.env` never leaks into container runtime config.
+$forcedEnvFile = $_SERVER['LARAVEL_ENV_FILE'] ?? $_ENV['LARAVEL_ENV_FILE'] ?? null;
+if (is_string($forcedEnvFile) && trim($forcedEnvFile) !== '') {
+    $app->loadEnvironmentFrom(trim($forcedEnvFile));
+}
+
 /*
 |--------------------------------------------------------------------------
 | Bind Important Interfaces

@@ -8,6 +8,8 @@ window.axios = axios;
 
 window.axios.defaults.headers.common['X-Requested-With'] = 'XMLHttpRequest';
 window.axios.defaults.withCredentials = true;
+window.axios.defaults.xsrfCookieName = import.meta.env.VITE_XSRF_COOKIE_NAME ?? 'XSRF-TOKEN';
+window.axios.defaults.xsrfHeaderName = 'X-XSRF-TOKEN';
 
 window.Pusher = Pusher;
 window.Echo = null;

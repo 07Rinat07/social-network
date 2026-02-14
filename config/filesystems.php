@@ -40,7 +40,9 @@ return [
             'driver' => 'local',
             'root' => storage_path('app/public'),
             'url' => env('APP_URL').'/storage',
-            'visibility' => 'public',
+            // On Docker bind mounts (especially Windows), setting visibility may fail
+            // after write and make store() return false despite file being written.
+            'visibility' => env('PUBLIC_DISK_VISIBILITY'),
             'throw' => false,
         ],
 

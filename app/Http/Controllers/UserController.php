@@ -171,17 +171,34 @@ class UserController extends Controller
         $user->name = $validated['name'];
         $user->nickname = $validated['nickname'] ?? null;
 
-        if ($request->boolean('remove_avatar') && $user->avatar_path) {
-            Storage::disk('public')->delete($user->avatar_path);
-            $user->avatar_path = null;
-        }
+        $currentAvatarPath = is_string($user->avatar_path) ? trim($user->avatar_path) : '';
+        $currentAvatarPath = ($currentAvatarPath === '' || $currentAvatarPath === '0') ? null : $currentAvatarPath;
+        $newAvatarPath = null;
 
         if ($request->hasFile('avatar')) {
-            if ($user->avatar_path) {
-                Storage::disk('public')->delete($user->avatar_path);
+            $storedPath = $request->file('avatar')->store('avatars', 'public');
+            if (!is_string($storedPath) || trim($storedPath) === '') {
+                return response()->json([
+                    'message' => 'Не удалось сохранить аватар. Проверьте права на запись в storage и повторите попытку.',
+                ], 422);
             }
 
-            $user->avatar_path = $request->file('avatar')->store('avatars', 'public');
+            $newAvatarPath = trim($storedPath);
+        }
+
+        if (is_string($newAvatarPath) && $newAvatarPath !== '') {
+            if ($currentAvatarPath) {
+                Storage::disk('public')->delete($currentAvatarPath);
+            }
+            $user->avatar_path = $newAvatarPath;
+        } elseif ($request->boolean('remove_avatar')) {
+            if ($currentAvatarPath) {
+                Storage::disk('public')->delete($currentAvatarPath);
+            }
+            $user->avatar_path = null;
+        } elseif ((string) $user->avatar_path === '0') {
+            // Normalize corrupted value that can appear after failed store().
+            $user->avatar_path = null;
         }
 
         $user->save();

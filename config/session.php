@@ -2,6 +2,12 @@
 
 use Illuminate\Support\Str;
 
+$sessionCookieDefault = Str::slug(env('APP_NAME', 'laravel'), '_').'_session';
+$appUrlPort = parse_url((string) env('APP_URL', ''), PHP_URL_PORT);
+if ($appUrlPort !== null && $appUrlPort !== false && $appUrlPort !== '') {
+    $sessionCookieDefault .= '_' . $appUrlPort;
+}
+
 return [
 
     /*
@@ -128,8 +134,20 @@ return [
 
     'cookie' => env(
         'SESSION_COOKIE',
-        Str::slug(env('APP_NAME', 'laravel'), '_').'_session'
+        $sessionCookieDefault
     ),
+
+    /*
+    |--------------------------------------------------------------------------
+    | XSRF Cookie Name
+    |--------------------------------------------------------------------------
+    |
+    | Keeping this configurable allows local and Docker environments running
+    | on the same host to avoid clobbering each other's CSRF cookie values.
+    |
+    */
+
+    'xsrf_cookie' => env('XSRF_COOKIE', 'XSRF-TOKEN'),
 
     /*
     |--------------------------------------------------------------------------

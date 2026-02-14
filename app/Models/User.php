@@ -132,7 +132,7 @@ class User extends Authenticatable implements MustVerifyEmail
     {
         $path = (string) ($this->attributes['avatar_path'] ?? '');
 
-        if ($path === '') {
+        if ($path === '' || $path === '0') {
             return null;
         }
 
