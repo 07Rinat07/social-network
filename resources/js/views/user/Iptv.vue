@@ -549,6 +549,7 @@ export default {
             recentChannelIds: [],
             copiedChannelId: '',
             exitCleanupDone: false,
+            isSwitchingSource: false,
         }
     },
 
@@ -1019,6 +1020,10 @@ export default {
             }
 
             if (nextUrl === '') {
+                if (this.isSwitchingSource) {
+                    return
+                }
+
                 this.stopServerTranscodeSession()
                 this.stopServerProxySession()
                 this.stopServerRelaySession()
@@ -1108,6 +1113,36 @@ export default {
             this.stopServerRelaySession({
                 useKeepalive: Boolean(options?.useKeepalive),
             })
+        },
+
+        async stopPlaybackForSourceSwitch() {
+            this.isSwitchingSource = true
+
+            try {
+                await Promise.allSettled([
+                    this.stopServerTranscodeSession({ preserveMode: true, preserveError: true }),
+                    this.stopServerProxySession({ preserveMode: true, preserveError: true }),
+                    this.stopServerRelaySession({ preserveMode: true, preserveError: true }),
+                ])
+
+                this.currentChannelId = ''
+                this.selectedQuality = -1
+                this.qualityOptions = []
+                this.playerError = ''
+                this.playerStatus = 'idle'
+                this.playerStatusMessage = ''
+                this.playerDiagnostics = null
+                this.videoMeta = {
+                    width: 0,
+                    height: 0,
+                }
+                this.compatRecoveryState = {
+                    sourceUrl: '',
+                    attempts: 0,
+                }
+            } finally {
+                this.isSwitchingSource = false
+            }
         },
 
         resolveCsrfToken() {
@@ -2413,6 +2448,7 @@ export default {
                 return
             }
 
+            await this.stopPlaybackForSourceSwitch()
             this.isLoadingPlaylist = true
             this.playlistError = ''
 
@@ -2446,6 +2482,7 @@ export default {
                 return
             }
 
+            await this.stopPlaybackForSourceSwitch()
             this.isLoadingPlaylist = true
             this.playlistError = ''
 
@@ -2463,7 +2500,7 @@ export default {
             }
         },
 
-        playDirectStream() {
+        async playDirectStream() {
             const url = String(this.directStreamUrl || '').trim()
 
             if (!this.isHttpUrl(url) && !this.isHttpsUrl(url)) {
@@ -2471,6 +2508,7 @@ export default {
                 return
             }
 
+            await this.stopPlaybackForSourceSwitch()
             this.playlistError = ''
 
             const channel = this.createChannel({

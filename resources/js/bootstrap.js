@@ -8,8 +8,19 @@ window.axios = axios;
 
 window.axios.defaults.headers.common['X-Requested-With'] = 'XMLHttpRequest';
 window.axios.defaults.withCredentials = true;
-window.axios.defaults.xsrfCookieName = import.meta.env.VITE_XSRF_COOKIE_NAME ?? 'XSRF-TOKEN';
+const runtimeXsrfCookieName = typeof document !== 'undefined'
+    ? String(document.querySelector('meta[name="xsrf-cookie"]')?.getAttribute('content') ?? '').trim()
+    : '';
+const envXsrfCookieName = String(import.meta.env.VITE_XSRF_COOKIE_NAME ?? '').trim();
+const csrfToken = typeof document !== 'undefined'
+    ? String(document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') ?? '').trim()
+    : '';
+
+window.axios.defaults.xsrfCookieName = runtimeXsrfCookieName || envXsrfCookieName || 'XSRF-TOKEN';
 window.axios.defaults.xsrfHeaderName = 'X-XSRF-TOKEN';
+if (csrfToken !== '') {
+    window.axios.defaults.headers.common['X-CSRF-TOKEN'] = csrfToken;
+}
 
 window.Pusher = Pusher;
 window.Echo = null;

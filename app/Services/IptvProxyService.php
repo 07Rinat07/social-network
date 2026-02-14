@@ -7,6 +7,7 @@ use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Str;
 use InvalidArgumentException;
 use RuntimeException;
+use Throwable;
 
 class IptvProxyService
 {
@@ -147,19 +148,26 @@ class IptvProxyService
         $origin = $this->originFromUrl($url);
         $referer = $origin !== '' ? rtrim($origin, '/') . '/' : '';
 
-        $response = Http::timeout(20)
-            ->retry(2, 300)
-            ->accept('*/*')
-            ->withHeaders([
-                'User-Agent' => 'SolidSocial-IPTV-Proxy/1.0',
-                'Accept-Language' => 'ru,en-US;q=0.9,en;q=0.8',
-                'Referer' => $referer,
-                'Origin' => $origin,
-            ])
-            ->get($url);
+        try {
+            $response = Http::timeout(20)
+                ->retry(2, 300, null, false)
+                ->accept('*/*')
+                ->withHeaders([
+                    'User-Agent' => 'SolidSocial-IPTV-Proxy/1.0',
+                    'Accept-Language' => 'ru,en-US;q=0.9,en;q=0.8',
+                    'Referer' => $referer,
+                    'Origin' => $origin,
+                ])
+                ->get($url);
+        } catch (Throwable $exception) {
+            throw new RuntimeException('IPTV-прокси не смог получить ресурс потока.', 0, $exception);
+        }
 
         if (!$response->ok()) {
-            throw new RuntimeException('IPTV-прокси не смог получить ресурс потока.');
+            throw new RuntimeException(sprintf(
+                'IPTV-прокси не смог получить ресурс потока (HTTP %d).',
+                $response->status()
+            ));
         }
 
         return $response;

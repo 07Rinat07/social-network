@@ -5,6 +5,7 @@ namespace Tests\Feature;
 use App\Models\User;
 use App\Services\IptvProxyService;
 use App\Services\IptvTranscodeService;
+use Illuminate\Http\Client\RequestException;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Http;
 use Laravel\Sanctum\Sanctum;
@@ -461,6 +462,26 @@ class IptvFeatureTest extends TestCase
         $response
             ->assertStatus(404)
             ->assertJsonPath('message', 'Прокси-сегмент не найден или истек.');
+    }
+
+    public function test_proxy_service_throws_runtime_exception_for_upstream_http_errors(): void
+    {
+        Http::fake([
+            'https://iptv.example.com/*' => Http::response('not found', 404),
+        ]);
+
+        /** @var IptvProxyService $service */
+        $service = app(IptvProxyService::class);
+        $session = $service->startSession('https://iptv.example.com/channel.m3u8');
+
+        try {
+            $service->getPlaylist($session['session_id']);
+            $this->fail('Expected RuntimeException was not thrown.');
+        } catch (RequestException $exception) {
+            $this->fail('RequestException must be converted into RuntimeException.');
+        } catch (RuntimeException $exception) {
+            $this->assertStringContainsString('IPTV-прокси не смог получить ресурс потока', $exception->getMessage());
+        }
     }
 
     public function test_transcode_stop_returns_success_for_unknown_session(): void
