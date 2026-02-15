@@ -209,7 +209,7 @@ export const runtimeTextMap = {
     'Загрузка': 'Loading',
     'Загрузка потока...': 'Loading stream...',
     'Загрузка...': 'Loading...',
-    'Зарубежные каналы': 'International channels',
+    'ТВ с русской озвучкой': 'TV with Russian audio',
     'Звук': 'Sound',
     'Идет звук, но видеокадры не отображаются. Попробуйте совместимый режим FFmpeg или другой канал.': 'Audio is playing, but no video frames are shown. Try FFmpeg compatibility mode or another channel.',
     'Идёт запись голосового сообщения...': 'Recording voice message...',

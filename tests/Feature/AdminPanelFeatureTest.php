@@ -8,6 +8,8 @@ use App\Models\Conversation;
 use App\Models\ConversationMessage;
 use App\Models\ConversationMessageAttachment;
 use App\Models\FeedbackMessage;
+use App\Models\IptvSavedChannel;
+use App\Models\IptvSavedPlaylist;
 use App\Models\LikedPost;
 use App\Models\Post;
 use App\Models\PostImage;
@@ -747,6 +749,23 @@ class AdminPanelFeatureTest extends TestCase
             'body' => 'Victim message',
         ]);
 
+        IptvSavedPlaylist::query()->create([
+            'user_id' => $victim->id,
+            'name' => 'Victim IPTV list',
+            'source_url' => 'https://iptv.example.com/victim-list.m3u',
+            'source_url_hash' => hash('sha256', 'https://iptv.example.com/victim-list.m3u'),
+            'channels_count' => 55,
+        ]);
+
+        IptvSavedChannel::query()->create([
+            'user_id' => $victim->id,
+            'name' => 'Victim IPTV channel',
+            'stream_url' => 'https://stream.example.com/victim.m3u8',
+            'stream_url_hash' => hash('sha256', 'https://stream.example.com/victim.m3u8'),
+            'group_title' => 'General',
+            'logo_url' => 'https://img.example.com/victim.png',
+        ]);
+
         Sanctum::actingAs($admin);
 
         $response = $this->deleteJson("/api/admin/users/{$victim->id}");
@@ -765,6 +784,8 @@ class AdminPanelFeatureTest extends TestCase
         $this->assertDatabaseMissing('subscriber_followings', ['following_id' => $victim->id]);
         $this->assertDatabaseMissing('conversation_messages', ['user_id' => $victim->id]);
         $this->assertDatabaseMissing('conversations', ['id' => $directConversation->id]);
+        $this->assertDatabaseMissing('iptv_saved_playlists', ['user_id' => $victim->id]);
+        $this->assertDatabaseMissing('iptv_saved_channels', ['user_id' => $victim->id]);
         $this->assertDatabaseHas('feedback_messages', [
             'id' => $feedback->id,
             'user_id' => null,

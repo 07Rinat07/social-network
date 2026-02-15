@@ -497,8 +497,7 @@ export default {
             this.destroyHls()
             this.destroyDash()
             this.destroyMpegts()
-            video.removeAttribute('src')
-            video.load()
+            this.clearVideoElementSource()
 
             if (sourceUrl === '') {
                 this.player.source = {

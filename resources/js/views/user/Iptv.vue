@@ -45,10 +45,116 @@
                 </div>
             </form>
 
+            <div class="iptv-library-box">
+                <div class="iptv-seed-head">
+                    <strong>{{ $t('iptv.savedTitle') }}</strong>
+                    <small class="muted">{{ $t('iptv.savedCounts', { playlists: savedPlaylistSources.length, channels: savedChannelSources.length }) }}</small>
+                </div>
+
+                <div class="iptv-library-actions">
+                    <button class="btn btn-outline btn-sm" type="button" :disabled="isLoadingPlaylist || isLoadingSavedLibrary || isImportingSavedLibrary" @click="saveCurrentPlaylistSource">
+                        {{ $t('iptv.savePlaylist') }}
+                    </button>
+                    <button class="btn btn-outline btn-sm" type="button" :disabled="isLoadingPlaylist || isLoadingSavedLibrary || isImportingSavedLibrary || !currentChannel" @click="saveCurrentChannelSource">
+                        {{ $t('iptv.saveChannel') }}
+                    </button>
+                    <button class="btn btn-outline btn-sm" type="button" :disabled="savedPlaylistSources.length + savedChannelSources.length === 0 || isLoadingSavedLibrary || isImportingSavedLibrary" @click="exportSavedLibrary">
+                        {{ $t('iptv.savedExport') }}
+                    </button>
+                    <button class="btn btn-outline btn-sm" type="button" :disabled="isLoadingSavedLibrary || isImportingSavedLibrary" @click="triggerSavedLibraryImport">
+                        {{ isImportingSavedLibrary ? $t('common.loading') : $t('iptv.savedImport') }}
+                    </button>
+                    <input
+                        ref="savedLibraryImportInput"
+                        class="iptv-library-import-input"
+                        type="file"
+                        accept=".json,application/json,text/json,text/plain"
+                        @change="importSavedLibraryFromFile"
+                    >
+                </div>
+
+                <input
+                    class="input-field iptv-library-search"
+                    v-model.trim="savedLibraryQuery"
+                    type="search"
+                    :placeholder="$t('iptv.savedSearchPlaceholder')"
+                >
+
+                <p v-if="savedLibraryError" class="error-text">{{ savedLibraryError }}</p>
+                <p v-else-if="savedLibraryInfo" class="success-text">{{ savedLibraryInfo }}</p>
+                <p v-if="isLoadingSavedLibrary" class="muted iptv-library-empty">{{ $t('iptv.savedLoading') }}</p>
+
+                <div class="iptv-library-columns">
+                    <div class="iptv-library-group">
+                        <p class="iptv-library-group-title">{{ $t('iptv.savedPlaylistsTitle') }}</p>
+                        <div v-if="filteredSavedPlaylistSources.length > 0" class="iptv-custom-seed-list">
+                            <div v-for="item in filteredSavedPlaylistSources" :key="item.id" class="iptv-custom-seed-item iptv-library-item">
+                                <div class="iptv-custom-seed-main iptv-library-main">
+                                    <strong>{{ item.name }}</strong>
+                                    <small>{{ item.url }}</small>
+                                    <small>{{ $t('iptv.savedPlaylistMeta', { count: item.channelsCount, date: formatSavedTimestamp(item.savedAt) }) }}</small>
+                                </div>
+                                <div class="iptv-library-item-actions">
+                                    <button class="btn btn-outline btn-sm" type="button" :disabled="isLoadingPlaylist || isLoadingSavedLibrary" @click="loadSavedPlaylistSource(item.id)">
+                                        {{ $t('iptv.savedLoad') }}
+                                    </button>
+                                    <button class="btn btn-outline btn-sm" type="button" :disabled="isLoadingSavedLibrary || isImportingSavedLibrary" @click="renameSavedPlaylistSource(item.id)">
+                                        {{ $t('iptv.savedRename') }}
+                                    </button>
+                                    <button class="btn btn-outline btn-sm" type="button" @click="removeSavedPlaylistSource(item.id)">
+                                        {{ $t('common.delete') }}
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                        <p v-else-if="!isLoadingSavedLibrary && savedPlaylistSources.length === 0" class="muted iptv-library-empty">{{ $t('iptv.savedPlaylistsEmpty') }}</p>
+                        <p v-else-if="!isLoadingSavedLibrary" class="muted iptv-library-empty">{{ $t('iptv.savedSearchEmpty') }}</p>
+                    </div>
+
+                    <div class="iptv-library-group">
+                        <p class="iptv-library-group-title">{{ $t('iptv.savedChannelsTitle') }}</p>
+                        <div v-if="filteredSavedChannelSources.length > 0" class="iptv-custom-seed-list">
+                            <div v-for="item in filteredSavedChannelSources" :key="item.id" class="iptv-custom-seed-item iptv-library-item">
+                                <div class="iptv-custom-seed-main iptv-library-main">
+                                    <strong>{{ item.name }}</strong>
+                                    <small>{{ item.url }}</small>
+                                    <small>{{ item.group || $t('iptv.noMetadata') }} · {{ formatSavedTimestamp(item.savedAt) }}</small>
+                                </div>
+                                <div class="iptv-library-item-actions">
+                                    <button class="btn btn-outline btn-sm" type="button" :disabled="isLoadingPlaylist || isLoadingSavedLibrary" @click="playSavedChannelSource(item.id)">
+                                        {{ $t('iptv.savedOpenChannel') }}
+                                    </button>
+                                    <button class="btn btn-outline btn-sm" type="button" :disabled="isLoadingSavedLibrary || isImportingSavedLibrary" @click="renameSavedChannelSource(item.id)">
+                                        {{ $t('iptv.savedRename') }}
+                                    </button>
+                                    <button class="btn btn-outline btn-sm" type="button" @click="removeSavedChannelSource(item.id)">
+                                        {{ $t('common.delete') }}
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                        <p v-else-if="!isLoadingSavedLibrary && savedChannelSources.length === 0" class="muted iptv-library-empty">{{ $t('iptv.savedChannelsEmpty') }}</p>
+                        <p v-else-if="!isLoadingSavedLibrary" class="muted iptv-library-empty">{{ $t('iptv.savedSearchEmpty') }}</p>
+                    </div>
+                </div>
+            </div>
+
             <div class="iptv-seed-box">
                 <div class="iptv-seed-head">
                     <strong>{{ $t('iptv.seedsTitle') }}</strong>
                     <small class="muted">{{ $t('iptv.seedCounts', { builtin: builtinSeedSources.length, custom: customSeedSources.length }) }}</small>
+                </div>
+
+                <div class="iptv-seed-guide" role="note">
+                    <p class="iptv-seed-guide-title">{{ $t('iptv.seedGuideTitle') }}</p>
+                    <div class="iptv-seed-guide-line">
+                        <span class="iptv-seed-guide-arrow" aria-hidden="true">➜</span>
+                        <small>{{ $t('iptv.seedGuideClick') }}</small>
+                    </div>
+                    <div class="iptv-seed-guide-line">
+                        <span class="iptv-seed-guide-arrow iptv-seed-guide-arrow--delay" aria-hidden="true">➜</span>
+                        <small>{{ $t('iptv.seedGuideTap') }}</small>
+                    </div>
                 </div>
 
                 <div class="iptv-seed-grid">
@@ -65,25 +171,6 @@
                         <small>{{ seed.url }}</small>
                     </button>
                 </div>
-
-                <form class="iptv-seed-form" @submit.prevent="addCustomSeedSource">
-                    <input
-                        class="input-field"
-                        v-model.trim="newSeedName"
-                        type="text"
-                        maxlength="80"
-                        :placeholder="$t('iptv.newSeedNamePlaceholder')"
-                    >
-                    <input
-                        class="input-field"
-                        v-model.trim="newSeedUrl"
-                        type="url"
-                        placeholder="https://example.com/playlist.m3u"
-                    >
-                    <button class="btn btn-outline" type="submit" :disabled="isLoadingPlaylist">
-                        {{ $t('iptv.addSeed') }}
-                    </button>
-                </form>
 
                 <div v-if="customSeedSources.length > 0" class="iptv-custom-seed-list">
                     <div v-for="seed in customSeedSources" :key="`custom-${seed.id}`" class="iptv-custom-seed-item">
@@ -371,6 +458,7 @@
 
                     <IptvPlayer
                         ref="iptvPlayerRef"
+                        :key="playerRenderKey"
                         :src="activePlaybackUrl"
                         :autoplay="true"
                         :fit-mode="fitMode"
@@ -432,6 +520,38 @@
                 </div>
             </div>
         </section>
+
+        <div
+            v-if="savedNameDialog.visible"
+            class="iptv-save-modal"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="iptv-save-modal-title"
+            @click.self="cancelSavedItemName"
+        >
+            <div class="iptv-save-modal-card" @keydown.esc.prevent="cancelSavedItemName">
+                <p id="iptv-save-modal-title" class="iptv-save-modal-title">{{ savedNameDialog.title }}</p>
+                <input
+                    ref="savedNameInput"
+                    class="input-field"
+                    v-model="savedNameDialog.value"
+                    type="text"
+                    maxlength="120"
+                    :placeholder="$t('iptv.savedNamePlaceholder')"
+                    @keydown.enter.prevent="confirmSavedItemName"
+                    @keydown.esc.prevent="cancelSavedItemName"
+                >
+                <p v-if="savedNameDialog.error" class="error-text iptv-save-modal-error">{{ savedNameDialog.error }}</p>
+                <div class="iptv-save-modal-actions">
+                    <button class="btn btn-outline btn-sm" type="button" @click="cancelSavedItemName">
+                        {{ $t('iptv.savedNameCancel') }}
+                    </button>
+                    <button class="btn btn-primary btn-sm" type="button" @click="confirmSavedItemName">
+                        {{ $t('iptv.savedNameConfirm') }}
+                    </button>
+                </div>
+            </div>
+        </div>
     </div>
 </template>
 
@@ -442,6 +562,12 @@ const IPTV_STATE_STORAGE_KEY = 'solid-social:iptv-player-state:v3'
 const IPTV_CUSTOM_SEEDS_STORAGE_KEY = 'solid-social:iptv-custom-seeds:v1'
 const IPTV_RECENT_LIMIT = 40
 const IPTV_CUSTOM_SEEDS_LIMIT = 60
+const IPTV_MAX_PLAYLIST_TEXT_BYTES = 10 * 1024 * 1024
+const IPTV_MAX_PLAYLIST_LINES = 250000
+const IPTV_MAX_PARSED_CHANNELS = 8000
+const IPTV_MAX_SAVED_IMPORT_BYTES = 3 * 1024 * 1024
+const IPTV_MAX_SAVED_IMPORT_PLAYLISTS = 200
+const IPTV_MAX_SAVED_IMPORT_CHANNELS = 500
 const IPTV_BUILTIN_SEED_SOURCES = [
     {
         id: 'dimonovich-tv',
@@ -449,19 +575,19 @@ const IPTV_BUILTIN_SEED_SOURCES = [
         url: 'https://raw.githubusercontent.com/Dimonovich/TV/Dimonovich/FREE/TV',
     },
     {
-        id: 'dimonovich-camera',
-        nameKey: 'iptv.seedWebcams',
-        url: 'https://raw.githubusercontent.com/Dimonovich/TV/Dimonovich/FREE/CAMERA',
+        id: 'tv-collection',
+        nameKey: 'iptv.seedTvCollection',
+        url: 'https://raw.githubusercontent.com/Voxlist/voxlist/refs/heads/main/voxlist.m3u',
     },
     {
         id: 'dimonovich-zarub',
         nameKey: 'iptv.seedInternational',
-        url: 'https://raw.githubusercontent.com/Dimonovich/TV/Dimonovich/FREE/ZARUB',
+        url: 'https://raw.githubusercontent.com/naggdd/iptv/main/ru.m3u',
     },
     {
-        id: 'voxlist-tv',
-        nameKey: 'iptv.seedVoxlist',
-        url: 'https://raw.githubusercontent.com/Voxlist/voxlist/refs/heads/main/voxlist.m3u',
+        id: 'world-countries-priority',
+        nameKey: 'iptv.seedWorldCountries',
+        url: 'https://iptv-org.github.io/iptv/index.country.m3u',
     },
 ]
 
@@ -486,6 +612,21 @@ export default {
             newSeedName: '',
             newSeedUrl: '',
             customSeedSources: [],
+            currentPlaylistUrl: '',
+            savedPlaylistSources: [],
+            savedChannelSources: [],
+            savedLibraryInfo: '',
+            savedLibraryError: '',
+            isLoadingSavedLibrary: false,
+            isImportingSavedLibrary: false,
+            savedLibraryQuery: '',
+            savedNameDialog: {
+                visible: false,
+                title: '',
+                value: '',
+                error: '',
+            },
+            savedNameDialogResolver: null,
 
             viewMode: 'all',
             selectedGroup: 'all',
@@ -572,6 +713,30 @@ export default {
 
         seedSources() {
             return [...this.builtinSeedSources, ...this.customSeedSources]
+        },
+
+        filteredSavedPlaylistSources() {
+            const query = String(this.savedLibraryQuery || '').trim().toLowerCase()
+            if (query === '') {
+                return this.savedPlaylistSources
+            }
+
+            return this.savedPlaylistSources.filter((item) => {
+                const haystack = `${item.name} ${item.url}`.toLowerCase()
+                return haystack.includes(query)
+            })
+        },
+
+        filteredSavedChannelSources() {
+            const query = String(this.savedLibraryQuery || '').trim().toLowerCase()
+            if (query === '') {
+                return this.savedChannelSources
+            }
+
+            return this.savedChannelSources.filter((item) => {
+                const haystack = `${item.name} ${item.url} ${item.group}`.toLowerCase()
+                return haystack.includes(query)
+            })
         },
 
         favoriteIdSet() {
@@ -700,7 +865,12 @@ export default {
         groupOptions() {
             const groups = Array.from(new Set(
                 this.channels
-                    .map((channel) => String(channel.group || '').trim())
+                    .flatMap((channel) => (
+                        Array.isArray(channel.groupTags) && channel.groupTags.length > 0
+                            ? channel.groupTags
+                            : this.resolveChannelGroups(channel.group).tags
+                    ))
+                    .map((group) => String(group || '').trim())
                     .filter((group) => group !== '')
             ))
 
@@ -719,8 +889,14 @@ export default {
             const query = this.searchQuery.toLowerCase()
 
             let result = this.channels.filter((channel) => {
-                if (this.selectedGroup !== 'all' && channel.group !== this.selectedGroup) {
-                    return false
+                if (this.selectedGroup !== 'all') {
+                    const channelGroups = Array.isArray(channel.groupTags) && channel.groupTags.length > 0
+                        ? channel.groupTags
+                        : this.resolveChannelGroups(channel.group).tags
+
+                    if (!channelGroups.includes(this.selectedGroup)) {
+                        return false
+                    }
                 }
 
                 if (this.secureOnly && !channel.isSecure) {
@@ -770,7 +946,13 @@ export default {
             }
 
             return result.sort((a, b) => {
-                const groupCompare = String(a.group || '').localeCompare(String(b.group || ''), 'ru')
+                const groupA = Array.isArray(a.groupTags) && a.groupTags.length > 0
+                    ? a.groupTags[0]
+                    : String(a.group || '')
+                const groupB = Array.isArray(b.groupTags) && b.groupTags.length > 0
+                    ? b.groupTags[0]
+                    : String(b.group || '')
+                const groupCompare = String(groupA).localeCompare(String(groupB), 'ru')
                 if (groupCompare !== 0) {
                     return groupCompare
                 }
@@ -818,6 +1000,13 @@ export default {
             }
 
             return dictionary[this.playbackMode] || this.$t('iptv.modeDirect')
+        },
+
+        playerRenderKey() {
+            const channelId = String(this.currentChannelId || 'no-channel')
+            const source = String(this.activePlaybackUrl || 'no-source')
+            const mode = String(this.playbackMode || 'direct')
+            return `${channelId}::${mode}::${source}`
         },
 
         videoMetaLabel() {
@@ -1048,6 +1237,7 @@ export default {
         this.preferHttpsUpgrade = this.isPageHttps
         this.hideListLogosOnMobile = this.isMobileViewport()
         this.loadCustomSeedSources()
+        this.loadSavedLibrarySources()
         this.loadPersistedState()
 
         this.loadTranscodeCapabilities()
@@ -1058,6 +1248,7 @@ export default {
     },
 
     beforeUnmount() {
+        this.closeSavedNameDialog(null)
         this.teardownPlaybackOnExit()
         window.removeEventListener('pagehide', this.handlePageHide)
         window.removeEventListener('beforeunload', this.handleBeforeUnload)
@@ -1067,6 +1258,7 @@ export default {
     },
 
     beforeRouteLeave(_to, _from, next) {
+        this.closeSavedNameDialog(null)
         this.teardownPlaybackOnExit()
         next()
     },
@@ -1946,6 +2138,574 @@ export default {
             }
         },
 
+        async loadSavedLibrarySources() {
+            this.isLoadingSavedLibrary = true
+
+            try {
+                const response = await axios.get('/api/iptv/saved')
+                const payload = response.data?.data || {}
+
+                const playlists = Array.isArray(payload.playlists) ? payload.playlists : []
+                const channels = Array.isArray(payload.channels) ? payload.channels : []
+
+                this.savedPlaylistSources = playlists
+                    .map((item) => this.normalizeSavedPlaylistItem(item))
+                    .filter(Boolean)
+
+                this.savedChannelSources = channels
+                    .map((item) => this.normalizeSavedChannelItem(item))
+                    .filter(Boolean)
+
+                if (this.savedLibraryError !== '') {
+                    this.savedLibraryError = ''
+                }
+            } catch (error) {
+                this.savedLibraryError = error.response?.data?.message || this.$t('iptv.savedLoadFailed')
+            } finally {
+                this.isLoadingSavedLibrary = false
+            }
+        },
+
+        normalizeSavedPlaylistItem(item) {
+            const url = String(item?.url || item?.source_url || '').trim()
+            if (!this.isHttpUrl(url) && !this.isHttpsUrl(url)) {
+                return null
+            }
+
+            const channelsCount = Number(item?.channels_count ?? item?.channelsCount ?? 0)
+
+            return {
+                id: String(item?.id || ''),
+                name: String(item?.name || this.guessSeedName(url)).trim().slice(0, 120),
+                url,
+                channelsCount: Number.isFinite(channelsCount) && channelsCount > 0 ? Math.floor(channelsCount) : 0,
+                savedAt: String(item?.updated_at || item?.savedAt || '').trim(),
+            }
+        },
+
+        normalizeSavedChannelItem(item) {
+            const url = String(item?.url || item?.stream_url || '').trim()
+            if (!this.isHttpUrl(url) && !this.isHttpsUrl(url)) {
+                return null
+            }
+
+            return {
+                id: String(item?.id || ''),
+                name: String(item?.name || this.$t('iptv.untitledChannel')).trim().slice(0, 120),
+                url,
+                group: String(item?.group || item?.group_title || '').trim().slice(0, 160),
+                logo: this.normalizeLogoUrl(item?.logo),
+                savedAt: String(item?.updated_at || item?.savedAt || '').trim(),
+            }
+        },
+
+        clearSavedLibraryFeedback() {
+            this.savedLibraryInfo = ''
+            this.savedLibraryError = ''
+        },
+
+        exportSavedLibrary() {
+            this.clearSavedLibraryFeedback()
+
+            if (this.savedPlaylistSources.length === 0 && this.savedChannelSources.length === 0) {
+                this.savedLibraryError = this.$t('iptv.savedExportEmpty')
+                return
+            }
+
+            const payload = {
+                format: 'solid-social-iptv-saved-library',
+                version: 1,
+                exported_at: new Date().toISOString(),
+                playlists: this.savedPlaylistSources.map((item) => ({
+                    name: item.name,
+                    url: item.url,
+                    channels_count: item.channelsCount,
+                })),
+                channels: this.savedChannelSources.map((item) => ({
+                    name: item.name,
+                    url: item.url,
+                    group: item.group,
+                    logo: item.logo,
+                })),
+            }
+
+            const timestamp = new Date().toISOString().replace(/:/g, '-').replace(/\..+$/, '')
+            const filename = `iptv-saved-${timestamp}.json`
+
+            if (typeof window === 'undefined' || typeof document === 'undefined' || typeof Blob === 'undefined') {
+                this.savedLibraryError = this.$t('iptv.savedExportFailed')
+                return
+            }
+
+            try {
+                const blob = new Blob([JSON.stringify(payload, null, 2)], {
+                    type: 'application/json;charset=utf-8',
+                })
+
+                const objectUrl = window.URL?.createObjectURL ? window.URL.createObjectURL(blob) : ''
+                if (objectUrl === '') {
+                    throw new Error('Object URL unavailable')
+                }
+
+                const anchor = document.createElement('a')
+                anchor.href = objectUrl
+                anchor.download = filename
+                anchor.style.display = 'none'
+                document.body.appendChild(anchor)
+                anchor.click()
+                anchor.remove()
+                window.URL.revokeObjectURL(objectUrl)
+
+                this.savedLibraryInfo = this.$t('iptv.savedExportDone', {
+                    playlists: this.savedPlaylistSources.length,
+                    channels: this.savedChannelSources.length,
+                })
+            } catch (_error) {
+                this.savedLibraryError = this.$t('iptv.savedExportFailed')
+            }
+        },
+
+        triggerSavedLibraryImport() {
+            const input = this.$refs.savedLibraryImportInput
+            if (!input || typeof input.click !== 'function') {
+                return
+            }
+
+            input.value = ''
+            input.click()
+        },
+
+        buildSavedImportCollections(payload) {
+            if (!payload || typeof payload !== 'object') {
+                return {
+                    playlists: [],
+                    channels: [],
+                    skipped: 0,
+                }
+            }
+
+            const rawPlaylists = Array.isArray(payload.playlists) ? payload.playlists : []
+            const rawChannels = Array.isArray(payload.channels) ? payload.channels : []
+            const skippedByLimit = Math.max(0, rawPlaylists.length - IPTV_MAX_SAVED_IMPORT_PLAYLISTS)
+                + Math.max(0, rawChannels.length - IPTV_MAX_SAVED_IMPORT_CHANNELS)
+
+            const limitedPlaylists = rawPlaylists.slice(0, IPTV_MAX_SAVED_IMPORT_PLAYLISTS)
+            const limitedChannels = rawChannels.slice(0, IPTV_MAX_SAVED_IMPORT_CHANNELS)
+
+            const playlists = limitedPlaylists
+                .map((item) => this.normalizeSavedPlaylistItem(item))
+                .filter(Boolean)
+
+            const channels = limitedChannels
+                .map((item) => this.normalizeSavedChannelItem(item))
+                .filter(Boolean)
+
+            const skippedByInvalid = (limitedPlaylists.length - playlists.length) + (limitedChannels.length - channels.length)
+
+            return {
+                playlists,
+                channels,
+                skipped: skippedByLimit + skippedByInvalid,
+            }
+        },
+
+        normalizeSavedChannelsCount(value) {
+            const count = Number(value)
+            if (!Number.isFinite(count) || count <= 0) {
+                return 0
+            }
+
+            return Math.min(1000000, Math.floor(count))
+        },
+
+        async importSavedLibraryFromFile(event) {
+            const input = event?.target
+            const file = input?.files?.[0]
+            if (!file) {
+                return
+            }
+
+            this.clearSavedLibraryFeedback()
+
+            if (Number(file.size || 0) > IPTV_MAX_SAVED_IMPORT_BYTES) {
+                this.savedLibraryError = this.$t('iptv.savedImportTooLarge', {
+                    max: Math.floor(IPTV_MAX_SAVED_IMPORT_BYTES / (1024 * 1024)),
+                })
+                if (input) {
+                    input.value = ''
+                }
+                return
+            }
+
+            this.isImportingSavedLibrary = true
+
+            try {
+                const rawText = await file.text()
+                const parsedPayload = JSON.parse(String(rawText || ''))
+                const collections = this.buildSavedImportCollections(parsedPayload)
+
+                const totalForImport = collections.playlists.length + collections.channels.length
+                if (totalForImport === 0) {
+                    this.savedLibraryError = this.$t('iptv.savedImportNoItems')
+                    return
+                }
+
+                let importedPlaylists = 0
+                let importedChannels = 0
+                let skipped = collections.skipped
+
+                for (const playlist of collections.playlists) {
+                    try {
+                        await axios.post('/api/iptv/saved/playlists', {
+                            name: playlist.name,
+                            url: playlist.url,
+                            channels_count: this.normalizeSavedChannelsCount(playlist.channelsCount),
+                        })
+                        importedPlaylists += 1
+                    } catch (_error) {
+                        skipped += 1
+                    }
+                }
+
+                for (const channel of collections.channels) {
+                    try {
+                        await axios.post('/api/iptv/saved/channels', {
+                            name: channel.name,
+                            url: channel.url,
+                            group: channel.group,
+                            logo: channel.logo,
+                        })
+                        importedChannels += 1
+                    } catch (_error) {
+                        skipped += 1
+                    }
+                }
+
+                await this.loadSavedLibrarySources()
+
+                this.savedLibraryInfo = this.$t('iptv.savedImportDone', {
+                    playlists: importedPlaylists,
+                    channels: importedChannels,
+                    skipped,
+                })
+            } catch (_error) {
+                this.savedLibraryError = this.$t('iptv.savedImportInvalid')
+            } finally {
+                this.isImportingSavedLibrary = false
+                if (input) {
+                    input.value = ''
+                }
+            }
+        },
+
+        openSavedNameDialog(title, suggestedName) {
+            if (typeof this.savedNameDialogResolver === 'function') {
+                this.savedNameDialogResolver(null)
+                this.savedNameDialogResolver = null
+            }
+
+            this.savedNameDialog = {
+                visible: true,
+                title: String(title || ''),
+                value: String(suggestedName || '').trim().slice(0, 120),
+                error: '',
+            }
+
+            return new Promise((resolve) => {
+                this.savedNameDialogResolver = resolve
+                this.$nextTick(() => {
+                    this.focusSavedNameInput()
+                })
+            })
+        },
+
+        closeSavedNameDialog(result = null) {
+            const resolver = this.savedNameDialogResolver
+            this.savedNameDialogResolver = null
+
+            this.savedNameDialog.visible = false
+            this.savedNameDialog.title = ''
+            this.savedNameDialog.value = ''
+            this.savedNameDialog.error = ''
+
+            if (typeof resolver === 'function') {
+                resolver(result)
+            }
+        },
+
+        focusSavedNameInput() {
+            const input = this.$refs.savedNameInput
+            if (!input || typeof input.focus !== 'function') {
+                return
+            }
+
+            input.focus()
+            if (typeof input.select === 'function') {
+                input.select()
+            }
+        },
+
+        confirmSavedItemName() {
+            const normalizedName = String(this.savedNameDialog.value || '').trim().slice(0, 120)
+            if (normalizedName === '') {
+                this.savedNameDialog.error = this.$t('iptv.savedNameRequired')
+                this.$nextTick(() => {
+                    this.focusSavedNameInput()
+                })
+                return
+            }
+
+            this.closeSavedNameDialog(normalizedName)
+        },
+
+        cancelSavedItemName() {
+            this.closeSavedNameDialog(null)
+        },
+
+        resolveCurrentPlaylistUrl() {
+            const fromCurrent = String(this.currentPlaylistUrl || '').trim()
+            if (this.isHttpUrl(fromCurrent) || this.isHttpsUrl(fromCurrent)) {
+                return fromCurrent
+            }
+
+            const fromInput = String(this.playlistUrl || '').trim()
+            if (this.isHttpUrl(fromInput) || this.isHttpsUrl(fromInput)) {
+                return fromInput
+            }
+
+            return ''
+        },
+
+        async promptSavedItemName(promptText, suggestedName) {
+            const fallback = String(suggestedName || '').trim().slice(0, 120)
+
+            if (typeof window === 'undefined') {
+                return fallback
+            }
+
+            return this.openSavedNameDialog(String(promptText || ''), fallback)
+        },
+
+        async saveCurrentPlaylistSource() {
+            this.clearSavedLibraryFeedback()
+            const url = this.resolveCurrentPlaylistUrl()
+
+            if (url === '') {
+                this.savedLibraryError = this.$t('iptv.savedPlaylistNoUrl')
+                return
+            }
+
+            const resolvedName = String(this.sourceLabel || '').trim()
+            const sourceNotSelected = this.$t('iptv.sourceNotSelected')
+            const suggestedName = (resolvedName && resolvedName !== sourceNotSelected ? resolvedName : this.guessSeedName(url)).slice(0, 120)
+            const name = await this.promptSavedItemName(this.$t('iptv.savePlaylistPrompt'), suggestedName)
+            if (name === null) {
+                return
+            }
+            if (name === '') {
+                this.savedLibraryError = this.$t('iptv.savedNameRequired')
+                return
+            }
+
+            try {
+                await axios.post('/api/iptv/saved/playlists', {
+                    name,
+                    url,
+                    channels_count: this.channels.length,
+                })
+
+                await this.loadSavedLibrarySources()
+                this.savedLibraryInfo = this.$t('iptv.savedPlaylistAdded')
+            } catch (error) {
+                this.savedLibraryError = error.response?.data?.message || this.$t('iptv.savedSaveFailed')
+            }
+        },
+
+        async loadSavedPlaylistSource(savedId) {
+            const source = this.savedPlaylistSources.find((item) => item.id === savedId)
+            if (!source) {
+                return
+            }
+
+            this.clearSavedLibraryFeedback()
+            this.playlistUrl = source.url
+            await this.fetchPlaylistByUrl(source.url, source.name)
+        },
+
+        async removeSavedPlaylistSource(savedId) {
+            if (!savedId) {
+                return
+            }
+
+            this.clearSavedLibraryFeedback()
+
+            try {
+                await axios.delete(`/api/iptv/saved/playlists/${encodeURIComponent(savedId)}`)
+                this.savedPlaylistSources = this.savedPlaylistSources.filter((item) => item.id !== savedId)
+            } catch (error) {
+                this.savedLibraryError = error.response?.data?.message || this.$t('iptv.savedDeleteFailed')
+            }
+        },
+
+        async renameSavedPlaylistSource(savedId) {
+            const source = this.savedPlaylistSources.find((item) => item.id === savedId)
+            if (!source) {
+                return
+            }
+
+            this.clearSavedLibraryFeedback()
+
+            const name = await this.promptSavedItemName(this.$t('iptv.savedPlaylistRenamePrompt'), source.name)
+            if (name === null) {
+                return
+            }
+
+            try {
+                await axios.patch(`/api/iptv/saved/playlists/${encodeURIComponent(savedId)}`, {
+                    name,
+                })
+
+                await this.loadSavedLibrarySources()
+                this.savedLibraryInfo = this.$t('iptv.savedPlaylistRenamed')
+            } catch (error) {
+                this.savedLibraryError = error.response?.data?.message || this.$t('iptv.savedRenameFailed')
+            }
+        },
+
+        async saveCurrentChannelSource() {
+            this.clearSavedLibraryFeedback()
+            const channel = this.currentChannel
+            if (!channel) {
+                this.savedLibraryError = this.$t('iptv.savedChannelNoSelection')
+                return
+            }
+
+            const url = String(channel.url || '').trim()
+            if (!this.isHttpUrl(url) && !this.isHttpsUrl(url)) {
+                this.savedLibraryError = this.$t('iptv.savedChannelNoSelection')
+                return
+            }
+
+            const suggestedName = String(channel.name || this.$t('iptv.untitledChannel')).trim().slice(0, 120)
+            const name = await this.promptSavedItemName(this.$t('iptv.saveChannelPrompt'), suggestedName)
+            if (name === null) {
+                return
+            }
+            if (name === '') {
+                this.savedLibraryError = this.$t('iptv.savedNameRequired')
+                return
+            }
+
+            try {
+                await axios.post('/api/iptv/saved/channels', {
+                    name,
+                    url,
+                    group: String(channel.group || '').trim().slice(0, 160),
+                    logo: this.normalizeLogoUrl(channel.logo),
+                })
+
+                await this.loadSavedLibrarySources()
+                this.savedLibraryInfo = this.$t('iptv.savedChannelAdded')
+            } catch (error) {
+                this.savedLibraryError = error.response?.data?.message || this.$t('iptv.savedSaveFailed')
+            }
+        },
+
+        async playSavedChannelSource(savedId) {
+            const source = this.savedChannelSources.find((item) => item.id === savedId)
+            if (!source) {
+                return
+            }
+
+            this.clearSavedLibraryFeedback()
+            await this.stopPlaybackForSourceSwitch()
+            this.playlistError = ''
+
+            const channel = this.createChannel({
+                name: source.name,
+                url: source.url,
+                group: source.group,
+                logo: source.logo,
+            }, this.channels.length)
+
+            const withoutDuplicate = this.channels.filter((item) => item.id !== channel.id)
+            this.channels = [channel, ...withoutDuplicate]
+            this.currentChannelId = channel.id
+            this.sourceLabel = this.$t('iptv.savedChannelSource')
+            this.currentPlaylistUrl = ''
+            this.activeSeedId = ''
+            this.selectedGroup = 'all'
+            this.selectedQuality = -1
+            this.markChannelRecent(channel.id)
+            this.syncSavedIdsWithPlaylist()
+        },
+
+        async removeSavedChannelSource(savedId) {
+            if (!savedId) {
+                return
+            }
+
+            this.clearSavedLibraryFeedback()
+
+            try {
+                await axios.delete(`/api/iptv/saved/channels/${encodeURIComponent(savedId)}`)
+                this.savedChannelSources = this.savedChannelSources.filter((item) => item.id !== savedId)
+            } catch (error) {
+                this.savedLibraryError = error.response?.data?.message || this.$t('iptv.savedDeleteFailed')
+            }
+        },
+
+        async renameSavedChannelSource(savedId) {
+            const source = this.savedChannelSources.find((item) => item.id === savedId)
+            if (!source) {
+                return
+            }
+
+            this.clearSavedLibraryFeedback()
+
+            const name = await this.promptSavedItemName(this.$t('iptv.savedChannelRenamePrompt'), source.name)
+            if (name === null) {
+                return
+            }
+
+            try {
+                await axios.patch(`/api/iptv/saved/channels/${encodeURIComponent(savedId)}`, {
+                    name,
+                })
+
+                await this.loadSavedLibrarySources()
+                this.savedLibraryInfo = this.$t('iptv.savedChannelRenamed')
+            } catch (error) {
+                this.savedLibraryError = error.response?.data?.message || this.$t('iptv.savedRenameFailed')
+            }
+        },
+
+        formatSavedTimestamp(value) {
+            const timestamp = String(value || '').trim()
+            if (timestamp === '') {
+                return this.$t('iptv.savedUnknownTime')
+            }
+
+            const date = new Date(timestamp)
+            if (Number.isNaN(date.getTime())) {
+                return this.$t('iptv.savedUnknownTime')
+            }
+
+            const locale = String(this.$i18n?.locale || '').trim() || undefined
+
+            try {
+                return new Intl.DateTimeFormat(locale, {
+                    year: 'numeric',
+                    month: '2-digit',
+                    day: '2-digit',
+                    hour: '2-digit',
+                    minute: '2-digit',
+                }).format(date)
+            } catch (_error) {
+                return date.toLocaleString()
+            }
+        },
+
         findSeedById(seedId) {
             return this.seedSources.find((seed) => seed.id === seedId) || null
         },
@@ -2119,11 +2879,98 @@ export default {
             image.style.display = 'none'
         },
 
+        normalizeGroupToken(value) {
+            return String(value || '')
+                .replace(/\s+/g, ' ')
+                .trim()
+        },
+
+        translateGroupToken(value) {
+            const token = this.normalizeGroupToken(value)
+            if (token === '') {
+                return ''
+            }
+
+            const tokenKey = token.toLowerCase()
+            const groupLabelKeys = {
+                animation: 'groupAnimation',
+                classic: 'groupClassic',
+                comedy: 'groupComedy',
+                cooking: 'groupCooking',
+                culture: 'groupCulture',
+                documentary: 'groupDocumentary',
+                education: 'groupEducation',
+                entertainment: 'groupEntertainment',
+                family: 'groupFamily',
+                general: 'groupGeneral',
+                kids: 'groupKids',
+                movie: 'groupMovies',
+                movies: 'groupMovies',
+                music: 'groupMusic',
+                news: 'groupNews',
+                business: 'groupBusiness',
+                auto: 'groupAuto',
+                series: 'groupSeries',
+                sport: 'groupSports',
+                sports: 'groupSports',
+                travel: 'groupTravel',
+            }
+
+            const labelKey = groupLabelKeys[tokenKey]
+            if (!labelKey) {
+                return token
+            }
+
+            return this.$t(`iptv.${labelKey}`)
+        },
+
+        resolveChannelGroups(value) {
+            const rawValue = this.normalizeGroupToken(value)
+            if (rawValue === '') {
+                return {
+                    tags: [],
+                    label: '',
+                }
+            }
+
+            const pieces = rawValue
+                .split(/[;|,/]+/)
+                .map((piece) => this.translateGroupToken(piece))
+                .filter((piece) => piece !== '')
+
+            const uniqueTags = []
+            const seen = new Set()
+
+            for (const piece of pieces.length > 0 ? pieces : [rawValue]) {
+                const normalizedPiece = this.normalizeGroupToken(piece)
+                if (normalizedPiece === '') {
+                    continue
+                }
+
+                const normalizedKey = normalizedPiece.toLowerCase()
+                if (seen.has(normalizedKey)) {
+                    continue
+                }
+
+                seen.add(normalizedKey)
+                uniqueTags.push(normalizedPiece)
+            }
+
+            return {
+                tags: uniqueTags,
+                label: uniqueTags.join(' · '),
+            }
+        },
+
         channelMeta(channel) {
             const parts = []
 
-            if (channel.group) {
-                parts.push(channel.group)
+            const groupLabel = Array.isArray(channel.groupTags) && channel.groupTags.length > 0
+                ? channel.groupTags.join(' · ')
+                : this.resolveChannelGroups(channel.group).label
+
+            if (groupLabel) {
+                parts.push(groupLabel)
             }
 
             if (channel.domain) {
@@ -2463,6 +3310,7 @@ export default {
                 this.activeSeedId = matchedSeed?.id || ''
                 const resolvedSourceLabel = String(sourceLabel || matchedSeed?.name || normalizedUrl)
                 this.applyParsedChannels(playlist, resolvedSourceLabel)
+                this.currentPlaylistUrl = normalizedUrl
             } catch (error) {
                 this.playlistError = error.response?.data?.message || this.$t('iptv.playlistLoadFailed')
             } finally {
@@ -2482,6 +3330,16 @@ export default {
                 return
             }
 
+            if (Number(file.size || 0) > IPTV_MAX_PLAYLIST_TEXT_BYTES) {
+                this.playlistError = this.$t('iptv.playlistTooLarge', {
+                    max: Math.floor(IPTV_MAX_PLAYLIST_TEXT_BYTES / (1024 * 1024)),
+                })
+                if (input) {
+                    input.value = ''
+                }
+                return
+            }
+
             await this.stopPlaybackForSourceSwitch()
             this.isLoadingPlaylist = true
             this.playlistError = ''
@@ -2490,6 +3348,7 @@ export default {
                 const playlist = await file.text()
                 this.applyParsedChannels(playlist, file.name || this.$t('iptv.localFile'))
                 this.activeSeedId = ''
+                this.currentPlaylistUrl = ''
             } catch (_error) {
                 this.playlistError = this.$t('iptv.playlistReadFailed')
             } finally {
@@ -2522,6 +3381,7 @@ export default {
             this.channels = [channel, ...withoutDuplicate]
             this.currentChannelId = channel.id
             this.sourceLabel = this.$t('iptv.directLinkSource')
+            this.currentPlaylistUrl = ''
             this.activeSeedId = ''
             this.selectedGroup = 'all'
             this.selectedQuality = -1
@@ -2538,6 +3398,7 @@ export default {
             this.playlistError = ''
             this.searchQuery = ''
             this.sourceLabel = this.$t('iptv.sourceNotSelected')
+            this.currentPlaylistUrl = ''
             this.activeSeedId = ''
             this.selectedGroup = 'all'
             this.selectedQuality = -1
@@ -2556,6 +3417,15 @@ export default {
         },
 
         applyParsedChannels(playlistText, sourceLabel) {
+            const validationError = this.validatePlaylistPayload(playlistText)
+            if (validationError !== '') {
+                this.channels = []
+                this.currentChannelId = ''
+                this.playlistError = validationError
+                this.sourceLabel = sourceLabel || this.$t('iptv.sourceNotSelected')
+                return
+            }
+
             const parsedChannels = this.parseM3uPlaylist(playlistText)
 
             if (parsedChannels.length === 0) {
@@ -2618,6 +3488,12 @@ export default {
                     continue
                 }
 
+                if (this.isBlockedStreamUrl(line)) {
+                    pendingMeta = null
+                    pendingGroup = ''
+                    continue
+                }
+
                 const nextChannel = this.createChannel({
                     ...(pendingMeta || {}),
                     group: String(pendingMeta?.group || pendingGroup || ''),
@@ -2628,7 +3504,7 @@ export default {
                 pendingMeta = null
                 pendingGroup = ''
 
-                if (channels.length >= 2000) {
+                if (channels.length >= IPTV_MAX_PARSED_CHANNELS) {
                     break
                 }
             }
@@ -2670,17 +3546,81 @@ export default {
             const parsed = this.parseUrlParts(url)
             const name = String(meta?.name || '').trim() || this.$t('iptv.channelWithIndex', { index: index + 1 })
             const protocol = parsed.protocol
+            const resolvedGroups = this.resolveChannelGroups(meta?.group)
 
             return {
                 id: this.buildStableChannelId(url),
                 name,
                 url,
-                group: String(meta?.group || '').trim(),
+                group: resolvedGroups.label,
+                groupTags: resolvedGroups.tags,
                 logo: this.normalizeLogoUrl(meta?.logo),
                 domain: parsed.domain,
                 protocol,
                 isSecure: protocol === 'https',
             }
+        },
+
+        validatePlaylistPayload(playlistText) {
+            const normalized = String(playlistText || '').replace(/\r/g, '').trim()
+            if (normalized === '') {
+                return this.$t('iptv.noValidChannels')
+            }
+
+            const payloadBytes = this.utf8ByteLength(normalized)
+            if (payloadBytes > IPTV_MAX_PLAYLIST_TEXT_BYTES) {
+                return this.$t('iptv.playlistTooLarge', {
+                    max: Math.floor(IPTV_MAX_PLAYLIST_TEXT_BYTES / (1024 * 1024)),
+                })
+            }
+
+            const head = normalized.slice(0, 4096).toLowerCase()
+            if (
+                head.includes('<!doctype html')
+                || head.includes('<html')
+                || head.includes('<head')
+                || head.includes('<body')
+                || head.includes('<script')
+                || head.includes('<iframe')
+            ) {
+                return this.$t('iptv.playlistUnsafeContent')
+            }
+
+            const lines = normalized.split('\n')
+            if (lines.length > IPTV_MAX_PLAYLIST_LINES) {
+                return this.$t('iptv.playlistUnsafeContent')
+            }
+
+            let validStreamCount = 0
+            for (const rawLine of lines) {
+                const line = String(rawLine || '').trim()
+                if (line === '' || line.startsWith('#')) {
+                    continue
+                }
+
+                const lowered = line.toLowerCase()
+                if (
+                    lowered.startsWith('javascript:')
+                    || lowered.startsWith('data:')
+                    || lowered.startsWith('vbscript:')
+                    || lowered.startsWith('file:')
+                ) {
+                    return this.$t('iptv.playlistUnsafeLinks')
+                }
+
+                if ((this.isHttpUrl(line) || this.isHttpsUrl(line)) && !this.isBlockedStreamUrl(line)) {
+                    validStreamCount += 1
+                    if (validStreamCount >= 1) {
+                        break
+                    }
+                }
+            }
+
+            if (validStreamCount === 0) {
+                return this.$t('iptv.noValidChannels')
+            }
+
+            return ''
         },
 
         normalizeLogoUrl(value) {
@@ -2726,6 +3666,85 @@ export default {
                     protocol: '',
                 }
             }
+        },
+
+        utf8ByteLength(value) {
+            const text = String(value || '')
+            try {
+                if (typeof TextEncoder !== 'undefined') {
+                    return new TextEncoder().encode(text).length
+                }
+            } catch (_error) {
+                // fallback below
+            }
+
+            return text.length
+        },
+
+        isBlockedStreamUrl(value) {
+            try {
+                const parsed = new URL(String(value || '').trim())
+                const protocol = String(parsed.protocol || '').replace(':', '').toLowerCase()
+                if (!['http', 'https'].includes(protocol)) {
+                    return true
+                }
+
+                const host = String(parsed.hostname || '').toLowerCase()
+                if (host === '' || host === 'localhost' || host.endsWith('.local')) {
+                    return true
+                }
+
+                if (host === '::1' || host === '0:0:0:0:0:0:0:1') {
+                    return true
+                }
+
+                if (host.startsWith('fc') || host.startsWith('fd') || host.startsWith('fe80:')) {
+                    return true
+                }
+
+                const ipv4 = this.parseIpv4Tuple(host)
+                if (!ipv4) {
+                    return false
+                }
+
+                const [a, b] = ipv4
+                if (a === 10 || a === 127 || a === 0) {
+                    return true
+                }
+                if (a === 169 && b === 254) {
+                    return true
+                }
+                if (a === 172 && b >= 16 && b <= 31) {
+                    return true
+                }
+                if (a === 192 && b === 168) {
+                    return true
+                }
+                if (a === 100 && b >= 64 && b <= 127) {
+                    return true
+                }
+                if (a >= 224) {
+                    return true
+                }
+
+                return false
+            } catch (_error) {
+                return true
+            }
+        },
+
+        parseIpv4Tuple(host) {
+            const parts = String(host || '').split('.')
+            if (parts.length !== 4) {
+                return null
+            }
+
+            const numbers = parts.map((part) => Number(part))
+            if (numbers.some((part) => !Number.isInteger(part) || part < 0 || part > 255)) {
+                return null
+            }
+
+            return numbers
         },
 
         isHttpUrl(value) {

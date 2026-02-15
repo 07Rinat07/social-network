@@ -519,4 +519,208 @@ class IptvFeatureTest extends TestCase
             ->assertOk()
             ->assertJsonPath('message', 'Релейный режим остановлен.');
     }
+
+    public function test_user_can_store_list_and_delete_saved_iptv_library_items(): void
+    {
+        $user = User::factory()->create();
+        Sanctum::actingAs($user);
+
+        $savePlaylistResponse = $this->postJson('/api/iptv/saved/playlists', [
+            'name' => 'Мой список',
+            'url' => 'https://iptv.example.com/my-list.m3u',
+            'channels_count' => 320,
+        ]);
+
+        $savePlaylistResponse
+            ->assertStatus(201)
+            ->assertJsonPath('data.name', 'Мой список')
+            ->assertJsonPath('data.url', 'https://iptv.example.com/my-list.m3u')
+            ->assertJsonPath('data.channels_count', 320);
+
+        $this->assertDatabaseHas('iptv_saved_playlists', [
+            'user_id' => $user->id,
+            'name' => 'Мой список',
+            'source_url' => 'https://iptv.example.com/my-list.m3u',
+            'channels_count' => 320,
+        ]);
+
+        $saveChannelResponse = $this->postJson('/api/iptv/saved/channels', [
+            'name' => 'Новости 24',
+            'url' => 'https://stream.example.com/news24.m3u8',
+            'group' => 'Новости',
+            'logo' => 'https://img.example.com/news24.png',
+        ]);
+
+        $saveChannelResponse
+            ->assertStatus(201)
+            ->assertJsonPath('data.name', 'Новости 24')
+            ->assertJsonPath('data.url', 'https://stream.example.com/news24.m3u8')
+            ->assertJsonPath('data.group', 'Новости');
+
+        $this->assertDatabaseHas('iptv_saved_channels', [
+            'user_id' => $user->id,
+            'name' => 'Новости 24',
+            'stream_url' => 'https://stream.example.com/news24.m3u8',
+            'group_title' => 'Новости',
+            'logo_url' => 'https://img.example.com/news24.png',
+        ]);
+
+        $listResponse = $this->getJson('/api/iptv/saved');
+
+        $listResponse
+            ->assertOk()
+            ->assertJsonCount(1, 'data.playlists')
+            ->assertJsonCount(1, 'data.channels')
+            ->assertJsonPath('data.playlists.0.url', 'https://iptv.example.com/my-list.m3u')
+            ->assertJsonPath('data.channels.0.url', 'https://stream.example.com/news24.m3u8');
+
+        $playlistId = (int) $listResponse->json('data.playlists.0.id');
+        $channelId = (int) $listResponse->json('data.channels.0.id');
+
+        $deletePlaylistResponse = $this->deleteJson("/api/iptv/saved/playlists/{$playlistId}");
+        $deleteChannelResponse = $this->deleteJson("/api/iptv/saved/channels/{$channelId}");
+
+        $deletePlaylistResponse->assertOk();
+        $deleteChannelResponse->assertOk();
+
+        $this->assertDatabaseMissing('iptv_saved_playlists', [
+            'id' => $playlistId,
+            'user_id' => $user->id,
+        ]);
+        $this->assertDatabaseMissing('iptv_saved_channels', [
+            'id' => $channelId,
+            'user_id' => $user->id,
+        ]);
+    }
+
+    public function test_user_can_rename_saved_iptv_library_items(): void
+    {
+        $user = User::factory()->create();
+        Sanctum::actingAs($user);
+
+        $this->postJson('/api/iptv/saved/playlists', [
+            'name' => 'Старое имя списка',
+            'url' => 'https://iptv.example.com/rename-list.m3u',
+            'channels_count' => 22,
+        ])->assertStatus(201);
+
+        $this->postJson('/api/iptv/saved/channels', [
+            'name' => 'Старое имя канала',
+            'url' => 'https://stream.example.com/rename-channel.m3u8',
+            'group' => 'General',
+        ])->assertStatus(201);
+
+        $listResponse = $this->getJson('/api/iptv/saved')
+            ->assertOk();
+
+        $playlistId = (int) $listResponse->json('data.playlists.0.id');
+        $channelId = (int) $listResponse->json('data.channels.0.id');
+
+        $this->patchJson("/api/iptv/saved/playlists/{$playlistId}", [
+            'name' => 'Новое имя списка',
+        ])
+            ->assertOk()
+            ->assertJsonPath('message', 'Имя плейлиста обновлено.')
+            ->assertJsonPath('data.name', 'Новое имя списка');
+
+        $this->patchJson("/api/iptv/saved/channels/{$channelId}", [
+            'name' => 'Новое имя канала',
+        ])
+            ->assertOk()
+            ->assertJsonPath('message', 'Имя канала обновлено.')
+            ->assertJsonPath('data.name', 'Новое имя канала');
+
+        $this->assertDatabaseHas('iptv_saved_playlists', [
+            'id' => $playlistId,
+            'user_id' => $user->id,
+            'name' => 'Новое имя списка',
+        ]);
+        $this->assertDatabaseHas('iptv_saved_channels', [
+            'id' => $channelId,
+            'user_id' => $user->id,
+            'name' => 'Новое имя канала',
+        ]);
+
+        $this->patchJson("/api/iptv/saved/playlists/{$playlistId}", [
+            'name' => '   ',
+        ])
+            ->assertStatus(422)
+            ->assertJsonPath('message', 'Имя не должно быть пустым.');
+
+        $otherUser = User::factory()->create();
+        Sanctum::actingAs($otherUser);
+
+        $this->patchJson("/api/iptv/saved/playlists/{$playlistId}", [
+            'name' => 'Чужой список',
+        ])->assertStatus(404);
+
+        $this->patchJson("/api/iptv/saved/channels/{$channelId}", [
+            'name' => 'Чужой канал',
+        ])->assertStatus(404);
+    }
+
+    public function test_saved_iptv_library_isolated_by_user(): void
+    {
+        $firstUser = User::factory()->create();
+        $secondUser = User::factory()->create();
+
+        Sanctum::actingAs($firstUser);
+        $this->postJson('/api/iptv/saved/playlists', [
+            'name' => 'First user list',
+            'url' => 'https://iptv.example.com/first.m3u',
+            'channels_count' => 10,
+        ])->assertStatus(201);
+
+        Sanctum::actingAs($secondUser);
+        $this->postJson('/api/iptv/saved/playlists', [
+            'name' => 'Second user list',
+            'url' => 'https://iptv.example.com/second.m3u',
+            'channels_count' => 20,
+        ])->assertStatus(201);
+
+        $response = $this->getJson('/api/iptv/saved');
+
+        $response
+            ->assertOk()
+            ->assertJsonCount(1, 'data.playlists')
+            ->assertJsonPath('data.playlists.0.name', 'Second user list');
+    }
+
+    public function test_saved_iptv_library_deleted_with_user(): void
+    {
+        $user = User::factory()->create();
+        Sanctum::actingAs($user);
+
+        $this->postJson('/api/iptv/saved/playlists', [
+            'name' => 'Delete with user',
+            'url' => 'https://iptv.example.com/delete-me.m3u',
+            'channels_count' => 77,
+        ])->assertStatus(201);
+
+        $this->postJson('/api/iptv/saved/channels', [
+            'name' => 'Delete channel with user',
+            'url' => 'https://stream.example.com/delete-me.m3u8',
+            'group' => 'General',
+        ])->assertStatus(201);
+
+        $this->assertDatabaseHas('iptv_saved_playlists', [
+            'user_id' => $user->id,
+            'source_url' => 'https://iptv.example.com/delete-me.m3u',
+        ]);
+        $this->assertDatabaseHas('iptv_saved_channels', [
+            'user_id' => $user->id,
+            'stream_url' => 'https://stream.example.com/delete-me.m3u8',
+        ]);
+
+        $user->delete();
+
+        $this->assertDatabaseMissing('iptv_saved_playlists', [
+            'user_id' => $user->id,
+            'source_url' => 'https://iptv.example.com/delete-me.m3u',
+        ]);
+        $this->assertDatabaseMissing('iptv_saved_channels', [
+            'user_id' => $user->id,
+            'stream_url' => 'https://stream.example.com/delete-me.m3u8',
+        ]);
+    }
 }

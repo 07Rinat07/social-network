@@ -116,6 +116,16 @@ class User extends Authenticatable implements MustVerifyEmail
         return $this->hasMany(UserBlock::class, 'blocked_user_id', 'id');
     }
 
+    public function iptvSavedPlaylists(): HasMany
+    {
+        return $this->hasMany(IptvSavedPlaylist::class, 'user_id', 'id');
+    }
+
+    public function iptvSavedChannels(): HasMany
+    {
+        return $this->hasMany(IptvSavedChannel::class, 'user_id', 'id');
+    }
+
     public function isAdmin(): bool
     {
         return (bool) $this->is_admin;

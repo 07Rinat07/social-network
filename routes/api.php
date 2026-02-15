@@ -76,6 +76,17 @@ Route::middleware(['auth:sanctum', 'verified'])->group(function () {
     Route::post('/radio/favorites', [RadioController::class, 'storeFavorite']);
     Route::delete('/radio/favorites/{stationUuid}', [RadioController::class, 'destroyFavorite']);
     Route::post('/iptv/playlist/fetch', [IptvController::class, 'fetchPlaylist']);
+    Route::get('/iptv/saved', [IptvController::class, 'savedLibrary']);
+    Route::post('/iptv/saved/playlists', [IptvController::class, 'storeSavedPlaylist']);
+    Route::patch('/iptv/saved/playlists/{playlistId}', [IptvController::class, 'updateSavedPlaylist'])
+        ->whereNumber('playlistId');
+    Route::delete('/iptv/saved/playlists/{playlistId}', [IptvController::class, 'destroySavedPlaylist'])
+        ->whereNumber('playlistId');
+    Route::post('/iptv/saved/channels', [IptvController::class, 'storeSavedChannel']);
+    Route::patch('/iptv/saved/channels/{channelId}', [IptvController::class, 'updateSavedChannel'])
+        ->whereNumber('channelId');
+    Route::delete('/iptv/saved/channels/{channelId}', [IptvController::class, 'destroySavedChannel'])
+        ->whereNumber('channelId');
     Route::post('/iptv/proxy/start', [IptvController::class, 'startProxy'])->name('api.iptv.proxy.start');
     Route::delete('/iptv/proxy/{session}', [IptvController::class, 'stopProxy'])->name('api.iptv.proxy.stop');
     Route::get('/iptv/transcode/capabilities', [IptvController::class, 'transcodeCapabilities'])->name('api.iptv.transcode.capabilities');
