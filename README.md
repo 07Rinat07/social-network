@@ -18,6 +18,7 @@ SPA-социальная сеть на `Laravel + Vue` с realtime-чатами,
 - [Переменные окружения](#переменные-окружения)
 - [Тестирование](#тестирование)
 - [API ориентиры](#api-ориентиры)
+- [Swagger / OpenAPI](#swagger--openapi)
 - [Тестовые аккаунты](#тестовые-аккаунты)
 - [Частые проблемы](#частые-проблемы)
 - [Деплой в production](#деплой-в-production)
@@ -58,8 +59,10 @@ SPA-социальная сеть на `Laravel + Vue` с realtime-чатами,
 
 ### Радио
 - Поиск станций через Radio Browser API.
-- Избранные станции пользователя.
-- Отдельный сценарий распределения избранного админа (команда).
+- Встроенные подборки станций по категориям с проверкой доступности потоков.
+- Блок "Сейчас играет" со статусом воспроизведения, временем сессии и метаданными станции.
+- Избранные станции пользователя с мини-контролом текущего трека (play/pause/seek для не-live потоков).
+- Одноразовая команда распределения избранного админов всем не-админам: `php artisan radio:distribute-admin-favorites` (`--dry-run` для проверки).
 
 ### Главная страница и контент
 - Медиа-карусель.
@@ -92,7 +95,7 @@ SPA-социальная сеть на `Laravel + Vue` с realtime-чатами,
 | Feed / posts | Публикации, лайки, комментарии, репосты, discover | `app/Http/Controllers/PostController.php` |
 | Realtime chat | Диалоги, presence, typing, вложения, архивы | `app/Http/Controllers/ChatController.php`, `routes/channels.php` |
 | IPTV | Загрузка плейлистов, proxy/transcode/relay сессии | `app/Http/Controllers/IptvController.php`, `app/Services/Iptv*` |
-| Radio | Поиск станций и избранное | `app/Http/Controllers/RadioController.php` |
+| Radio | Поиск, подборки, воспроизведение, избранное и их распределение | `app/Http/Controllers/RadioController.php`, `app/Console/Commands/DistributeAdminRadioFavorites.php` |
 | Админка | Модерация пользователей/контента/обращений, настройки сайта | `/api/admin/*`, `app/Http/Controllers/AdminController.php` |
 | Контент главной | RU/EN контент, world overview (время/погода) | `app/Http/Controllers/SiteSettingController.php`, `app/Services/WorldOverviewService.php` |
 | i18n + SEO | RU/EN маршруты, runtime перевод, SEO мета | `resources/js/router/index.js`, `resources/js/i18n` |
@@ -217,6 +220,7 @@ docker/
 ### Полезные Docker команды
 - Миграции вручную: `docker compose exec app php artisan migrate --seed`
 - Сиды: `docker compose exec app php artisan db:seed`
+- Проверка раздачи радио-избранного админа: `docker compose exec app php artisan radio:distribute-admin-favorites --dry-run`
 - Тесты: `docker compose --profile test run --rm test`
 - Логи: `docker compose logs --tail=100 app`
 - Остановка: `docker compose down`
@@ -238,7 +242,7 @@ docker/
 ### Ключевые env-переменные
 - Приложение: `APP_ENV`, `APP_DEBUG`, `APP_URL`
 - База: `DB_CONNECTION`, `DB_HOST`, `DB_PORT`, `DB_DATABASE`, `DB_USERNAME`, `DB_PASSWORD`
-- Безопасность/сессия: `SANCTUM_STATEFUL_DOMAINS`, `CORS_ALLOWED_ORIGINS`, `SESSION_COOKIE`, `XSRF_COOKIE`
+- Безопасность/сессия: `SANCTUM_STATEFUL_DOMAINS`, `CORS_ALLOWED_ORIGINS`, `SESSION_COOKIE`, `XSRF_COOKIE`, `VITE_XSRF_COOKIE_NAME`
 - Realtime: `REVERB_*`, `VITE_REVERB_*`
 - IPTV: `IPTV_FFMPEG_BIN`
 - Radio API: `RADIO_BROWSER_BASE_URL`
@@ -264,15 +268,21 @@ docker/
 - `GET /api/site/world-overview?locale=ru|en`
 
 ### Авторизованные + verified
-- `GET /api/chats`, `POST /api/chats/{conversation}/messages`
-- `GET /api/radio/stations`, `GET /api/radio/favorites`
-- `POST /api/iptv/playlist/fetch`
+- Чаты: `GET /api/chats`, `GET /api/chats/unread-summary`, `GET /api/chats/{conversation}/messages`, `POST /api/chats/{conversation}/messages`
+- Радио: `GET /api/radio/stations`, `GET /api/radio/favorites`, `POST /api/radio/favorites`, `DELETE /api/radio/favorites/{stationUuid}`
+- IPTV библиотека и импорт: `POST /api/iptv/playlist/fetch`, `GET /api/iptv/saved`, `POST /api/iptv/saved/playlists`, `PATCH /api/iptv/saved/playlists/{playlistId}`, `DELETE /api/iptv/saved/playlists/{playlistId}`, `POST /api/iptv/saved/channels`, `PATCH /api/iptv/saved/channels/{channelId}`, `DELETE /api/iptv/saved/channels/{channelId}`
 - `POST /api/iptv/proxy/start`, `DELETE /api/iptv/proxy/{session}`
 - `POST /api/iptv/transcode/start`, `DELETE /api/iptv/transcode/{session}`
 - `POST /api/iptv/relay/start`, `DELETE /api/iptv/relay/{session}`
 
 ### Админские (`/api/admin/*`)
 - Пользователи, посты, комментарии, обращения, диалоги, блокировки, настройки сайта.
+
+## Swagger / OpenAPI
+- Swagger UI: `GET /api/documentation`
+- OpenAPI JSON: `GET /docs/api-docs.json`
+- Генерация документации: `php artisan l5-swagger:generate`
+- Базовые аннотации: `app/OpenApi/OpenApiSpec.php`
 
 ## Тестовые аккаунты
 Доступны после `php artisan db:seed`:

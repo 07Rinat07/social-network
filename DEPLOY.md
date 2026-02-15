@@ -120,6 +120,15 @@ php artisan view:cache
 php artisan db:seed --class=UserSeeder --force
 ```
 
+Если нужно раздать текущее радио-избранное админов всем не-админам (одноразовый сценарий):
+
+```bash
+php artisan radio:distribute-admin-favorites --dry-run
+php artisan radio:distribute-admin-favorites
+```
+
+Команда идемпотентна (`insertOrIgnore`) и безопасна для повторного запуска.
+
 ## 5. Права
 
 ```bash
