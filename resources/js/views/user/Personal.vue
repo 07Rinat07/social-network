@@ -133,6 +133,19 @@
                     </button>
                 </div>
 
+                <div style="display: flex; gap: 0.5rem; flex-wrap: wrap;">
+                    <button class="btn btn-outline btn-sm" type="button" @click="toggleStickerTray">
+                        {{ showStickerTray ? $t('chats.hideStickers') : $t('chats.stickers') }}
+                    </button>
+                </div>
+
+                <div v-if="showStickerTray" class="chat-sticker-tray">
+                    <StickerPicker
+                        :category-label="$t('radio.genreFilterLabel')"
+                        @select="insertSticker"
+                    ></StickerPicker>
+                </div>
+
                 <div style="display: flex; gap: 0.6rem; flex-wrap: wrap; align-items: center;">
                     <input @change="uploadMedia" ref="file" type="file" class="hidden" multiple accept="image/*,video/*">
                     <button class="btn btn-outline" @click.prevent="selectFile">{{ $t('personal.uploadMedia') }}</button>
@@ -193,7 +206,9 @@ import MediaLightbox from '../../components/MediaLightbox.vue'
 import MediaPlayer from '../../components/MediaPlayer.vue'
 import Post from '../../components/Post.vue'
 import Stat from '../../components/Stat.vue'
+import StickerPicker from '../../components/stickers/StickerPicker.vue'
 import { applyImagePreviewFallback, resetImagePreviewFallback } from '../../utils/mediaPreview'
+import { stickerTokenFromId } from '../../data/stickerCatalog'
 
 export default {
     name: 'Personal',
@@ -203,7 +218,8 @@ export default {
         MediaLightbox,
         MediaPlayer,
         Post,
-        Stat
+        Stat,
+        StickerPicker,
     },
 
     data() {
@@ -218,6 +234,7 @@ export default {
             isUploading: false,
             isSavingProfile: false,
             emojis: ['🔥', '🚀', '😎', '❤️', '👏', '🎉'],
+            showStickerTray: false,
             siteConfig: {},
             storagePreference: 'server_local',
             currentUser: null,
@@ -307,6 +324,21 @@ export default {
 
         appendEmoji(emoji) {
             this.content = `${this.content}${emoji}`
+        },
+
+        toggleStickerTray() {
+            this.showStickerTray = !this.showStickerTray
+        },
+
+        insertSticker(sticker) {
+            const token = stickerTokenFromId(sticker?.id)
+            if (token === '') {
+                return
+            }
+
+            const suffix = this.content.trim() === '' ? '' : ' '
+            this.content = `${this.content}${suffix}${token}`
+            this.showStickerTray = false
         },
 
         async getStats() {

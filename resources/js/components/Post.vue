@@ -21,7 +21,11 @@
             👁 {{ post.views_count ?? 0 }} просмотров
         </p>
 
-        <p class="post-content">{{ post.content }}</p>
+        <StickerRichText
+            as="p"
+            class="post-content"
+            :text="post.content"
+        ></StickerRichText>
 
         <div class="media-grid" v-if="normalizedMedia.length > 0">
             <template v-for="media in normalizedMedia" :key="`post-media-${post.id}-${media.id ?? media.url}`">
@@ -59,7 +63,11 @@
             <router-link class="post-author" :to="{name: 'user.show', params: {id: post.reposted_post.user.id}}">
                 {{ displayName(post.reposted_post.user) }}
             </router-link>
-            <p style="margin: 0;">{{ post.reposted_post.content }}</p>
+            <StickerRichText
+                as="p"
+                style="margin: 0;"
+                :text="post.reposted_post.content"
+            ></StickerRichText>
 
             <div class="media-grid" v-if="normalizedRepostMedia.length > 0">
                 <template v-for="media in normalizedRepostMedia" :key="`repost-media-${post.id}-${media.id ?? media.url}`">
@@ -100,6 +108,15 @@
         <div v-if="isRepostOpened" class="repost-box">
             <input v-model.trim="title" class="input-field" type="text" placeholder="Заголовок репоста">
             <textarea v-model.trim="content" class="textarea-field" placeholder="Комментарий к репосту"></textarea>
+            <button class="btn btn-outline btn-sm" type="button" @click.prevent="toggleRepostStickerTray">
+                {{ showRepostStickerTray ? 'Скрыть стикеры' : 'Стикеры' }}
+            </button>
+            <div v-if="showRepostStickerTray" class="chat-sticker-tray">
+                <StickerPicker
+                    :category-label="$t('radio.genreFilterLabel')"
+                    @select="insertRepostSticker"
+                ></StickerPicker>
+            </div>
             <button class="btn btn-primary" @click.prevent="repost(post)">Опубликовать репост</button>
         </div>
 
@@ -123,6 +140,17 @@
                     </button>
                 </div>
 
+                <button class="btn btn-outline btn-sm" type="button" @click="toggleCommentStickerTray">
+                    {{ showCommentStickerTray ? 'Скрыть стикеры' : 'Стикеры' }}
+                </button>
+
+                <div v-if="showCommentStickerTray" class="chat-sticker-tray">
+                    <StickerPicker
+                        :category-label="$t('radio.genreFilterLabel')"
+                        @select="insertCommentSticker"
+                    ></StickerPicker>
+                </div>
+
                 <button class="btn btn-sun" @click.prevent="storeComment(post)">Отправить комментарий</button>
             </div>
 
@@ -136,7 +164,7 @@
                     </div>
                     <p class="comment-body">
                         <strong v-if="commentItem.answered_for_user" style="color: var(--accent-strong);">@{{ commentItem.answered_for_user }} </strong>
-                        {{ commentItem.body }}
+                        <StickerRichText as="span" :text="commentItem.body"></StickerRichText>
                     </p>
                     <div style="display: flex; gap: 0.35rem; flex-wrap: wrap;">
                         <button class="btn btn-outline btn-sm" @click="setParentId(commentItem)">Ответить</button>
@@ -159,7 +187,10 @@
 <script>
 import MediaLightbox from './MediaLightbox.vue'
 import MediaPlayer from './MediaPlayer.vue'
+import StickerPicker from './stickers/StickerPicker.vue'
+import StickerRichText from './stickers/StickerRichText.vue'
 import { applyImagePreviewFallback, resetImagePreviewFallback } from '../utils/mediaPreview'
+import { stickerTokenFromId } from '../data/stickerCatalog'
 
 export default {
     name: 'Post',
@@ -169,6 +200,8 @@ export default {
     components: {
         MediaLightbox,
         MediaPlayer,
+        StickerPicker,
+        StickerRichText,
     },
 
     data() {
@@ -181,7 +214,9 @@ export default {
             isCommentsOpened: false,
             commentsLoaded: false,
             comment: null,
-            emojis: ['🔥', '👍', '❤️', '👏', '😂', '😎']
+            emojis: ['🔥', '👍', '❤️', '👏', '😂', '😎'],
+            showCommentStickerTray: false,
+            showRepostStickerTray: false,
         }
     },
 
@@ -293,6 +328,36 @@ export default {
             this.body = `${this.body}${emoji}`
         },
 
+        toggleCommentStickerTray() {
+            this.showCommentStickerTray = !this.showCommentStickerTray
+        },
+
+        insertCommentSticker(sticker) {
+            const token = stickerTokenFromId(sticker?.id)
+            if (token === '') {
+                return
+            }
+
+            const suffix = this.body.trim() === '' ? '' : ' '
+            this.body = `${this.body}${suffix}${token}`
+            this.showCommentStickerTray = false
+        },
+
+        toggleRepostStickerTray() {
+            this.showRepostStickerTray = !this.showRepostStickerTray
+        },
+
+        insertRepostSticker(sticker) {
+            const token = stickerTokenFromId(sticker?.id)
+            if (token === '') {
+                return
+            }
+
+            const suffix = this.content.trim() === '' ? '' : ' '
+            this.content = `${this.content}${suffix}${token}`
+            this.showRepostStickerTray = false
+        },
+
         storeComment(post) {
             if (!this.body) {
                 return
@@ -302,6 +367,7 @@ export default {
             axios.post(`/api/posts/${post.id}/comment`, {body: this.body, parent_id: commentId})
                 .then((response) => {
                     this.body = ''
+                    this.showCommentStickerTray = false
                     this.comments.unshift(response.data.data)
                     this.comment = null
                     post.comments_count += 1
@@ -379,6 +445,7 @@ export default {
                     this.title = ''
                     this.content = ''
                     this.isRepostOpened = false
+                    this.showRepostStickerTray = false
                     post.reposted_by_posts_count += 1
                 })
         },

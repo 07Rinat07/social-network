@@ -41,6 +41,14 @@
                     </div>
 
                     <p class="muted radio-featured-hint">{{ preset.hint }}</p>
+                    <div
+                        v-if="preset.country || preset.language || preset.tag"
+                        class="radio-featured-meta"
+                    >
+                        <span v-if="preset.country" class="radio-featured-pill">{{ preset.country }}</span>
+                        <span v-if="preset.language" class="radio-featured-pill">{{ preset.language }}</span>
+                        <span v-if="preset.tag" class="radio-featured-pill">{{ preset.tag }}</span>
+                    </div>
                     <p class="muted radio-featured-query">
                         {{ $t('radio.featuredQueryLabel') }}: {{ preset.query }}
                     </p>
@@ -70,10 +78,10 @@
                         <button
                             class="btn btn-outline btn-sm"
                             type="button"
-                            :disabled="isLoadingStations"
-                            @click="applyFeaturedPresetFilters(preset)"
+                            :disabled="isFeaturedLoading(preset.id)"
+                            @click="refreshFeaturedPreset(preset)"
                         >
-                            {{ $t('radio.featuredSearch') }}
+                            {{ $t('radio.featuredRefresh') }}
                         </button>
                         <button
                             class="btn btn-outline btn-sm"
@@ -195,12 +203,17 @@
             </p>
 
             <MediaPlayer
+                v-if="!isWidgetPlaybackBridgeEnabled"
                 ref="radioPlayer"
                 type="audio"
                 :src="currentStation.stream_url"
                 player-class="media-audio"
                 :mime-type="currentStation.codec ? `audio/${String(currentStation.codec).toLowerCase()}` : ''"
             ></MediaPlayer>
+
+            <p v-else class="muted radio-sync-note">
+                {{ $t('radio.syncedWithWidget') }}
+            </p>
 
             <div class="radio-now-actions">
                 <button class="btn btn-outline btn-sm" type="button" @click="toggleCurrentPlayback">
@@ -343,360 +356,16 @@
 
 <script>
 import MediaPlayer from '../../components/MediaPlayer.vue'
+import { RADIO_PRESET_CATALOG } from '../../data/radioPresetCatalog'
 
-const RADIO_FEATURED_PRESETS = [
-    {
-        id: 'russkoe-radio',
-        name: 'Русское Радио',
-        shortLabel: 'RU',
-        category: 'ru_kz',
-        hint: 'Популярная русская музыка.',
-        query: 'Русское Радио',
-        country: 'Russia',
-        language: 'Russian',
-        tag: 'pop',
-        keywords: ['русское радио', 'russkoe radio'],
-        homepage: 'https://rusradio.ru/mobile/online/',
-    },
-    {
-        id: 'europa-plus',
-        name: 'Европа Плюс',
-        shortLabel: 'RU',
-        category: 'ru_kz',
-        hint: 'Хиты и популярная музыка.',
-        query: 'Europa Plus',
-        country: 'Russia',
-        language: 'Russian',
-        tag: 'pop',
-        keywords: ['europa plus', 'европа плюс'],
-        homepage: 'https://europaplus.ru/',
-    },
-    {
-        id: 'energy-dance',
-        name: 'Energy Dance',
-        shortLabel: 'RU',
-        category: 'dance',
-        hint: 'Танцевальный формат NRJ/ENERGY.',
-        query: 'Energy Dance',
-        country: 'Russia',
-        language: 'Russian',
-        tag: 'dance',
-        keywords: ['energy dance', 'nrj dance', 'энерджи'],
-        homepage: 'https://www.energyfm.ru/',
-    },
-    {
-        id: 'radio-talap',
-        name: 'Радио Талап',
-        shortLabel: 'KZ',
-        category: 'ru_kz',
-        hint: 'Казахстанская станция.',
-        query: 'Talap',
-        country: 'Kazakhstan',
-        language: 'Kazakh',
-        tag: 'music',
-        keywords: ['talap', 'талап'],
-        homepage: '',
-    },
-    {
-        id: 'radio-ns',
-        name: 'Радио NS',
-        shortLabel: 'KZ',
-        category: 'ru_kz',
-        hint: 'Станции NS и региональные версии.',
-        query: 'Radio NS',
-        country: 'Kazakhstan',
-        language: 'Russian',
-        tag: 'hits',
-        keywords: ['radio ns', 'радио ns'],
-        homepage: 'https://radio.ns.kz/',
-    },
-    {
-        id: 'qazaq-radiosy',
-        name: 'Казахское Радио',
-        shortLabel: 'KZ',
-        category: 'ru_kz',
-        hint: 'Қазақ радиосы и национальные станции.',
-        query: 'Qazaq Radiosy',
-        country: 'Kazakhstan',
-        language: 'Kazakh',
-        tag: 'news',
-        keywords: ['qazaq radiosy', 'қазақ радиосы', 'казахское радио'],
-        homepage: 'https://qazradio.fm/',
-    },
-    {
-        id: 'record-dance',
-        name: 'Record Dance',
-        shortLabel: 'RU',
-        category: 'dance',
-        hint: 'Танцевальная волна Radio Record.',
-        query: 'Radio Record Dance',
-        country: 'Russia',
-        language: 'Russian',
-        tag: 'dance',
-        keywords: ['record dance', 'радио рекорд'],
-        homepage: 'https://radiorecord.ru/',
-    },
-    {
-        id: 'record-rock',
-        name: 'Record Rock',
-        shortLabel: 'RU',
-        category: 'rock_jazz',
-        hint: 'Рок-подборка в экосистеме Record.',
-        query: 'Radio Record Rock',
-        country: 'Russia',
-        language: 'Russian',
-        tag: 'rock',
-        keywords: ['record rock', 'радио рекорд рок'],
-        homepage: 'https://radiorecord.ru/station/rock/',
-    },
-    {
-        id: 'record-superdisco',
-        name: 'Superdisco 90-х',
-        shortLabel: 'RU',
-        category: 'dance',
-        hint: 'Супердискотека 90-х (Record).',
-        query: 'Супердискотека 90-х',
-        country: 'Russia',
-        language: 'Russian',
-        tag: '90s',
-        keywords: ['супердискотека', 'superdisco 90'],
-        homepage: 'https://radiorecord.ru/station/sd90/',
-    },
-    {
-        id: 'marusya-fm',
-        name: 'Маруся FM',
-        shortLabel: 'RU',
-        category: 'ru_kz',
-        hint: 'Современная русская поп-музыка.',
-        query: 'Маруся FM',
-        country: 'Russia',
-        language: 'Russian',
-        tag: 'pop',
-        keywords: ['маруся fm', 'marusya fm'],
-        homepage: 'https://marus.fm/',
-    },
-    {
-        id: 'radio-dacha',
-        name: 'Радио Дача',
-        shortLabel: 'RU',
-        category: 'ru_kz',
-        hint: 'Популярная русская эстрадная музыка.',
-        query: 'Радио Дача',
-        country: 'Russia',
-        language: 'Russian',
-        tag: 'pop',
-        keywords: ['радио дача', 'radio dacha'],
-        homepage: 'https://radiodacha.ru/',
-    },
-    {
-        id: 'radio-vanya',
-        name: 'Радио Ваня',
-        shortLabel: 'RU',
-        category: 'ru_kz',
-        hint: 'Легкий музыкальный формат с хитами.',
-        query: 'Радио Ваня',
-        country: 'Russia',
-        language: 'Russian',
-        tag: 'hits',
-        keywords: ['радио ваня', 'radio vanya'],
-        homepage: 'https://radiovanya.ru/',
-    },
-    {
-        id: 'avtoradio',
-        name: 'Авторадио',
-        shortLabel: 'RU',
-        category: 'ru_kz',
-        hint: 'Хиты и популярные шоу.',
-        query: 'Авторадио',
-        country: 'Russia',
-        language: 'Russian',
-        tag: 'hits',
-        keywords: ['авторадио', 'avtoradio'],
-        homepage: 'https://www.avtoradio.ru/',
-    },
-    {
-        id: 'novoe-radio',
-        name: 'Новое Радио',
-        shortLabel: 'RU',
-        category: 'ru_kz',
-        hint: 'Суперхиты и новинки.',
-        query: 'Новое Радио',
-        country: 'Russia',
-        language: 'Russian',
-        tag: 'hits',
-        keywords: ['новое радио', 'new radio'],
-        homepage: 'https://newradio.ru/',
-    },
-    {
-        id: 'dfm-main',
-        name: 'DFM',
-        shortLabel: 'RU',
-        category: 'dance',
-        hint: 'Танцевальные хиты.',
-        query: 'DFM',
-        country: 'Russia',
-        language: 'Russian',
-        tag: 'dance',
-        keywords: ['dfm'],
-        homepage: 'https://dfm.ru/',
-    },
-    {
-        id: 'dfm-deep',
-        name: 'DFM Deep',
-        shortLabel: 'RU',
-        category: 'dance',
-        hint: 'Deep-электроника и house.',
-        query: 'DFM Deep',
-        country: 'Russia',
-        language: 'Russian',
-        tag: 'deep',
-        keywords: ['dfm deep'],
-        homepage: 'https://dfm.ru/online/deep',
-    },
-    {
-        id: 'dfm-90',
-        name: 'DFM Дискач 90-х',
-        shortLabel: 'RU',
-        category: 'dance',
-        hint: 'Танцевальная ностальгия 90-х.',
-        query: 'DFM Дискач 90-х',
-        country: 'Russia',
-        language: 'Russian',
-        tag: '90s',
-        keywords: ['дискач 90', 'dfm 90'],
-        homepage: 'https://dfm.ru/online/disco',
-    },
-    {
-        id: 'relax-fm',
-        name: 'Relax FM',
-        shortLabel: 'RU',
-        category: 'ru_kz',
-        hint: 'Спокойный фоновый формат.',
-        query: 'Relax FM',
-        country: 'Russia',
-        language: 'Russian',
-        tag: 'relax',
-        keywords: ['relax fm'],
-        homepage: 'https://relax-fm.ru/',
-    },
-    {
-        id: 'nashe-radio',
-        name: 'НАШЕ Радио',
-        shortLabel: 'RU',
-        category: 'rock_jazz',
-        hint: 'Русский рок.',
-        query: 'Наше Радио',
-        country: 'Russia',
-        language: 'Russian',
-        tag: 'rock',
-        keywords: ['наше радио', 'nashe radio'],
-        homepage: 'https://nashe.ru/',
-    },
-    {
-        id: 'radio-jazz',
-        name: 'Радио JAZZ',
-        shortLabel: 'RU',
-        category: 'rock_jazz',
-        hint: 'Джазовые подборки.',
-        query: 'Радио Jazz',
-        country: 'Russia',
-        language: 'Russian',
-        tag: 'jazz',
-        keywords: ['radio jazz', 'радио jazz'],
-        homepage: 'https://radiojazzfm.ru/',
-    },
-    {
-        id: 'smooth-jazz-247',
-        name: 'Smooth Jazz 247',
-        shortLabel: 'US',
-        category: 'rock_jazz',
-        hint: 'Smooth jazz 24/7.',
-        query: 'Smooth Jazz 247',
-        country: 'United States',
-        language: 'English',
-        tag: 'jazz',
-        keywords: ['smooth jazz 247'],
-        homepage: 'https://www.smoothjazz247.com/',
-    },
-    {
-        id: 'radio-80000',
-        name: 'Radio 80000',
-        shortLabel: 'DE',
-        category: 'world',
-        hint: 'Независимое радио из Мюнхена.',
-        query: 'Radio 80000',
-        country: 'Germany',
-        language: 'German',
-        tag: 'electronic',
-        keywords: ['radio 80000', '80000'],
-        homepage: 'https://www.radio80000.com/',
-    },
-    {
-        id: 'bbc-radio-1',
-        name: 'BBC Radio 1',
-        shortLabel: 'UK',
-        category: 'world',
-        hint: 'Популярная британская станция.',
-        query: 'BBC Radio 1',
-        country: 'United Kingdom',
-        language: 'English',
-        tag: 'pop',
-        keywords: ['bbc radio 1'],
-        homepage: 'https://www.bbc.co.uk/sounds/play/live:bbc_radio_one',
-    },
-    {
-        id: 'bbc-6-music',
-        name: 'BBC 6 Music',
-        shortLabel: 'UK',
-        category: 'world',
-        hint: 'Альтернатива и селективная музыка.',
-        query: 'BBC Radio 6 Music',
-        country: 'United Kingdom',
-        language: 'English',
-        tag: 'alternative',
-        keywords: ['bbc 6 music', 'bbc radio 6'],
-        homepage: 'https://www.bbc.co.uk/sounds/play/live:bbc_6music',
-    },
-    {
-        id: 'frisky-radio',
-        name: 'Frisky Radio',
-        shortLabel: 'US',
-        category: 'world',
-        hint: 'Электронная музыка и DJ-сеты.',
-        query: 'Frisky Radio',
-        country: 'United States',
-        language: 'English',
-        tag: 'electronic',
-        keywords: ['frisky radio', 'frisky'],
-        homepage: 'https://friskyradio.com/',
-    },
-    {
-        id: 'bar-legend-radio',
-        name: 'Bar Legend Radio',
-        shortLabel: 'US',
-        category: 'world',
-        hint: 'Независимая музыкальная станция.',
-        query: 'Bar Legend Radio',
-        country: 'United States',
-        language: 'English',
-        tag: 'blues',
-        keywords: ['bar legend radio'],
-        homepage: 'https://barlegendradio.com/',
-    },
-    {
-        id: 'blues-rock-24',
-        name: 'Blues Rock 24 hours online',
-        shortLabel: 'US',
-        category: 'rock_jazz',
-        hint: 'Классический блюз-рок поток 24/7.',
-        query: 'Blues Rock 24 hours online',
-        country: 'United States',
-        language: 'English',
-        tag: 'blues rock',
-        keywords: ['blues rock 24', 'blues rock'],
-        homepage: '',
-    },
-]
+const RADIO_FEATURED_PRESETS = RADIO_PRESET_CATALOG
+
+const RADIO_FAVORITES_SYNC_EVENT = 'social:radio:favorites-updated'
+const RADIO_FAVORITES_SYNC_SOURCE = 'radio-page'
+const RADIO_PLAYBACK_SYNC_EVENT = 'social:radio:playback-sync'
+const RADIO_PLAYBACK_READY_EVENT = 'social:radio:playback-ready'
+const RADIO_PLAYBACK_SOURCE_PAGE = 'radio-page'
+const RADIO_PLAYBACK_SOURCE_WIDGET = 'widget-radio'
 
 export default {
     name: 'Radio',
@@ -736,24 +405,46 @@ export default {
                 currentTime: 0,
                 duration: 0,
             },
+            widgetPlaybackBridgeReady: false,
             boundPlayer: null,
             boundPlayerEvents: [],
         }
     },
 
     async mounted() {
+        if (typeof window !== 'undefined') {
+            window.addEventListener(RADIO_FAVORITES_SYNC_EVENT, this.handleWidgetFavoritesSync)
+            window.addEventListener(RADIO_PLAYBACK_SYNC_EVENT, this.handleWidgetPlaybackSync)
+            window.addEventListener(RADIO_PLAYBACK_READY_EVENT, this.handleWidgetPlaybackReady)
+            this.widgetPlaybackBridgeReady = Boolean(window.__socialRadioWidgetReady)
+        }
+
         this.startUiTicker()
         await this.loadFavorites()
+
+        if (this.widgetPlaybackBridgeReady) {
+            this.requestWidgetPlaybackState()
+        }
     },
 
     beforeUnmount() {
         this.stopUiTicker()
         this.unbindPlayerStateEvents()
+
+        if (typeof window !== 'undefined') {
+            window.removeEventListener(RADIO_FAVORITES_SYNC_EVENT, this.handleWidgetFavoritesSync)
+            window.removeEventListener(RADIO_PLAYBACK_SYNC_EVENT, this.handleWidgetPlaybackSync)
+            window.removeEventListener(RADIO_PLAYBACK_READY_EVENT, this.handleWidgetPlaybackReady)
+        }
     },
 
     computed: {
         featuredPresetList() {
             return RADIO_FEATURED_PRESETS
+        },
+
+        isWidgetPlaybackBridgeEnabled() {
+            return this.widgetPlaybackBridgeReady
         },
 
         featuredCategoryOptions() {
@@ -925,6 +616,10 @@ export default {
         },
 
         updatePlaybackStateFromPlayer() {
+            if (this.isWidgetPlaybackBridgeEnabled) {
+                return
+            }
+
             const player = this.getActivePlayer()
             if (!player) {
                 this.playbackState = {
@@ -947,6 +642,11 @@ export default {
         },
 
         bindPlayerStateEvents() {
+            if (this.isWidgetPlaybackBridgeEnabled) {
+                this.unbindPlayerStateEvents()
+                return
+            }
+
             const player = this.getActivePlayer()
             if (!player || typeof player.on !== 'function') {
                 return
@@ -995,6 +695,21 @@ export default {
         },
 
         async toggleCurrentPlayback() {
+            if (this.isWidgetPlaybackBridgeEnabled) {
+                if (!this.currentStation?.stream_url) {
+                    return
+                }
+
+                const command = this.playbackState.isPlaying ? 'pause' : 'play'
+                this.dispatchWidgetPlaybackCommand(command, this.currentStation)
+                this.playbackState = {
+                    ...this.playbackState,
+                    isPlaying: command === 'play',
+                }
+                this.autoplayNotice = ''
+                return
+            }
+
             const player = this.getActivePlayer()
             if (!player) {
                 return
@@ -1020,6 +735,10 @@ export default {
         },
 
         onPlaybackSeekInput(event) {
+            if (this.isWidgetPlaybackBridgeEnabled) {
+                return
+            }
+
             if (!this.isPlaybackSeekEnabled) {
                 return
             }
@@ -1293,6 +1012,15 @@ export default {
             await this.resolveFeaturedPresetStation(preset, { play: true })
         },
 
+        async refreshFeaturedPreset(preset) {
+            const station = await this.resolveFeaturedPresetStation(preset, { force: true, play: false })
+            if (!station) {
+                return
+            }
+
+            this.setRadioNotice(this.$t('radio.featuredRefreshed', { name: preset.name }))
+        },
+
         async toggleFeaturedFavorite(preset) {
             const station = await this.resolveFeaturedPresetStation(preset, { play: false })
             if (!station) {
@@ -1300,17 +1028,6 @@ export default {
             }
 
             await this.toggleFavorite(station)
-        },
-
-        applyFeaturedPresetFilters(preset) {
-            this.filters = {
-                q: preset.query || '',
-                country: preset.country || '',
-                language: preset.language || '',
-                tag: preset.tag || '',
-            }
-
-            this.searchStations()
         },
 
         async checkFeaturedPresets() {
@@ -1402,10 +1119,181 @@ export default {
 
             try {
                 const response = await axios.get('/api/radio/favorites')
-                this.favorites = response.data.data ?? []
+                this.applyFavoritesSnapshot(response.data?.data ?? [])
             } finally {
                 this.isLoadingFavorites = false
             }
+        },
+
+        normalizeFavoritesSnapshot(source) {
+            const list = Array.isArray(source) ? source : []
+            const seen = new Set()
+
+            return list
+                .map((item) => this.normalizeStationPayload(item))
+                .filter((item) => {
+                    const stationUuid = String(item?.station_uuid || '').trim()
+                    if (stationUuid === '' || seen.has(stationUuid)) {
+                        return false
+                    }
+
+                    seen.add(stationUuid)
+                    return true
+                })
+        },
+
+        applyFavoritesSnapshot(source) {
+            this.favorites = this.normalizeFavoritesSnapshot(source)
+            this.syncStationsFavoriteFlags()
+        },
+
+        syncStationsFavoriteFlags() {
+            const favoriteStationIds = new Set(
+                this.favorites
+                    .map((item) => String(item?.station_uuid || '').trim())
+                    .filter((stationUuid) => stationUuid !== '')
+            )
+
+            this.stations = this.stations.map((item) => {
+                const stationUuid = String(item?.station_uuid || '').trim()
+                return {
+                    ...item,
+                    is_favorite: stationUuid !== '' && favoriteStationIds.has(stationUuid),
+                }
+            })
+        },
+
+        handleWidgetFavoritesSync(event) {
+            const source = String(event?.detail?.source || '')
+            if (source === RADIO_FAVORITES_SYNC_SOURCE) {
+                return
+            }
+
+            const snapshot = event?.detail?.favorites
+            if (Array.isArray(snapshot)) {
+                this.applyFavoritesSnapshot(snapshot)
+                return
+            }
+
+            this.loadFavorites()
+        },
+
+        notifyFavoritesSync(options = {}) {
+            if (typeof window === 'undefined' || typeof CustomEvent === 'undefined') {
+                return
+            }
+
+            window.dispatchEvent(new CustomEvent(RADIO_FAVORITES_SYNC_EVENT, {
+                detail: {
+                    source: RADIO_FAVORITES_SYNC_SOURCE,
+                    action: String(options?.action || '').trim(),
+                    stationUuid: String(options?.stationUuid || '').trim(),
+                    favorites: this.favorites.map((item) => this.normalizeStationPayload(item)),
+                    sentAt: Date.now(),
+                },
+            }))
+        },
+
+        pauseLocalPlaybackForBridgeSync() {
+            const player = this.getActivePlayer()
+            if (!player || typeof player.pause !== 'function') {
+                return
+            }
+
+            if (player.playing) {
+                player.pause()
+            }
+        },
+
+        dispatchWidgetPlaybackCommand(command, station = null) {
+            if (typeof window === 'undefined' || typeof CustomEvent === 'undefined') {
+                return
+            }
+
+            const normalizedCommand = String(command || '').trim()
+            if (normalizedCommand === '') {
+                return
+            }
+
+            const normalizedStation = this.normalizeStationPayload(station)
+            const payloadStation = normalizedStation?.stream_url ? normalizedStation : this.currentStation
+
+            window.dispatchEvent(new CustomEvent(RADIO_PLAYBACK_SYNC_EVENT, {
+                detail: {
+                    source: RADIO_PLAYBACK_SOURCE_PAGE,
+                    type: 'command',
+                    command: normalizedCommand,
+                    station: payloadStation || null,
+                    sentAt: Date.now(),
+                },
+            }))
+        },
+
+        requestWidgetPlaybackState() {
+            this.dispatchWidgetPlaybackCommand('sync', this.currentStation)
+        },
+
+        handleWidgetPlaybackReady(event) {
+            const source = String(event?.detail?.source || '')
+            if (source !== RADIO_PLAYBACK_SOURCE_WIDGET) {
+                return
+            }
+
+            const isReady = Boolean(event?.detail?.isReady)
+            const wasReady = this.widgetPlaybackBridgeReady
+            this.widgetPlaybackBridgeReady = isReady
+
+            if (isReady) {
+                this.unbindPlayerStateEvents()
+            }
+
+            if (!isReady || wasReady === isReady) {
+                return
+            }
+
+            if (this.currentStation?.stream_url && this.playbackState.isPlaying) {
+                this.pauseLocalPlaybackForBridgeSync()
+                this.dispatchWidgetPlaybackCommand('play', this.currentStation)
+                return
+            }
+
+            this.requestWidgetPlaybackState()
+        },
+
+        handleWidgetPlaybackSync(event) {
+            const source = String(event?.detail?.source || '')
+            const type = String(event?.detail?.type || '')
+            if (source !== RADIO_PLAYBACK_SOURCE_WIDGET || type !== 'state') {
+                return
+            }
+
+            this.widgetPlaybackBridgeReady = true
+            this.unbindPlayerStateEvents()
+
+            const normalizedStation = this.normalizeStationPayload(event?.detail?.station)
+            if (normalizedStation?.stream_url) {
+                const previousStationUuid = String(this.currentStation?.station_uuid || '')
+                this.currentStation = normalizedStation
+
+                if (normalizedStation.station_uuid !== previousStationUuid || this.stationSessionStartedAt <= 0) {
+                    const syncedStart = Number(event?.detail?.sessionStartedAt || 0)
+                    this.stationSessionStartedAt = Number.isFinite(syncedStart) && syncedStart > 0
+                        ? syncedStart
+                        : Date.now()
+                }
+            }
+
+            const currentTime = Number(event?.detail?.currentTime || 0)
+            const duration = Number(event?.detail?.duration || 0)
+
+            this.playbackState = {
+                isPlaying: Boolean(event?.detail?.isPlaying),
+                currentTime: Number.isFinite(currentTime) && currentTime > 0 ? currentTime : 0,
+                duration: Number.isFinite(duration) && duration > 0 ? duration : 0,
+            }
+
+            this.autoplayNotice = ''
+            this.pauseLocalPlaybackForBridgeSync()
         },
 
         resetFilters() {
@@ -1436,6 +1324,17 @@ export default {
 
             this.autoplayNotice = ''
             this.setRadioNotice('')
+
+            if (this.isWidgetPlaybackBridgeEnabled) {
+                this.pauseLocalPlaybackForBridgeSync()
+                this.playbackState = {
+                    ...this.playbackState,
+                    isPlaying: true,
+                }
+                this.dispatchWidgetPlaybackCommand('play', normalizedStation)
+                return
+            }
+
             await this.$nextTick()
             this.bindPlayerStateEvents()
 
@@ -1484,9 +1383,10 @@ export default {
             this.setFavoriteLoading(stationUuid, true)
 
             try {
-                if (this.isFavorite(stationUuid)) {
+                const shouldRemove = this.isFavorite(stationUuid)
+
+                if (shouldRemove) {
                     await axios.delete(`/api/radio/favorites/${encodeURIComponent(stationUuid)}`)
-                    this.favorites = this.favorites.filter((item) => item.station_uuid !== stationUuid)
                     this.setRadioNotice(this.$t('radio.favoriteRemoved'))
                 } else {
                     await axios.post('/api/radio/favorites', {
@@ -1502,30 +1402,14 @@ export default {
                         bitrate: Number(station.bitrate || 0) || null,
                         votes: Number(station.votes || 0) || null,
                     })
-
-                    if (!this.isFavorite(stationUuid)) {
-                        this.favorites.unshift({
-                            station_uuid: station.station_uuid,
-                            name: station.name || this.$t('radio.untitled'),
-                            stream_url: station.stream_url,
-                            homepage: station.homepage || '',
-                            favicon: station.favicon || '',
-                            country: station.country || '',
-                            language: station.language || '',
-                            tags: station.tags || '',
-                            codec: station.codec || '',
-                            bitrate: Number(station.bitrate || 0),
-                            votes: Number(station.votes || 0),
-                        })
-                    }
-
                     this.setRadioNotice(this.$t('radio.favoriteAdded'))
                 }
 
-                this.stations = this.stations.map((item) => ({
-                    ...item,
-                    is_favorite: item.station_uuid === stationUuid ? this.isFavorite(stationUuid) : item.is_favorite,
-                }))
+                await this.loadFavorites()
+                this.notifyFavoritesSync({
+                    action: shouldRemove ? 'remove' : 'add',
+                    stationUuid,
+                })
             } catch (error) {
                 this.setRadioNotice(error.response?.data?.message || this.$t('radio.updateFavoritesError'))
             } finally {

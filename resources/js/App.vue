@@ -1,86 +1,109 @@
 <template>
-    <div class="app-shell">
-        <header class="topbar glass-panel">
-            <router-link class="brand" :to="localizedRoute('home')" aria-label="Solid Social">
-                <BrandLogo />
-            </router-link>
+    <div class="app-root">
+        <div class="app-shell">
+            <header class="topbar glass-panel">
+                <router-link class="brand" :to="localizedRoute('home')" aria-label="Solid Social">
+                    <BrandLogo />
+                </router-link>
 
-            <nav class="nav-links">
-                <router-link class="nav-link" :to="localizedRoute('home')">{{ $t('nav.home') }}</router-link>
-                <router-link class="nav-link" :to="localizedRoute('home', {hash: '#feedback-form'})">{{ $t('nav.feedback') }}</router-link>
+                <nav class="nav-links">
+                    <router-link class="nav-link" :to="localizedRoute('home')">{{ $t('nav.home') }}</router-link>
+                    <router-link class="nav-link" :to="localizedRoute('home', {hash: '#feedback-form'})">{{ $t('nav.feedback') }}</router-link>
 
-                <template v-if="isAuthenticated">
-                    <template v-if="isEmailVerified">
-                        <router-link class="nav-link" :to="localizedRoute('user.index')">{{ $t('nav.users') }}</router-link>
-                        <router-link class="nav-link" :to="localizedRoute('user.feed')">{{ $t('nav.feed') }}</router-link>
-                        <router-link class="nav-link" :to="localizedRoute('user.personal')">{{ $t('nav.cabinet') }}</router-link>
-                        <router-link class="nav-link" :to="localizedRoute('radio.index')">{{ $t('nav.radio') }}</router-link>
-                        <router-link class="nav-link" :to="localizedRoute('iptv.index')">{{ $t('nav.iptv') }}</router-link>
-                        <router-link class="nav-link" :to="localizedRoute('user.feedback')">{{ $t('nav.myRequests') }}</router-link>
-                        <router-link class="nav-link" :to="localizedRoute('chat.index')">
-                            {{ $t('nav.chats') }}
-                            <span
-                                v-if="chatUnreadTotal > 0"
-                                class="badge"
-                                style="margin-left: 0.35rem; font-size: 0.72rem; min-width: 1.8rem; text-align: center;"
-                            >
-                                {{ chatUnreadBadge }}
-                            </span>
-                        </router-link>
-                        <router-link v-if="user?.is_admin" class="nav-link" :to="localizedRoute('admin.index')">{{ $t('nav.admin') }}</router-link>
+                    <template v-if="isAuthenticated">
+                        <template v-if="isEmailVerified">
+                            <router-link class="nav-link" :to="localizedRoute('user.index')">{{ $t('nav.users') }}</router-link>
+                            <router-link class="nav-link" :to="localizedRoute('user.feed')">{{ $t('nav.feed') }}</router-link>
+                            <router-link class="nav-link" :to="localizedRoute('user.personal')">{{ $t('nav.cabinet') }}</router-link>
+                            <router-link class="nav-link" :to="localizedRoute('radio.index')">{{ $t('nav.radio') }}</router-link>
+                            <router-link class="nav-link" :to="localizedRoute('iptv.index')">{{ $t('nav.iptv') }}</router-link>
+                            <router-link class="nav-link" :to="localizedRoute('user.feedback')">{{ $t('nav.myRequests') }}</router-link>
+                            <router-link class="nav-link" :to="localizedRoute('chat.index')">
+                                {{ $t('nav.chats') }}
+                                <span
+                                    v-if="chatUnreadTotal > 0"
+                                    class="badge"
+                                    style="margin-left: 0.35rem; font-size: 0.72rem; min-width: 1.8rem; text-align: center;"
+                                >
+                                    {{ chatUnreadBadge }}
+                                </span>
+                            </router-link>
+                            <router-link v-if="user?.is_admin" class="nav-link" :to="localizedRoute('admin.index')">{{ $t('nav.admin') }}</router-link>
+                        </template>
+                        <template v-else>
+                            <router-link class="nav-link" :to="localizedRoute('auth.verify')">{{ $t('nav.verifyEmail') }}</router-link>
+                        </template>
                     </template>
+
                     <template v-else>
-                        <router-link class="nav-link" :to="localizedRoute('auth.verify')">{{ $t('nav.verifyEmail') }}</router-link>
+                        <router-link class="nav-link" :to="localizedRoute('user.login')">{{ $t('nav.login') }}</router-link>
+                        <router-link class="nav-link" :to="localizedRoute('user.registration')">{{ $t('nav.registration') }}</router-link>
                     </template>
-                </template>
 
-                <template v-else>
-                    <router-link class="nav-link" :to="localizedRoute('user.login')">{{ $t('nav.login') }}</router-link>
-                    <router-link class="nav-link" :to="localizedRoute('user.registration')">{{ $t('nav.registration') }}</router-link>
-                </template>
+                    <div class="lang-switch" :aria-label="$t('common.languageSwitcher')">
+                        <button
+                            type="button"
+                            class="lang-switch-btn"
+                            :class="{'is-active': currentLocale === 'ru'}"
+                            @click="switchLocale('ru')"
+                        >
+                            {{ $t('lang.ru') }}
+                        </button>
+                        <button
+                            type="button"
+                            class="lang-switch-btn"
+                            :class="{'is-active': currentLocale === 'en'}"
+                            @click="switchLocale('en')"
+                        >
+                            {{ $t('lang.en') }}
+                        </button>
+                    </div>
+                </nav>
 
-                <div class="lang-switch" :aria-label="$t('common.languageSwitcher')">
-                    <button
-                        type="button"
-                        class="lang-switch-btn"
-                        :class="{'is-active': currentLocale === 'ru'}"
-                        @click="switchLocale('ru')"
-                    >
-                        {{ $t('lang.ru') }}
-                    </button>
-                    <button
-                        type="button"
-                        class="lang-switch-btn"
-                        :class="{'is-active': currentLocale === 'en'}"
-                        @click="switchLocale('en')"
-                    >
-                        {{ $t('lang.en') }}
-                    </button>
+                <div class="auth-chip" v-if="isAuthenticated">
+                    <img v-if="user?.avatar_url" :src="user.avatar_url" alt="avatar" class="avatar avatar-sm">
+                    <span v-else class="avatar avatar-sm avatar-placeholder">{{ initials(user) }}</span>
+                    <span>{{ displayName(user) }}</span>
+                    <span v-if="!isEmailVerified" class="badge">{{ $t('auth.emailNotVerified') }}</span>
+                    <button class="btn btn-danger btn-sm" @click.prevent="logout">{{ $t('auth.logout') }}</button>
                 </div>
-            </nav>
+            </header>
 
-            <div class="auth-chip" v-if="isAuthenticated">
-                <img v-if="user?.avatar_url" :src="user.avatar_url" alt="avatar" class="avatar avatar-sm">
-                <span v-else class="avatar avatar-sm avatar-placeholder">{{ initials(user) }}</span>
-                <span>{{ displayName(user) }}</span>
-                <span v-if="!isEmailVerified" class="badge">{{ $t('auth.emailNotVerified') }}</span>
-                <button class="btn btn-danger btn-sm" @click.prevent="logout">{{ $t('auth.logout') }}</button>
+            <div class="app-workspace">
+                <main class="app-main">
+                    <router-view @auth-changed="syncAuthState" @chat-unread-updated="onChatUnreadUpdated"></router-view>
+                </main>
             </div>
-        </header>
+        </div>
 
-        <main>
-            <router-view @auth-changed="syncAuthState" @chat-unread-updated="onChatUnreadUpdated"></router-view>
-        </main>
+        <div v-if="canUsePersistentWidgets" class="widget-docks">
+            <PersistentRadioWidget
+                class="app-widget app-widget--left"
+                :active="canUsePersistentWidgets"
+                :user="user"
+            ></PersistentRadioWidget>
+
+            <PersistentChatWidget
+                class="app-widget app-widget--right"
+                :active="canUsePersistentWidgets"
+                :user="user"
+                @unread-updated="onChatUnreadUpdated"
+            ></PersistentChatWidget>
+        </div>
     </div>
 </template>
 
 <script>
 import BrandLogo from './components/BrandLogo.vue'
+import PersistentRadioWidget from './components/widgets/PersistentRadioWidget.vue'
+import PersistentChatWidget from './components/widgets/PersistentChatWidget.vue'
 
 export default {
     name: 'App',
     components: {
-        BrandLogo
+        BrandLogo,
+        PersistentRadioWidget,
+        PersistentChatWidget,
     },
 
     data() {
@@ -110,6 +133,10 @@ export default {
     computed: {
         isEmailVerified() {
             return Boolean(this.user?.email_verified_at)
+        },
+
+        canUsePersistentWidgets() {
+            return this.isAuthenticated && this.isEmailVerified
         },
 
         currentLocale() {

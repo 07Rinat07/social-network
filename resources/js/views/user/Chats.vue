@@ -354,7 +354,12 @@
                                     {{ isMessageDeleting(message.id) ? $t('chats.deleting') : $t('common.delete') }}
                                 </button>
                             </div>
-                            <div v-if="message.body" class="chat-message-body">{{ message.body }}</div>
+                            <StickerRichText
+                                v-if="message.body"
+                                as="div"
+                                class="chat-message-body"
+                                :text="message.body"
+                            ></StickerRichText>
 
                             <div class="media-grid chat-message-media" v-if="message.attachments && message.attachments.length > 0">
                                 <div
@@ -514,9 +519,25 @@
                         class="btn btn-outline"
                         type="button"
                         @click="startVoiceRecording"
-                        :disabled="isComposerDisabled || isRecordingVoice || isProcessingVoice || voiceStopInProgress || !canRecordVoice"
+                        :disabled="isComposerDisabled || isRecordingVoice || isProcessingVoice || voiceStopInProgress || isRecordingVideo || isProcessingVideo || videoStopInProgress || !canRecordVoice"
                     >
                         {{ $t('chats.recordVoice') }}
+                    </button>
+                    <button
+                        class="btn btn-outline"
+                        type="button"
+                        @click="startVideoRecording"
+                        :disabled="isComposerDisabled || isRecordingVideo || isProcessingVideo || videoStopInProgress || isRecordingVoice || isProcessingVoice || voiceStopInProgress || !canRecordVideo"
+                    >
+                        {{ $t('chats.recordVideo') }}
+                    </button>
+                    <button
+                        class="btn btn-outline"
+                        type="button"
+                        @click="toggleVideoPreview"
+                        :disabled="isComposerDisabled || isRecordingVideo || isProcessingVideo || videoStopInProgress || isRecordingVoice || isProcessingVoice || voiceStopInProgress || !canRecordVideo"
+                    >
+                        {{ isVideoPreviewActive ? $t('chats.closeCameraPreview') : $t('chats.openCameraPreview') }}
                     </button>
                     <button
                         class="btn btn-danger"
@@ -536,25 +557,105 @@
                     >
                         {{ $t('chats.cancelRecording') }}
                     </button>
+                    <button
+                        class="btn btn-danger"
+                        type="button"
+                        @click="stopVideoRecording"
+                        :disabled="videoStopInProgress"
+                        v-if="isRecordingVideo"
+                    >
+                        {{ $t('chats.stopRecordingWithDuration', { current: formattedVideoRecordDuration, limit: formattedVideoRecordDurationLimit }) }}
+                    </button>
+                    <button
+                        class="btn btn-outline"
+                        type="button"
+                        @click="stopVideoRecording(true)"
+                        :disabled="videoStopInProgress"
+                        v-if="isRecordingVideo"
+                    >
+                        {{ $t('chats.cancelRecording') }}
+                    </button>
                 </div>
 
                 <div v-if="showStickerTray" class="chat-sticker-tray">
-                    <button
-                        v-for="sticker in quickStickers"
-                        :key="sticker.id"
-                        type="button"
-                        class="chat-sticker-btn"
-                        @click="insertSticker(sticker)"
-                    >
-                        <span class="chat-sticker-emoji">{{ sticker.emoji }}</span>
-                        <span class="chat-sticker-label">{{ $t(sticker.labelKey) }}</span>
-                    </button>
+                    <StickerPicker
+                        :disabled="isComposerDisabled"
+                        :category-label="$t('radio.genreFilterLabel')"
+                        @select="insertSticker"
+                    ></StickerPicker>
                     <p class="muted chat-sticker-note">{{ $t('chats.stickerHint') }}</p>
                 </div>
 
                 <p class="muted" v-if="!canRecordVoice">
                     {{ $t('chats.voiceUnavailable') }}
                 </p>
+                <p class="muted" v-if="!canRecordVideo">
+                    {{ $t('chats.cameraUnavailable') }}
+                </p>
+                <div v-if="canRecordVoice || canRecordVideo" class="section-card chat-device-card">
+                    <div class="chat-device-card__head">
+                        <strong>{{ $t('chats.recordingDevices') }}</strong>
+                        <button
+                            class="btn btn-outline btn-sm"
+                            type="button"
+                            @click="refreshMediaDeviceOptions(true)"
+                            :disabled="isLoadingMediaDevices"
+                        >
+                            {{ isLoadingMediaDevices ? $t('common.refreshing') : $t('common.refresh') }}
+                        </button>
+                    </div>
+                    <div class="chat-device-card__grid">
+                        <label v-if="canRecordVoice" class="chat-device-card__field">
+                            <span>{{ $t('chats.microphoneInput') }}</span>
+                            <select
+                                v-model="selectedAudioInputId"
+                                class="select-field chat-device-card__select"
+                                :disabled="isLoadingMediaDevices || isRecordingVoice || isProcessingVoice || voiceStopInProgress"
+                                @change="onSelectedAudioInputChanged"
+                            >
+                                <option value="">{{ $t('chats.defaultDevice') }}</option>
+                                <option
+                                    v-for="device in audioInputDevices"
+                                    :key="`chat-mic-${device.deviceId}`"
+                                    :value="device.deviceId"
+                                >
+                                    {{ device.label }}
+                                </option>
+                            </select>
+                        </label>
+                        <label v-if="canRecordVideo" class="chat-device-card__field">
+                            <span>{{ $t('chats.cameraInput') }}</span>
+                            <select
+                                v-model="selectedVideoInputId"
+                                class="select-field chat-device-card__select"
+                                :disabled="isLoadingMediaDevices || isRecordingVideo || isProcessingVideo || videoStopInProgress"
+                                @change="onSelectedVideoInputChanged"
+                            >
+                                <option value="">{{ $t('chats.defaultDevice') }}</option>
+                                <option
+                                    v-for="device in videoInputDevices"
+                                    :key="`chat-camera-${device.deviceId}`"
+                                    :value="device.deviceId"
+                                >
+                                    {{ device.label }}
+                                </option>
+                            </select>
+                        </label>
+                    </div>
+                    <p v-if="mediaDeviceError" class="error-text chat-device-card__error">{{ mediaDeviceError }}</p>
+                </div>
+                <div v-if="isVideoPreviewActive || isVideoPreviewLoading" class="section-card chat-video-preview-card">
+                    <p class="muted chat-video-preview-card__status">
+                        {{ isVideoPreviewLoading ? $t('chats.previewLoading') : $t('chats.cameraPreviewReady') }}
+                    </p>
+                    <video
+                        ref="videoPreviewElement"
+                        class="chat-video-preview-card__video"
+                        autoplay
+                        muted
+                        playsinline
+                    ></video>
+                </div>
                 <p class="muted" v-if="isRecordingVoice">
                     {{ $t('chats.voiceRecordingNow') }}
                 </p>
@@ -591,6 +692,32 @@
                 </div>
                 <p class="muted" v-if="isProcessingVoice">
                     {{ $t('chats.processingRecording') }}
+                </p>
+                <p class="muted" v-if="isRecordingVideo">
+                    {{ $t('chats.videoRecordingNow') }}
+                </p>
+                <div
+                    v-if="isRecordingVideo"
+                    class="section-card chat-voice-card"
+                >
+                    <div class="muted chat-voice-meta">
+                        <span>{{ $t('chats.recordingDuration', { value: formattedVideoRecordDuration }) }}</span>
+                        <span>{{ $t('chats.limitValue', { value: formattedVideoRecordDurationLimit }) }}</span>
+                    </div>
+                    <div class="chat-voice-progress chat-voice-progress-duration">
+                        <div
+                            :style="{
+                                width: `${videoDurationProgressPercent}%`,
+                                height: '100%',
+                                borderRadius: '999px',
+                                background: 'linear-gradient(90deg, #ec4899 0%, #8b5cf6 50%, #0ea5e9 100%)',
+                                transition: 'width 200ms linear',
+                            }"
+                        ></div>
+                    </div>
+                </div>
+                <p class="muted" v-if="isProcessingVideo">
+                    {{ $t('chats.preparingVideoToSend') }}
                 </p>
 
                 <div class="media-grid" v-if="selectedFilePreviews.length > 0">
@@ -641,7 +768,7 @@
                     </div>
                 </div>
 
-                <button class="btn btn-primary chat-send-btn" type="submit" :disabled="isComposerDisabled || isSending || isRecordingVoice || isProcessingVoice || voiceStopInProgress || !canSendCurrentMessage">
+                <button class="btn btn-primary chat-send-btn" type="submit" :disabled="isComposerDisabled || isSending || isRecordingVoice || isProcessingVoice || voiceStopInProgress || isRecordingVideo || isProcessingVideo || videoStopInProgress || !canSendCurrentMessage">
                     {{ isSending ? $t('common.sending') : $t('chats.send') }}
                 </button>
             </form>
@@ -908,11 +1035,22 @@
 <script>
 import MediaLightbox from '../../components/MediaLightbox.vue'
 import MediaPlayer from '../../components/MediaPlayer.vue'
+import StickerPicker from '../../components/stickers/StickerPicker.vue'
+import StickerRichText from '../../components/stickers/StickerRichText.vue'
 import { applyImagePreviewFallback, resetImagePreviewFallback } from '../../utils/mediaPreview'
+import { stickerTextToPreview, stickerTokenFromId } from '../../data/stickerCatalog'
 
 const CHAT_SOUND_STORAGE_KEY = 'chat_notification_settings_v1'
 const CHAT_UI_STORAGE_KEY = 'chat_ui_settings_v1'
+const CHAT_SHARED_SYNC_STORAGE_PREFIX = 'social.chat.shared'
 const CHAT_MESSAGE_REACTION_EMOJIS = ['👍', '❤️', '🔥', '😂', '👏', '😮']
+const CHAT_WIDGET_SYNC_EVENT = 'social:chat:sync'
+const CHAT_WIDGET_SYNC_SOURCE_PAGE = 'chat-page'
+const CHAT_WIDGET_SYNC_SOURCE_WIDGET = 'chat-widget'
+const CHAT_WIDGET_SYNC_TYPE_ACTIVE_CONVERSATION = 'active-conversation'
+const CHAT_WIDGET_SYNC_TYPE_CONVERSATION_READ = 'conversation-read'
+const CHAT_WIDGET_SYNC_TYPE_MESSAGE_UPSERT = 'message-upsert'
+const CHAT_WIDGET_SYNC_TYPE_STATE_REFRESH = 'state-refresh'
 const DEFAULT_NOTIFICATION_SOUND_ID = 'beep_short'
 const MAX_CUSTOM_NOTIFICATION_SOUND_BYTES = 15 * 1024 * 1024
 const MAX_PERSISTED_CUSTOM_NOTIFICATION_SOUND_BYTES = 2 * 1024 * 1024
@@ -946,6 +1084,8 @@ export default {
     components: {
         MediaLightbox,
         MediaPlayer,
+        StickerPicker,
+        StickerRichText,
     },
 
     data() {
@@ -983,16 +1123,18 @@ export default {
             typingLastSentAt: 0,
             emojis: ['😀', '🔥', '❤️', '😂', '👏', '😎', '👍', '🎉', '🤝', '🤩'],
             showStickerTray: false,
-            quickStickers: [
-                { id: 'wave', emoji: '👋✨', labelKey: 'chats.stickerWave', value: '👋✨😊' },
-                { id: 'sun', emoji: '🌞💬', labelKey: 'chats.stickerSun', value: '🌞💬🚀' },
-                { id: 'party', emoji: '🎉🪩', labelKey: 'chats.stickerParty', value: '🎉🪩🥳' },
-                { id: 'support', emoji: '🫶🤝', labelKey: 'chats.stickerSupport', value: '🫶🤝💙' },
-                { id: 'laugh', emoji: '😂🔥', labelKey: 'chats.stickerLaugh', value: '😂🔥🤣' },
-                { id: 'love', emoji: '💖🌸', labelKey: 'chats.stickerLove', value: '💖🌸✨' },
-            ],
             messageReactionEmojis: CHAT_MESSAGE_REACTION_EMOJIS,
             canRecordVoice: false,
+            canRecordVideo: false,
+            isLoadingMediaDevices: false,
+            mediaDeviceError: '',
+            audioInputDevices: [],
+            videoInputDevices: [],
+            selectedAudioInputId: '',
+            selectedVideoInputId: '',
+            isVideoPreviewActive: false,
+            isVideoPreviewLoading: false,
+            videoPreviewStream: null,
             isRecordingVoice: false,
             isProcessingVoice: false,
             voiceRecordDurationSeconds: 0,
@@ -1016,6 +1158,17 @@ export default {
             voicePcmSampleRate: 0,
             voiceRecordedChunks: [],
             voiceRecordedMimeType: '',
+            isRecordingVideo: false,
+            isProcessingVideo: false,
+            videoRecordDurationSeconds: 0,
+            videoStopInProgress: false,
+            maxVideoRecordDurationSeconds: 3 * 60,
+            videoMediaRecorder: null,
+            videoRecordStream: null,
+            videoRecordTimerId: null,
+            videoRecordStartedAt: null,
+            videoRecordedChunks: [],
+            videoRecordedMimeType: '',
             notificationSettings: {
                 enabled: true,
                 sound: DEFAULT_NOTIFICATION_SOUND_ID,
@@ -1202,6 +1355,14 @@ export default {
                 return this.$t('chats.preparingVoiceToSend')
             }
 
+            if (this.isRecordingVideo) {
+                return this.$t('chats.videoRecordingNow')
+            }
+
+            if (this.isProcessingVideo) {
+                return this.$t('chats.preparingVideoToSend')
+            }
+
             const activeTypingLine = this.activeTypingStatusLine
             if (activeTypingLine !== '') {
                 return activeTypingLine
@@ -1328,13 +1489,49 @@ export default {
                 0,
                 Math.min(100, (this.voiceRecordDurationSeconds / this.maxVoiceRecordDurationSeconds) * 100)
             )
+        },
+
+        formattedVideoRecordDuration() {
+            const total = Math.max(0, Number(this.videoRecordDurationSeconds) || 0)
+            const minutes = Math.floor(total / 60)
+            const seconds = total % 60
+
+            return `${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`
+        },
+
+        formattedVideoRecordDurationLimit() {
+            const total = Math.max(0, Number(this.maxVideoRecordDurationSeconds) || 0)
+            const minutes = Math.floor(total / 60)
+            const seconds = total % 60
+
+            return `${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`
+        },
+
+        videoDurationProgressPercent() {
+            if (this.maxVideoRecordDurationSeconds <= 0) {
+                return 0
+            }
+
+            return Math.max(
+                0,
+                Math.min(100, (this.videoRecordDurationSeconds / this.maxVideoRecordDurationSeconds) * 100)
+            )
         }
     },
 
     async mounted() {
+        if (typeof window !== 'undefined') {
+            window.addEventListener(CHAT_WIDGET_SYNC_EVENT, this.handleChatSyncEvent)
+        }
+        if (typeof navigator !== 'undefined' && navigator.mediaDevices && typeof navigator.mediaDevices.addEventListener === 'function') {
+            navigator.mediaDevices.addEventListener('devicechange', this.handleMediaDevicesChanged)
+        }
+
         this.loadNotificationSettings()
         this.loadChatUiSettings()
         this.canRecordVoice = this.isVoiceRecordingSupported()
+        this.canRecordVideo = this.isVideoRecordingSupported()
+        await this.loadMediaInputDevices()
         await this.loadCurrentUser()
         this.syncSitePresenceChannel()
         await Promise.all([
@@ -1346,12 +1543,26 @@ export default {
         ])
 
         if (this.conversations.length > 0) {
-            await this.openConversation(this.conversations[0])
+            const syncedConversationId = this.loadSharedSyncConversationId()
+            const preferredConversation = syncedConversationId !== null
+                ? this.conversations.find((conversation) => Number(conversation.id) === syncedConversationId) || null
+                : null
+
+            await this.openConversation(preferredConversation || this.conversations[0])
         }
     },
 
     beforeUnmount() {
+        if (typeof window !== 'undefined') {
+            window.removeEventListener(CHAT_WIDGET_SYNC_EVENT, this.handleChatSyncEvent)
+        }
+        if (typeof navigator !== 'undefined' && navigator.mediaDevices && typeof navigator.mediaDevices.removeEventListener === 'function') {
+            navigator.mediaDevices.removeEventListener('devicechange', this.handleMediaDevicesChanged)
+        }
+
         this.stopVoiceRecording(true)
+        this.stopVideoRecording(true)
+        this.stopVideoPreview()
         this.notifyTypingStopped()
         if (this.userSearchDebounceTimerId) {
             window.clearTimeout(this.userSearchDebounceTimerId)
@@ -1375,6 +1586,208 @@ export default {
 
         openMedia(url, alt = null) {
             this.$refs.mediaLightbox?.open(url, alt || this.$t('chats.photo'))
+        },
+
+        sharedSyncStorageKey() {
+            const userId = Number(this.currentUser?.id ?? 0)
+            return Number.isFinite(userId) && userId > 0
+                ? `${CHAT_SHARED_SYNC_STORAGE_PREFIX}.${userId}`
+                : `${CHAT_SHARED_SYNC_STORAGE_PREFIX}.guest`
+        },
+
+        loadSharedSyncConversationId() {
+            if (typeof localStorage === 'undefined') {
+                return null
+            }
+
+            try {
+                const raw = localStorage.getItem(this.sharedSyncStorageKey())
+                if (!raw) {
+                    return null
+                }
+
+                const parsed = JSON.parse(raw)
+                const conversationId = Number(parsed?.activeConversationId ?? 0)
+                return Number.isFinite(conversationId) && conversationId > 0
+                    ? conversationId
+                    : null
+            } catch (_error) {
+                return null
+            }
+        },
+
+        persistSharedSyncConversationId(conversationId) {
+            if (typeof localStorage === 'undefined') {
+                return
+            }
+
+            const targetId = Number(conversationId)
+            const normalizedConversationId = Number.isFinite(targetId) && targetId > 0
+                ? targetId
+                : null
+
+            try {
+                localStorage.setItem(this.sharedSyncStorageKey(), JSON.stringify({
+                    activeConversationId: normalizedConversationId,
+                    updatedAt: Date.now(),
+                }))
+            } catch (_error) {
+                // Ignore write issues.
+            }
+        },
+
+        notifyChatSync(type, conversationId) {
+            if (typeof window === 'undefined' || typeof CustomEvent === 'undefined') {
+                return
+            }
+
+            const targetId = Number(conversationId)
+            if (!Number.isFinite(targetId) || targetId <= 0) {
+                return
+            }
+
+            window.dispatchEvent(new CustomEvent(CHAT_WIDGET_SYNC_EVENT, {
+                detail: {
+                    source: CHAT_WIDGET_SYNC_SOURCE_PAGE,
+                    type: String(type || ''),
+                    conversationId: targetId,
+                    sentAt: Date.now(),
+                },
+            }))
+        },
+
+        notifyChatSyncMessage(message, options = {}) {
+            if (typeof window === 'undefined' || typeof CustomEvent === 'undefined') {
+                return
+            }
+
+            const normalized = this.normalizeMessage(message)
+            const conversationId = Number(normalized?.conversation_id ?? 0)
+            if (!normalized || !Number.isFinite(conversationId) || conversationId <= 0) {
+                return
+            }
+
+            window.dispatchEvent(new CustomEvent(CHAT_WIDGET_SYNC_EVENT, {
+                detail: {
+                    source: CHAT_WIDGET_SYNC_SOURCE_PAGE,
+                    type: CHAT_WIDGET_SYNC_TYPE_MESSAGE_UPSERT,
+                    conversationId,
+                    message: normalized,
+                    markRead: Boolean(options?.markRead),
+                    sentAt: Date.now(),
+                },
+            }))
+        },
+
+        notifyChatSyncStateRefresh(options = {}) {
+            if (typeof window === 'undefined' || typeof CustomEvent === 'undefined') {
+                return
+            }
+
+            const rawConversationId = Number(options?.conversationId ?? 0)
+            const conversationId = Number.isFinite(rawConversationId) && rawConversationId > 0
+                ? rawConversationId
+                : null
+
+            window.dispatchEvent(new CustomEvent(CHAT_WIDGET_SYNC_EVENT, {
+                detail: {
+                    source: CHAT_WIDGET_SYNC_SOURCE_PAGE,
+                    type: CHAT_WIDGET_SYNC_TYPE_STATE_REFRESH,
+                    conversationId,
+                    sentAt: Date.now(),
+                },
+            }))
+        },
+
+        async handleChatSyncEvent(event) {
+            const source = String(event?.detail?.source || '')
+            if (source === CHAT_WIDGET_SYNC_SOURCE_PAGE || source !== CHAT_WIDGET_SYNC_SOURCE_WIDGET) {
+                return
+            }
+
+            const type = String(event?.detail?.type || '')
+            const conversationId = Number(event?.detail?.conversationId)
+
+            if (type === CHAT_WIDGET_SYNC_TYPE_CONVERSATION_READ) {
+                if (!Number.isFinite(conversationId) || conversationId <= 0) {
+                    return
+                }
+
+                this.setConversationReadLocally(conversationId)
+                return
+            }
+
+            if (type === CHAT_WIDGET_SYNC_TYPE_MESSAGE_UPSERT) {
+                const syncedMessage = this.normalizeMessage(event?.detail?.message)
+                const targetConversationId = Number(syncedMessage?.conversation_id ?? conversationId)
+                if (!syncedMessage || !Number.isFinite(targetConversationId) || targetConversationId <= 0) {
+                    return
+                }
+
+                if (!this.conversations.some((conversation) => Number(conversation?.id) === targetConversationId)) {
+                    await this.loadConversations()
+                }
+
+                this.updateConversationFromIncoming(syncedMessage, {
+                    incrementUnread: false,
+                })
+
+                if (Number(this.activeConversation?.id ?? 0) === targetConversationId) {
+                    this.upsertMessage(syncedMessage)
+                    if (Boolean(event?.detail?.markRead)) {
+                        this.setConversationReadLocally(targetConversationId)
+                    }
+
+                    this.$nextTick(() => this.scrollMessagesDown())
+                }
+
+                return
+            }
+
+            if (type === CHAT_WIDGET_SYNC_TYPE_STATE_REFRESH) {
+                await this.loadConversations()
+
+                const activeConversationId = Number(this.activeConversation?.id ?? 0)
+                const shouldReloadMessages = activeConversationId > 0
+                    && (!Number.isFinite(conversationId) || conversationId <= 0 || activeConversationId === conversationId)
+
+                if (shouldReloadMessages) {
+                    await this.loadMessages({
+                        silentSync: true,
+                    })
+                }
+
+                return
+            }
+
+            if (type !== CHAT_WIDGET_SYNC_TYPE_ACTIVE_CONVERSATION) {
+                return
+            }
+
+            if (!Number.isFinite(conversationId) || conversationId <= 0) {
+                return
+            }
+
+            if (Number(this.activeConversation?.id ?? 0) === conversationId) {
+                return
+            }
+
+            let targetConversation = this.conversations.find((conversation) => Number(conversation.id) === conversationId) || null
+
+            if (!targetConversation) {
+                try {
+                    await this.loadConversations()
+                    targetConversation = this.conversations.find((conversation) => Number(conversation.id) === conversationId) || null
+                } catch (_error) {
+                    targetConversation = null
+                }
+            }
+
+            if (targetConversation) {
+                await this.openConversation(targetConversation, {
+                    silentSync: true,
+                })
+            }
         },
 
         handleComposerInput() {
@@ -2295,8 +2708,12 @@ export default {
             }
 
             const message = conversation.last_message
-            const author = this.displayName(message.user)
-            const text = message.body || this.attachmentSummary(message)
+            const author = this.isMine(message)
+                ? this.$t('chats.youShort')
+                : this.displayName(message.user)
+            const text = message.body
+                ? stickerTextToPreview(message.body)
+                : this.attachmentSummary(message)
 
             return `${author}: ${text}`
         },
@@ -2414,6 +2831,7 @@ export default {
                     this.activeConversation = updated
                 } else {
                     this.activeConversation = null
+                    this.persistSharedSyncConversationId(null)
                 }
             }
 
@@ -2484,6 +2902,7 @@ export default {
                 await axios.post(`/api/users/${user.id}/block`, payload)
 
                 await Promise.all([this.loadUsers(), this.loadMyBlocks(), this.loadConversations()])
+                this.notifyChatSyncStateRefresh()
             } catch (error) {
                 alert(this.resolveApiMessage(error, this.$t('chats.blockUserFailed')))
             }
@@ -2493,6 +2912,7 @@ export default {
             try {
                 await axios.delete(`/api/users/${user.id}/block`)
                 await Promise.all([this.loadUsers(), this.loadMyBlocks(), this.loadConversations()])
+                this.notifyChatSyncStateRefresh()
             } catch (error) {
                 alert(this.resolveApiMessage(error, this.$t('chats.unblockUserFailed')))
             }
@@ -2527,23 +2947,36 @@ export default {
             return this.$t('chats.blockTypeUntil', { date: this.formatDateTime(block.expires_at) })
         },
 
-        async openConversation(conversation) {
+        async openConversation(conversation, options = {}) {
             const previousConversationId = Number(this.activeConversation?.id ?? 0)
             const nextConversationId = Number(conversation?.id ?? 0)
+            if (!Number.isFinite(nextConversationId) || nextConversationId <= 0) {
+                return
+            }
+
+            const silentSync = Boolean(options?.silentSync)
             if (previousConversationId > 0 && previousConversationId !== nextConversationId) {
                 this.notifyTypingStopped(previousConversationId)
+                this.stopVoiceRecording(true)
+                this.stopVideoRecording(true)
+                this.stopVideoPreview()
             }
 
             this.activeConversation = conversation
+            this.persistSharedSyncConversationId(nextConversationId)
             this.leftPaneMode = 'conversations'
             this.showStickerTray = false
             this.saveChatUiSettings()
             this.messageSearch = ''
             this.syncActiveConversationPresenceChannel()
-            await this.loadMessages()
+            await this.loadMessages({silentSync})
+
+            if (!silentSync) {
+                this.notifyChatSync(CHAT_WIDGET_SYNC_TYPE_ACTIVE_CONVERSATION, nextConversationId)
+            }
         },
 
-        async loadMessages() {
+        async loadMessages(options = {}) {
             if (!this.activeConversation) {
                 this.messages = []
                 return
@@ -2556,7 +2989,9 @@ export default {
 
                 this.messages = (response.data.data ?? []).map((message) => this.normalizeMessage(message))
                 this.setConversationReadLocally(this.activeConversation.id)
-                await this.markConversationRead(this.activeConversation.id)
+                await this.markConversationRead(this.activeConversation.id, {
+                    silentSync: Boolean(options?.silentSync),
+                })
                 this.$nextTick(() => this.scrollMessagesDown())
             } catch (error) {
                 this.messages = []
@@ -2566,14 +3001,19 @@ export default {
             }
         },
 
-        async markConversationRead(conversationId) {
+        async markConversationRead(conversationId, options = {}) {
             if (!conversationId) {
                 return
             }
 
+            const silentSync = Boolean(options?.silentSync)
             try {
                 await axios.post(`/api/chats/${conversationId}/read`)
                 this.setConversationReadLocally(conversationId)
+
+                if (!silentSync) {
+                    this.notifyChatSync(CHAT_WIDGET_SYNC_TYPE_CONVERSATION_READ, conversationId)
+                }
             } catch (error) {
                 // Ignore silent read-sync errors.
             }
@@ -2609,13 +3049,13 @@ export default {
         },
 
         insertSticker(sticker) {
-            const value = String(sticker?.value || '').trim()
-            if (value === '' || this.isComposerDisabled) {
+            const token = stickerTokenFromId(sticker?.id)
+            if (token === '' || this.isComposerDisabled) {
                 return
             }
 
             const suffix = this.messageBody.trim() === '' ? '' : ' '
-            this.messageBody = `${this.messageBody}${suffix}${value}`
+            this.messageBody = `${this.messageBody}${suffix}${token}`
             this.showStickerTray = false
             this.notifyTypingActivity({ immediate: true })
         },
@@ -2624,11 +3064,245 @@ export default {
             this.$refs.messageFiles.click()
         },
 
+        async handleMediaDevicesChanged() {
+            await this.loadMediaInputDevices()
+        },
+
+        async refreshMediaDeviceOptions(requestAccess = false) {
+            await this.loadMediaInputDevices({ requestAccess: requestAccess === true })
+        },
+
+        async loadMediaInputDevices(options = {}) {
+            const requestAccess = options?.requestAccess === true
+            if (typeof navigator === 'undefined'
+                || !navigator.mediaDevices
+                || typeof navigator.mediaDevices.enumerateDevices !== 'function') {
+                this.mediaDeviceError = this.$t('chats.deviceListUnavailable')
+                this.audioInputDevices = []
+                this.videoInputDevices = []
+                this.selectedAudioInputId = ''
+                this.selectedVideoInputId = ''
+                return
+            }
+
+            this.isLoadingMediaDevices = true
+            this.mediaDeviceError = ''
+
+            let accessStream = null
+
+            try {
+                if (requestAccess && typeof navigator.mediaDevices.getUserMedia === 'function') {
+                    const probeConstraints = {}
+                    if (this.canRecordVoice) {
+                        probeConstraints.audio = true
+                    }
+                    if (this.canRecordVideo) {
+                        probeConstraints.video = true
+                    }
+                    if (Object.keys(probeConstraints).length > 0) {
+                        try {
+                            accessStream = await navigator.mediaDevices.getUserMedia(probeConstraints)
+                        } catch (_error) {
+                            // Labels can still be unavailable without permission.
+                        }
+                    }
+                }
+
+                const devices = await navigator.mediaDevices.enumerateDevices()
+                const audioInputs = this.normalizeMediaInputDevices(devices, 'audioinput')
+                const videoInputs = this.normalizeMediaInputDevices(devices, 'videoinput')
+
+                this.audioInputDevices = audioInputs
+                this.videoInputDevices = videoInputs
+
+                const currentAudioId = String(this.selectedAudioInputId || '')
+                if (!currentAudioId || !audioInputs.some((device) => device.deviceId === currentAudioId)) {
+                    this.selectedAudioInputId = audioInputs[0]?.deviceId || ''
+                }
+
+                const currentVideoId = String(this.selectedVideoInputId || '')
+                if (!currentVideoId || !videoInputs.some((device) => device.deviceId === currentVideoId)) {
+                    this.selectedVideoInputId = videoInputs[0]?.deviceId || ''
+                }
+            } catch (_error) {
+                this.mediaDeviceError = this.$t('chats.deviceListUnavailable')
+                this.audioInputDevices = []
+                this.videoInputDevices = []
+                this.selectedAudioInputId = ''
+                this.selectedVideoInputId = ''
+            } finally {
+                if (accessStream) {
+                    for (const track of accessStream.getTracks()) {
+                        track.stop()
+                    }
+                }
+                this.isLoadingMediaDevices = false
+            }
+        },
+
+        normalizeMediaInputDevices(devices, kind) {
+            return (Array.isArray(devices) ? devices : [])
+                .filter((device) => String(device?.kind || '') === kind)
+                .map((device, index) => {
+                    const deviceId = String(device?.deviceId || '')
+                    const label = this.resolveDeviceOptionLabel(kind, index, device?.label)
+
+                    return {
+                        deviceId,
+                        label,
+                    }
+                })
+                .filter((device) => device.deviceId !== '')
+        },
+
+        resolveDeviceOptionLabel(kind, index, rawLabel) {
+            const normalizedLabel = String(rawLabel || '').trim()
+            if (normalizedLabel !== '') {
+                return normalizedLabel
+            }
+
+            if (kind === 'audioinput') {
+                return `${this.$t('chats.microphoneInput')} ${index + 1}`
+            }
+
+            return `${this.$t('chats.cameraInput')} ${index + 1}`
+        },
+
+        onSelectedAudioInputChanged() {
+            const selected = String(this.selectedAudioInputId || '')
+            if (selected === '' || this.audioInputDevices.some((device) => device.deviceId === selected)) {
+                return
+            }
+
+            this.selectedAudioInputId = ''
+        },
+
+        async onSelectedVideoInputChanged() {
+            const selected = String(this.selectedVideoInputId || '')
+            if (selected !== '' && !this.videoInputDevices.some((device) => device.deviceId === selected)) {
+                this.selectedVideoInputId = ''
+                return
+            }
+
+            if (this.isVideoPreviewActive && !this.isRecordingVideo && !this.isProcessingVideo && !this.videoStopInProgress) {
+                await this.startVideoPreview({ forceRestart: true })
+            }
+        },
+
+        buildVideoPreviewConstraints() {
+            const selectedVideoInputId = String(this.selectedVideoInputId || '').trim()
+
+            return {
+                video: {
+                    ...(selectedVideoInputId !== '' ? { deviceId: { exact: selectedVideoInputId } } : { facingMode: 'user' }),
+                    width: { ideal: 960 },
+                    height: { ideal: 540 },
+                    frameRate: { ideal: 24, max: 30 },
+                },
+                audio: false,
+            }
+        },
+
+        async attachVideoPreviewStream(stream) {
+            await this.$nextTick()
+            const previewElement = this.$refs.videoPreviewElement
+            if (!(previewElement instanceof HTMLVideoElement)) {
+                return
+            }
+
+            previewElement.srcObject = stream
+            previewElement.muted = true
+            previewElement.playsInline = true
+
+            try {
+                await previewElement.play()
+            } catch (_error) {
+                // Autoplay can be blocked by browser policy.
+            }
+        },
+
+        async startVideoPreview(options = {}) {
+            const forceRestart = options?.forceRestart === true
+            if (!this.canRecordVideo
+                || this.isRecordingVideo
+                || this.isProcessingVideo
+                || this.videoStopInProgress
+                || this.isRecordingVoice
+                || this.isProcessingVoice
+                || this.voiceStopInProgress) {
+                return
+            }
+
+            if (this.isVideoPreviewActive && !forceRestart) {
+                return
+            }
+
+            this.stopVideoPreview()
+            this.isVideoPreviewLoading = true
+
+            let stream = null
+            try {
+                try {
+                    stream = await navigator.mediaDevices.getUserMedia(this.buildVideoPreviewConstraints())
+                } catch (_error) {
+                    stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: false })
+                }
+
+                this.videoPreviewStream = stream
+                this.isVideoPreviewActive = true
+                await this.attachVideoPreviewStream(stream)
+                await this.loadMediaInputDevices()
+            } catch (_error) {
+                if (stream) {
+                    this.stopVideoRecordStreamTracks(stream)
+                }
+                this.videoPreviewStream = null
+                this.isVideoPreviewActive = false
+                alert(this.$t('chats.cameraAccessFailed'))
+            } finally {
+                this.isVideoPreviewLoading = false
+            }
+        },
+
+        stopVideoPreview() {
+            const previewElement = this.$refs.videoPreviewElement
+            if (previewElement instanceof HTMLVideoElement) {
+                previewElement.pause()
+                previewElement.srcObject = null
+            }
+
+            if (this.videoPreviewStream) {
+                this.stopVideoRecordStreamTracks(this.videoPreviewStream)
+            }
+
+            this.videoPreviewStream = null
+            this.isVideoPreviewActive = false
+            this.isVideoPreviewLoading = false
+        },
+
+        async toggleVideoPreview() {
+            if (this.isVideoPreviewActive || this.isVideoPreviewLoading) {
+                this.stopVideoPreview()
+                return
+            }
+
+            await this.startVideoPreview()
+        },
+
         isVoiceRecordingSupported() {
             const hasAudioContext = typeof window !== 'undefined'
                 && Boolean(window.AudioContext || window.webkitAudioContext)
 
             return hasAudioContext
+                && typeof window !== 'undefined'
+                && typeof window.MediaRecorder !== 'undefined'
+                && typeof navigator !== 'undefined'
+                && Boolean(navigator.mediaDevices?.getUserMedia)
+        },
+
+        isVideoRecordingSupported() {
+            return typeof window !== 'undefined'
+                && typeof window.MediaRecorder !== 'undefined'
                 && typeof navigator !== 'undefined'
                 && Boolean(navigator.mediaDevices?.getUserMedia)
         },
@@ -2669,9 +3343,42 @@ export default {
             return ''
         },
 
+        getPreferredVideoMimeType() {
+            if (typeof window === 'undefined' || typeof window.MediaRecorder === 'undefined') {
+                return ''
+            }
+
+            const candidates = [
+                'video/webm;codecs=vp9,opus',
+                'video/webm;codecs=vp8,opus',
+                'video/webm',
+                'video/mp4',
+            ]
+
+            const probe = typeof document !== 'undefined' ? document.createElement('video') : null
+            const canPlay = (candidate) => {
+                if (!probe || typeof probe.canPlayType !== 'function') {
+                    return true
+                }
+
+                const mime = candidate.split(';')[0]?.trim() || candidate
+
+                return probe.canPlayType(mime) !== ''
+            }
+
+            const recorderAndPlayerSupported = candidates.find((candidate) => {
+                return window.MediaRecorder.isTypeSupported(candidate) && canPlay(candidate)
+            })
+
+            return recorderAndPlayerSupported || ''
+        },
+
         buildVoiceCaptureConstraints() {
+            const selectedAudioInputId = String(this.selectedAudioInputId || '').trim()
+
             return {
                 audio: {
+                    ...(selectedAudioInputId !== '' ? { deviceId: { exact: selectedAudioInputId } } : {}),
                     channelCount: { ideal: 1 },
                     echoCancellation: { ideal: true },
                     noiseSuppression: { ideal: true },
@@ -2682,8 +3389,35 @@ export default {
             }
         },
 
+        buildVideoCaptureConstraints() {
+            const selectedAudioInputId = String(this.selectedAudioInputId || '').trim()
+            const selectedVideoInputId = String(this.selectedVideoInputId || '').trim()
+
+            return {
+                video: {
+                    ...(selectedVideoInputId !== '' ? { deviceId: { exact: selectedVideoInputId } } : { facingMode: 'user' }),
+                    width: { ideal: 1280 },
+                    height: { ideal: 720 },
+                    frameRate: { ideal: 30, max: 30 },
+                },
+                audio: {
+                    ...(selectedAudioInputId !== '' ? { deviceId: { exact: selectedAudioInputId } } : {}),
+                    echoCancellation: { ideal: true },
+                    noiseSuppression: { ideal: true },
+                    autoGainControl: { ideal: true },
+                },
+            }
+        },
+
         async startVoiceRecording() {
-            if (!this.canRecordVoice || this.isComposerDisabled || this.isRecordingVoice || this.isProcessingVoice || this.voiceStopInProgress) {
+            if (!this.canRecordVoice
+                || this.isComposerDisabled
+                || this.isRecordingVoice
+                || this.isProcessingVoice
+                || this.voiceStopInProgress
+                || this.isRecordingVideo
+                || this.isProcessingVideo
+                || this.videoStopInProgress) {
                 return
             }
 
@@ -2694,6 +3428,7 @@ export default {
                 } catch (error) {
                     stream = await navigator.mediaDevices.getUserMedia({ audio: true })
                 }
+                await this.loadMediaInputDevices()
                 const recordStartedAt = Date.now()
 
                 this.isProcessingVoice = false
@@ -2879,6 +3614,190 @@ export default {
             }
         },
 
+        async startVideoRecording() {
+            if (!this.canRecordVideo
+                || this.isComposerDisabled
+                || this.isRecordingVideo
+                || this.isProcessingVideo
+                || this.videoStopInProgress
+                || this.isRecordingVoice
+                || this.isProcessingVoice
+                || this.voiceStopInProgress) {
+                return
+            }
+
+            try {
+                this.stopVideoPreview()
+                let stream = null
+                try {
+                    stream = await navigator.mediaDevices.getUserMedia(this.buildVideoCaptureConstraints())
+                } catch (error) {
+                    try {
+                        stream = await navigator.mediaDevices.getUserMedia({video: true, audio: true})
+                    } catch (fallbackError) {
+                        stream = await navigator.mediaDevices.getUserMedia({video: true, audio: false})
+                    }
+                }
+                await this.loadMediaInputDevices()
+
+                const recordStartedAt = Date.now()
+                this.isProcessingVideo = false
+                this.videoRecordDurationSeconds = 0
+                this.videoRecordStartedAt = recordStartedAt
+                this.videoRecordStream = stream
+                this.videoMediaRecorder = null
+                this.videoRecordedChunks = []
+                this.videoRecordedMimeType = ''
+                this.isRecordingVideo = true
+                this.notifyTypingActivity({ immediate: true })
+
+                if (typeof window !== 'undefined' && typeof window.MediaRecorder !== 'undefined') {
+                    const options = {}
+                    const preferredMimeType = this.getPreferredVideoMimeType()
+                    if (preferredMimeType !== '') {
+                        options.mimeType = preferredMimeType
+                    }
+
+                    try {
+                        const recorder = new MediaRecorder(stream, options)
+                        recorder.ondataavailable = (event) => {
+                            if (event.data && event.data.size > 0) {
+                                this.videoRecordedChunks.push(event.data)
+                                if (!this.videoRecordedMimeType && typeof event.data.type === 'string' && event.data.type.trim() !== '') {
+                                    this.videoRecordedMimeType = event.data.type
+                                }
+                            }
+                        }
+
+                        recorder.start(300)
+                        this.videoMediaRecorder = recorder
+                    } catch (error) {
+                        this.videoMediaRecorder = null
+                    }
+                }
+
+                this.videoRecordTimerId = window.setInterval(() => {
+                    this.videoRecordDurationSeconds += 1
+
+                    if (this.videoRecordDurationSeconds >= this.maxVideoRecordDurationSeconds) {
+                        this.stopVideoRecording(false)
+                            .finally(() => {
+                                alert(this.$t('chats.videoLimitReached', { limit: this.formattedVideoRecordDurationLimit }))
+                            })
+                    }
+                }, 1000)
+            } catch (error) {
+                await this.stopVideoRecording(true)
+                alert(this.$t('chats.cameraAccessFailed'))
+            }
+        },
+
+        async stopVideoRecording(forceDiscard = false) {
+            const shouldDiscard = forceDiscard === true
+            if (this.videoStopInProgress) {
+                return
+            }
+
+            this.videoStopInProgress = true
+
+            try {
+                this.stopVideoRecordTimer()
+                const stream = this.videoRecordStream
+                const recorder = this.videoMediaRecorder
+                const recordedDurationMs = this.videoRecordStartedAt
+                    ? Math.max(0, Date.now() - this.videoRecordStartedAt)
+                    : 0
+
+                this.isRecordingVideo = false
+
+                if (shouldDiscard) {
+                    if (stream) {
+                        this.stopVideoRecordStreamTracks(stream)
+                    }
+                    this.videoRecordStream = null
+                    this.videoMediaRecorder = null
+                    this.videoRecordedChunks = []
+                    this.videoRecordedMimeType = ''
+                    this.videoRecordStartedAt = null
+                    this.isProcessingVideo = false
+                    this.notifyTypingActivity({ immediate: true })
+                    return
+                }
+
+                this.isProcessingVideo = true
+
+                try {
+                    if (recorder && recorder.state !== 'inactive') {
+                        if (typeof recorder.requestData === 'function') {
+                            try {
+                                recorder.requestData()
+                            } catch (_error) {
+                                // Ignore data flush errors.
+                            }
+                        }
+
+                        try {
+                            recorder.stop()
+                        } catch (_error) {
+                            // Ignore stop race errors.
+                        }
+                    }
+
+                    let appended = false
+                    if (recorder) {
+                        await this.waitForRecorderInactive(recorder, 2400)
+                        await this.waitForRecordedChunks(this.videoRecordedChunks, 2400)
+
+                        if (this.videoRecordedChunks.length > 0) {
+                            const mimeType = this.videoRecordedMimeType || recorder.mimeType || ''
+                            appended = this.appendRecordedVideo(this.videoRecordedChunks, mimeType, recordedDurationMs)
+                        }
+                    }
+
+                    if (!appended && this.videoRecordedChunks.length > 0) {
+                        const mimeType = this.videoRecordedMimeType || recorder?.mimeType || ''
+                        appended = this.appendRecordedVideo(this.videoRecordedChunks, mimeType, recordedDurationMs)
+                    }
+
+                    if (!appended) {
+                        alert(this.$t('chats.videoNotRecordedRetry'))
+                    }
+                } catch (error) {
+                    let appended = false
+                    if (this.videoRecordedChunks.length > 0) {
+                        const mimeType = this.videoRecordedMimeType || recorder?.mimeType || ''
+                        appended = this.appendRecordedVideo(this.videoRecordedChunks, mimeType, recordedDurationMs)
+                    }
+
+                    if (!appended) {
+                        alert(this.$t('chats.videoNotRecordedRetry'))
+                    }
+                } finally {
+                    if (recorder && recorder.state !== 'inactive') {
+                        try {
+                            recorder.stop()
+                        } catch (_error) {
+                            // Ignore repeated stop calls.
+                        }
+                    }
+
+                    if (stream) {
+                        this.stopVideoRecordStreamTracks(stream)
+                    }
+
+                    this.videoRecordStream = null
+                    this.videoMediaRecorder = null
+                    this.videoRecordedChunks = []
+                    this.videoRecordedMimeType = ''
+                    this.videoRecordStartedAt = null
+                    this.isProcessingVideo = false
+                    this.notifyTypingActivity({ immediate: true })
+                }
+            } finally {
+                this.videoStopInProgress = false
+            }
+        },
+
         captureVoicePcmFrame() {
             if (!this.voicePcmAnalyserNode) {
                 return
@@ -3060,7 +3979,37 @@ export default {
             }
         },
 
+        stopVideoRecordTimer() {
+            if (this.videoRecordTimerId) {
+                window.clearInterval(this.videoRecordTimerId)
+                this.videoRecordTimerId = null
+            }
+
+            this.videoRecordDurationSeconds = 0
+        },
+
+        stopVideoRecordStreamTracks(stream) {
+            if (!stream) {
+                return
+            }
+
+            for (const track of stream.getTracks()) {
+                track.stop()
+            }
+        },
+
         normalizeRecordedAudioMimeType(mimeType) {
+            const normalized = String(mimeType || '').toLowerCase().trim()
+            if (!normalized) {
+                return ''
+            }
+
+            const [baseType] = normalized.split(';')
+
+            return baseType?.trim() || ''
+        },
+
+        normalizeRecordedVideoMimeType(mimeType) {
             const normalized = String(mimeType || '').toLowerCase().trim()
             if (!normalized) {
                 return ''
@@ -3087,6 +4036,36 @@ export default {
             const file = new File([blob], `voice-${timestamp}.${extension}`, { type: blobType })
             const key = `voice-${timestamp}-${Math.random().toString(36).slice(2)}`
             this.appendVoiceFileToComposer(file, key, file.type || blobType || '')
+
+            return true
+        },
+
+        appendRecordedVideo(chunks, mimeType, recordedDurationMs = 0) {
+            const blobType = this.normalizeRecordedVideoMimeType(mimeType)
+            const blob = blobType !== ''
+                ? new Blob(chunks, { type: blobType })
+                : new Blob(chunks)
+
+            if (blob.size === 0) {
+                alert(this.$t('chats.videoEmptyRetry'))
+                return false
+            }
+
+            const extension = this.fileExtensionFromMime(blobType)
+            const timestamp = Date.now()
+            const file = new File([blob], `video-${timestamp}.${extension}`, { type: blobType || 'video/webm' })
+            const key = `video-${timestamp}-${Math.random().toString(36).slice(2)}`
+            const url = URL.createObjectURL(file)
+
+            this.selectedFiles.push({key, file})
+            this.selectedFilePreviews.push({
+                key,
+                url,
+                kind: 'video',
+                name: file.name,
+                mimeType: file.type || blobType || 'video/webm',
+                size: Number(file.size || 0),
+            })
 
             return true
         },
@@ -3286,7 +4265,15 @@ export default {
         },
 
         async sendMessage() {
-            if (!this.activeConversation || !this.canSendCurrentMessage || this.activeConversation.is_blocked) {
+            if (!this.activeConversation
+                || !this.canSendCurrentMessage
+                || this.activeConversation.is_blocked
+                || this.isRecordingVoice
+                || this.isProcessingVoice
+                || this.voiceStopInProgress
+                || this.isRecordingVideo
+                || this.isProcessingVideo
+                || this.videoStopInProgress) {
                 return
             }
 
@@ -3314,10 +4301,14 @@ export default {
                     })
                 }
 
-                this.upsertMessage(response.data.data)
+                const normalizedMessage = this.normalizeMessage(response.data.data)
+                this.upsertMessage(normalizedMessage)
                 this.messageBody = ''
                 this.clearSelectedFiles()
-                this.updateConversationFromIncoming(response.data.data)
+                this.updateConversationFromIncoming(normalizedMessage)
+                this.notifyChatSyncMessage(normalizedMessage, {
+                    markRead: true,
+                })
                 this.$nextTick(() => this.scrollMessagesDown())
                 this.notifyTypingStopped()
             } catch (error) {
@@ -3639,6 +4630,9 @@ export default {
                 await axios.delete(`/api/chats/${this.activeConversation.id}/messages/${messageId}`)
                 this.removeMessageLocally(messageId)
                 await this.loadConversations()
+                this.notifyChatSyncStateRefresh({
+                    conversationId: this.activeConversation?.id ?? null,
+                })
             } catch (error) {
                 alert(this.resolveApiMessage(error, this.$t('chats.deleteMessageFailed')))
             } finally {
@@ -3681,6 +4675,9 @@ export default {
                 }
 
                 await this.loadConversations()
+                this.notifyChatSyncStateRefresh({
+                    conversationId: this.activeConversation?.id ?? null,
+                })
             } catch (error) {
                 alert(this.resolveApiMessage(error, this.$t('chats.deleteAttachmentFailed')))
             } finally {

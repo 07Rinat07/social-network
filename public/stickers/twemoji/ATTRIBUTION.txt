@@ -1,0 +1,14 @@
+Twemoji sticker assets used in this project.
+
+Source:
+https://github.com/twitter/twemoji
+
+CDN (download origin):
+https://cdn.jsdelivr.net/gh/twitter/twemoji@14.0.2/assets/72x72/
+
+License:
+Creative Commons Attribution 4.0 International (CC BY 4.0)
+https://creativecommons.org/licenses/by/4.0/
+
+Copyright:
+Copyright 2020 Twitter, Inc and other contributors.
