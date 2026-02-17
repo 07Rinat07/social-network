@@ -44,7 +44,9 @@ SPA-социальная сеть на `Laravel + Vue` с realtime-чатами,
 - Личные и общие диалоги.
 - Presence: кто онлайн на сайте и в конкретном чате.
 - Typing indicator через `whisper`.
+- Статусы настроения с настройкой видимости (для всех или скрытие от выбранных участников).
 - Архивирование/восстановление чатов, реакции, вложения.
+- Удаление сообщений/вложений автором и администратором (через API), синхронизация между страницей чатов и виджетом.
 - Транспорт realtime: `Laravel Reverb` + `pusher` protocol.
 
 ### IPTV
@@ -78,15 +80,63 @@ SPA-социальная сеть на `Laravel + Vue` с realtime-чатами,
 
 ## Скриншоты интерфейса
 
-Нажмите на изображение, чтобы открыть полный размер.
+Актуальная галерея интерфейса. Нажмите на изображение, чтобы открыть полный размер.
 
-| Главная (лента в движении) | Чаты |
-|---|---|
-| [![Главная страница Solid Social](docs/screenshots/home-feed.png)](docs/screenshots/home-feed.png) | [![Страница чатов Solid Social](docs/screenshots/chat-page.png)](docs/screenshots/chat-page.png) |
+<table>
+  <tr>
+    <td align="center" width="33%">
+      <a href="docs/screenshots/home-feed.png" target="_blank" rel="noopener noreferrer">
+        <img src="docs/screenshots/home-feed.png" alt="Главная страница Solid Social" height="200">
+      </a>
+      <br>
+      <sub><b>Главная / лента</b></sub>
+    </td>
+    <td align="center" width="33%">
+      <a href="docs/screenshots/chat-page.png" target="_blank" rel="noopener noreferrer">
+        <img src="docs/screenshots/chat-page.png" alt="Страница чатов Solid Social" height="200">
+      </a>
+      <br>
+      <sub><b>Чаты</b></sub>
+    </td>
+    <td align="center" width="33%">
+      <a href="docs/screenshots/radio.png" target="_blank" rel="noopener noreferrer">
+        <img src="docs/screenshots/radio.png" alt="Радио Solid Social" height="200">
+      </a>
+      <br>
+      <sub><b>Радио</b></sub>
+    </td>
+  </tr>
+  <tr>
+    <td align="center" width="33%">
+      <a href="docs/screenshots/iptv-playing.png" target="_blank" rel="noopener noreferrer">
+        <img src="docs/screenshots/iptv-playing.png" alt="IPTV с воспроизводимым каналом" height="200">
+      </a>
+      <br>
+      <sub><b>IPTV</b></sub>
+    </td>
+    <td align="center" width="33%">
+      <a href="docs/screenshots/cabinet.png" target="_blank" rel="noopener noreferrer">
+        <img src="docs/screenshots/cabinet.png" alt="Кабинет пользователя Solid Social" height="200">
+      </a>
+      <br>
+      <sub><b>Кабинет пользователя</b></sub>
+    </td>
+    <td align="center" width="33%">
+      <a href="docs/screenshots/admin-settings.png" target="_blank" rel="noopener noreferrer">
+        <img src="docs/screenshots/admin-settings.png" alt="Админка: раздел настроек" height="200">
+      </a>
+      <br>
+      <sub><b>Админ-панель</b></sub>
+    </td>
+  </tr>
+  <tr>
+    <td colspan="3" align="center">
+      <sub>Скриншоты открываются в новой вкладке — вернуться можно, просто закрыв её.</sub>
+    </td>
+  </tr>
+</table>
 
-| IPTV (воспроизведение канала) | Админ-панель: Настройки сайта |
-|---|---|
-| [![IPTV с воспроизводимым каналом](docs/screenshots/iptv-playing.png)](docs/screenshots/iptv-playing.png) | [![Админка: раздел Настройки сайта](docs/screenshots/admin-settings.png)](docs/screenshots/admin-settings.png) |
+Каталог со скриншотами: `docs/screenshots/`.
 
 ## Карта модулей
 | Модуль | Назначение | Точка входа |
@@ -248,6 +298,7 @@ docker/
 - Radio API: `RADIO_BROWSER_BASE_URL`
 
 ## Тестирование
+Локально:
 - Все тесты: `php artisan test`
 - Feature suite: `php artisan test --testsuite=Feature`
 - IPTV: `php artisan test tests/Feature/IptvFeatureTest.php`
@@ -255,6 +306,13 @@ docker/
 - Broadcast channels: `php artisan test tests/Feature/BroadcastChannelsFeatureTest.php`
 - Админка: `php artisan test tests/Feature/AdminPanelFeatureTest.php`
 - Фронт-билд: `npm run build`
+
+В Docker:
+- Все тесты (одноразовый test-контейнер): `docker compose --profile test run --rm test`
+- Все тесты (в запущенном app-контейнере): `docker compose exec app php artisan test`
+- Feature suite: `docker compose exec app php artisan test --testsuite=Feature`
+- Конкретный файл тестов: `docker compose exec app php artisan test tests/Feature/ChatFeatureTest.php`
+- Фронт-билд: `docker compose run --rm frontend-build`
 
 Рекомендуемый pre-commit check:
 - `php artisan test`
@@ -268,7 +326,16 @@ docker/
 - `GET /api/site/world-overview?locale=ru|en`
 
 ### Авторизованные + verified
-- Чаты: `GET /api/chats`, `GET /api/chats/unread-summary`, `GET /api/chats/{conversation}/messages`, `POST /api/chats/{conversation}/messages`
+- Чаты:
+  - `GET /api/chats`, `GET /api/chats/unread-summary`, `GET /api/chats/users`
+  - `POST /api/chats/direct/{user}`, `GET /api/chats/{conversation}`, `POST /api/chats/{conversation}/read`
+  - `GET /api/chats/{conversation}/messages`, `POST /api/chats/{conversation}/messages`
+  - `POST /api/chats/{conversation}/messages/{message}/reactions`
+  - `DELETE /api/chats/{conversation}/messages/{message}`
+  - `DELETE /api/chats/{conversation}/messages/{message}/attachments/{attachment}`
+  - `GET /api/chats/settings`, `PATCH /api/chats/settings`
+  - `GET /api/chats/archives`, `POST /api/chats/archives`, `GET /api/chats/archives/{archive}/download`, `POST /api/chats/archives/{archive}/restore`
+  - `PATCH /api/chats/{conversation}/mood-status`
 - Радио: `GET /api/radio/stations`, `GET /api/radio/favorites`, `POST /api/radio/favorites`, `DELETE /api/radio/favorites/{stationUuid}`
 - IPTV библиотека и импорт: `POST /api/iptv/playlist/fetch`, `GET /api/iptv/saved`, `POST /api/iptv/saved/playlists`, `PATCH /api/iptv/saved/playlists/{playlistId}`, `DELETE /api/iptv/saved/playlists/{playlistId}`, `POST /api/iptv/saved/channels`, `PATCH /api/iptv/saved/channels/{channelId}`, `DELETE /api/iptv/saved/channels/{channelId}`
 - `POST /api/iptv/proxy/start`, `DELETE /api/iptv/proxy/{session}`
@@ -283,6 +350,7 @@ docker/
 - OpenAPI JSON: `GET /docs/api-docs.json`
 - Генерация документации: `php artisan l5-swagger:generate`
 - Базовые аннотации: `app/OpenApi/OpenApiSpec.php`
+- В актуальной спецификации покрыты ключевые user-chat и admin-chat эндпоинты (диалоги, сообщения, реакции, mood status, удаление, массовая очистка и модерация сообщений в админке).
 
 ## Тестовые аккаунты
 Доступны после `php artisan db:seed`:

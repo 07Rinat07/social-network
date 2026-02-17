@@ -107,6 +107,7 @@ Route::middleware(['auth:sanctum', 'verified'])->group(function () {
     Route::post('/chats/direct/{user}', [ChatController::class, 'createOrGetDirect']);
     Route::get('/chats/{conversation}', [ChatController::class, 'show']);
     Route::post('/chats/{conversation}/read', [ChatController::class, 'markRead']);
+    Route::patch('/chats/{conversation}/mood-status', [ChatController::class, 'upsertMoodStatus']);
     Route::get('/chats/{conversation}/messages', [ChatController::class, 'messages']);
     Route::post('/chats/{conversation}/messages', [ChatController::class, 'storeMessage']);
     Route::post('/chats/{conversation}/messages/{message}/reactions', [ChatController::class, 'toggleMessageReaction']);

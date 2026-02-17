@@ -3,8 +3,10 @@
 namespace App\Http\Controllers;
 
 use App\Events\ConversationMessageSent;
+use App\Events\ConversationMoodStatusUpdated;
 use App\Models\ChatArchive;
 use App\Models\Conversation;
+use App\Models\ConversationMoodStatus;
 use App\Models\ConversationMessage;
 use App\Models\ConversationMessageAttachment;
 use App\Models\ConversationMessageReaction;
@@ -13,6 +15,7 @@ use App\Models\User;
 use App\Models\UserChatSetting;
 use App\Models\UserBlock;
 use App\Services\SiteSettingService;
+use Illuminate\Http\File;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\UploadedFile;
@@ -22,6 +25,7 @@ use Illuminate\Support\Str;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Validation\Rule;
+use Symfony\Component\Process\Process;
 use Symfony\Component\HttpFoundation\StreamedResponse;
 
 class ChatController extends Controller
@@ -57,6 +61,7 @@ class ChatController extends Controller
                 'lastMessage.user:id,name,nickname,avatar_path,is_admin',
                 'lastMessage.attachments',
                 'lastMessage.reactions',
+                'moodStatuses.user:id,name,nickname,avatar_path,is_admin',
             ])
             ->latest('updated_at')
             ->get();
@@ -431,6 +436,7 @@ class ChatController extends Controller
             'lastMessage.user:id,name,nickname,avatar_path,is_admin',
             'lastMessage.attachments',
             'lastMessage.reactions',
+            'moodStatuses.user:id,name,nickname,avatar_path,is_admin',
         ]);
 
         $this->markConversationAsRead($restoredConversation, $user->id);
@@ -693,6 +699,7 @@ class ChatController extends Controller
             'lastMessage.user:id,name,nickname,avatar_path,is_admin',
             'lastMessage.attachments',
             'lastMessage.reactions',
+            'moodStatuses.user:id,name,nickname,avatar_path,is_admin',
         ]);
 
         $unreadCounts = $this->resolveUnreadCounts([$conversation->id], $viewer->id);
@@ -711,6 +718,7 @@ class ChatController extends Controller
             'lastMessage.user:id,name,nickname,avatar_path,is_admin',
             'lastMessage.attachments',
             'lastMessage.reactions',
+            'moodStatuses.user:id,name,nickname,avatar_path,is_admin',
         ]);
 
         $viewerId = $request->user()->id;
@@ -723,6 +731,90 @@ class ChatController extends Controller
 
         return response()->json([
             'data' => $this->conversationPayload($conversation, $viewerId, (int) ($unreadCounts[$conversation->id] ?? 0)),
+        ]);
+    }
+
+    public function upsertMoodStatus(Conversation $conversation, Request $request): JsonResponse
+    {
+        $viewer = $request->user();
+        $viewerId = (int) $viewer->id;
+
+        $this->ensureAccess($conversation, $viewerId);
+        $this->ensureParticipantRecords(
+            collect([$conversation]),
+            $viewerId,
+            $conversation->type === Conversation::TYPE_GLOBAL ? $conversation->id : null
+        );
+
+        $validated = $request->validate([
+            'text' => ['nullable', 'string', 'max:500'],
+            'is_visible_to_all' => ['required', 'boolean'],
+            'hidden_user_ids' => ['nullable', 'array'],
+            'hidden_user_ids.*' => ['integer', 'distinct'],
+        ]);
+
+        $text = trim((string) ($validated['text'] ?? ''));
+        $isVisibleToAll = (bool) $validated['is_visible_to_all'];
+
+        $rawHiddenUserIds = collect($validated['hidden_user_ids'] ?? [])
+            ->map(static fn (mixed $value): int => (int) $value)
+            ->filter(static fn (int $id): bool => $id > 0)
+            ->unique()
+            ->values();
+
+        $conversation->loadMissing('participants:id');
+        $allowedHiddenUserIds = $conversation->participants
+            ->pluck('id')
+            ->map(static fn (mixed $value): int => (int) $value)
+            ->filter(static fn (int $id) => $id > 0 && $id !== $viewerId)
+            ->unique()
+            ->values();
+
+        $hiddenUserIds = $rawHiddenUserIds
+            ->filter(static fn (int $id) => $allowedHiddenUserIds->contains($id))
+            ->values()
+            ->all();
+
+        if ($text === '') {
+            ConversationMoodStatus::query()
+                ->where('conversation_id', $conversation->id)
+                ->where('user_id', $viewerId)
+                ->delete();
+        } else {
+            ConversationMoodStatus::query()->updateOrCreate(
+                [
+                    'conversation_id' => $conversation->id,
+                    'user_id' => $viewerId,
+                ],
+                [
+                    'text' => $text,
+                    'is_visible_to_all' => $isVisibleToAll,
+                    'hidden_for_user_ids' => $isVisibleToAll ? [] : $hiddenUserIds,
+                ]
+            );
+        }
+
+        broadcast(new ConversationMoodStatusUpdated((int) $conversation->id, $viewerId))->toOthers();
+
+        $conversation->load([
+            'participants:id,name,nickname,avatar_path,is_admin',
+            'lastMessage.user:id,name,nickname,avatar_path,is_admin',
+            'lastMessage.attachments',
+            'lastMessage.reactions',
+            'moodStatuses.user:id,name,nickname,avatar_path,is_admin',
+        ]);
+
+        $unreadCounts = $this->resolveUnreadCounts([$conversation->id], $viewerId);
+
+        return response()->json([
+            'message' => 'Mood status updated.',
+            'data' => [
+                'conversation' => $this->conversationPayload(
+                    $conversation,
+                    $viewerId,
+                    (int) ($unreadCounts[$conversation->id] ?? 0)
+                ),
+            ],
         ]);
     }
 
@@ -949,7 +1041,7 @@ class ChatController extends Controller
             abort(404);
         }
 
-        $canDelete = (int) $message->user_id === (int) $viewer->id;
+        $canDelete = (int) $message->user_id === (int) $viewer->id || (bool) $viewer->is_admin;
         if (!$canDelete) {
             return response()->json([
                 'message' => 'Access denied to delete this message.',
@@ -994,7 +1086,7 @@ class ChatController extends Controller
             abort(404);
         }
 
-        $canDelete = (int) $message->user_id === (int) $viewer->id;
+        $canDelete = (int) $message->user_id === (int) $viewer->id || (bool) $viewer->is_admin;
         if (!$canDelete) {
             return response()->json([
                 'message' => 'Access denied to delete this attachment.',
@@ -1068,6 +1160,35 @@ class ChatController extends Controller
 
         $disk = $this->siteSettingService->resolveMediaDiskForUser($viewer);
 
+        if ($type === ConversationMessageAttachment::TYPE_VIDEO) {
+            $converted = $this->convertVideoAttachmentToMp4($file);
+            if ($converted !== null) {
+                $convertedFile = null;
+
+                try {
+                    $convertedFile = new File($converted['path']);
+                    $path = $this->storeLocalFileWithFallback($convertedFile, $folder, $disk);
+
+                    $message->attachments()->create([
+                        'path' => $path['path'],
+                        'storage_disk' => $path['disk'],
+                        'type' => $type,
+                        'mime_type' => 'video/mp4',
+                        'size' => (int) ($converted['size'] ?? 0),
+                        'original_name' => $converted['original_name'],
+                    ]);
+
+                    return;
+                } catch (\Throwable) {
+                    // Fallback to original file when conversion output cannot be persisted.
+                } finally {
+                    if (is_file($converted['path'])) {
+                        @unlink($converted['path']);
+                    }
+                }
+            }
+        }
+
         try {
             $path = $file->store($folder, $disk);
         } catch (\Throwable) {
@@ -1083,6 +1204,183 @@ class ChatController extends Controller
             'size' => $file->getSize(),
             'original_name' => $file->getClientOriginalName(),
         ]);
+    }
+
+    /**
+     * @return array{path: string, original_name: string, size: int}|null
+     */
+    protected function convertVideoAttachmentToMp4(UploadedFile $file): ?array
+    {
+        $serverMimeType = strtolower((string) ($file->getMimeType() ?: ''));
+        $clientMimeType = strtolower((string) ($file->getClientMimeType() ?: ''));
+        $clientExtension = strtolower((string) $file->getClientOriginalExtension());
+
+        if (
+            $clientExtension === 'mp4'
+            || str_contains($serverMimeType, 'mp4')
+            || str_contains($clientMimeType, 'mp4')
+        ) {
+            return null;
+        }
+
+        $binary = $this->resolveChatFfmpegBinary();
+        if ($binary === null) {
+            return null;
+        }
+
+        $sourcePath = trim((string) $file->getRealPath());
+        if ($sourcePath === '' || !is_file($sourcePath)) {
+            return null;
+        }
+
+        $outputPath = tempnam(sys_get_temp_dir(), 'chat-mp4-');
+        if (!is_string($outputPath) || $outputPath === '') {
+            return null;
+        }
+
+        @unlink($outputPath);
+        $outputPath .= '.mp4';
+
+        $process = new Process([
+            $binary,
+            '-hide_banner',
+            '-nostdin',
+            '-loglevel', 'error',
+            '-y',
+            '-i', $sourcePath,
+            '-map', '0:v:0?',
+            '-map', '0:a:0?',
+            '-c:v', 'libx264',
+            '-preset', 'veryfast',
+            '-pix_fmt', 'yuv420p',
+            '-movflags', '+faststart',
+            '-c:a', 'aac',
+            '-b:a', '128k',
+            $outputPath,
+        ]);
+
+        $process->setTimeout(180);
+        $process->setIdleTimeout(180);
+
+        try {
+            $process->run();
+        } catch (\Throwable) {
+            if (is_file($outputPath)) {
+                @unlink($outputPath);
+            }
+            return null;
+        }
+
+        if (!$process->isSuccessful() || !is_file($outputPath) || filesize($outputPath) <= 0) {
+            if (is_file($outputPath)) {
+                @unlink($outputPath);
+            }
+            return null;
+        }
+
+        $originalName = $this->replaceFileExtensionWithMp4((string) $file->getClientOriginalName());
+        $size = (int) (filesize($outputPath) ?: 0);
+
+        return [
+            'path' => $outputPath,
+            'original_name' => $originalName,
+            'size' => $size,
+        ];
+    }
+
+    /**
+     * @return array{path: string, disk: string}
+     */
+    protected function storeLocalFileWithFallback(File $file, string $folder, string $preferredDisk): array
+    {
+        try {
+            $path = Storage::disk($preferredDisk)->putFile($folder, $file);
+            if (!is_string($path) || trim($path) === '') {
+                throw new \RuntimeException('Failed to store converted chat file on preferred disk.');
+            }
+
+            return [
+                'path' => $path,
+                'disk' => $preferredDisk,
+            ];
+        } catch (\Throwable) {
+            $path = Storage::disk('public')->putFile($folder, $file);
+            if (!is_string($path) || trim($path) === '') {
+                throw new \RuntimeException('Failed to store converted chat file on fallback disk.');
+            }
+
+            return [
+                'path' => $path,
+                'disk' => 'public',
+            ];
+        }
+    }
+
+    protected function replaceFileExtensionWithMp4(string $originalName): string
+    {
+        $name = trim($originalName);
+        if ($name === '') {
+            return 'video.mp4';
+        }
+
+        $dotPosition = strrpos($name, '.');
+        if ($dotPosition === false) {
+            return $name . '.mp4';
+        }
+
+        $base = substr($name, 0, $dotPosition);
+        return ($base !== '' ? $base : 'video') . '.mp4';
+    }
+
+    protected function resolveChatFfmpegBinary(): ?string
+    {
+        static $resolved = false;
+        static $binary = null;
+
+        if ($resolved) {
+            return $binary;
+        }
+
+        $configured = trim((string) env('CHAT_FFMPEG_BIN', env('IPTV_FFMPEG_BIN', 'ffmpeg')));
+        $candidates = [$configured !== '' ? $configured : 'ffmpeg', 'ffmpeg'];
+
+        if (DIRECTORY_SEPARATOR === '\\') {
+            $candidates[] = 'ffmpeg.exe';
+        }
+
+        $unique = [];
+        foreach ($candidates as $candidate) {
+            $normalized = trim((string) $candidate);
+            if ($normalized === '' || in_array($normalized, $unique, true)) {
+                continue;
+            }
+
+            $unique[] = $normalized;
+        }
+
+        foreach ($unique as $candidate) {
+            $probe = new Process([$candidate, '-version']);
+            $probe->setTimeout(15);
+            $probe->setIdleTimeout(15);
+
+            try {
+                $probe->run();
+            } catch (\Throwable) {
+                continue;
+            }
+
+            if (!$probe->isSuccessful()) {
+                continue;
+            }
+
+            $binary = $candidate;
+            $resolved = true;
+            return $binary;
+        }
+
+        $resolved = true;
+        $binary = null;
+        return null;
     }
 
     protected function nameHasExtension(string $name, array $extensions): bool
@@ -1348,6 +1646,11 @@ class ChatController extends Controller
         $lastMessage = $conversation->relationLoaded('lastMessage')
             ? $conversation->lastMessage
             : null;
+        $moodStatuses = $conversation->relationLoaded('moodStatuses')
+            ? $conversation->moodStatuses
+            : $conversation->moodStatuses()
+                ->with('user:id,name,nickname,avatar_path,is_admin')
+                ->get();
 
         $otherParticipant = $participants->first(fn (User $user) => $user->id !== $viewerId);
 
@@ -1389,7 +1692,71 @@ class ChatController extends Controller
                 'is_admin' => (bool) $user->is_admin,
             ])->values(),
             'last_message' => $lastMessage ? $this->messagePayload($lastMessage, $viewerId) : null,
+            'mood_statuses' => $this->conversationMoodStatusesPayload($moodStatuses, $viewerId),
             'updated_at' => $conversation->updated_at?->toIso8601String(),
+        ];
+    }
+
+    protected function conversationMoodStatusesPayload(Collection $statusItems, int $viewerId): array
+    {
+        if ($statusItems->isEmpty()) {
+            return [];
+        }
+
+        return $statusItems
+            ->map(fn (ConversationMoodStatus $status) => $this->conversationMoodStatusPayload($status, $viewerId))
+            ->filter(static fn (mixed $status): bool => is_array($status))
+            ->values()
+            ->all();
+    }
+
+    protected function conversationMoodStatusPayload(ConversationMoodStatus $status, int $viewerId): ?array
+    {
+        $text = trim((string) $status->text);
+        if ($text === '') {
+            return null;
+        }
+
+        $ownerId = (int) $status->user_id;
+        $isOwner = $ownerId === $viewerId;
+
+        $hiddenUserIds = collect($status->hidden_for_user_ids ?? [])
+            ->map(static fn (mixed $value): int => (int) $value)
+            ->filter(static fn (int $id): bool => $id > 0)
+            ->unique()
+            ->values()
+            ->all();
+
+        $isVisibleToViewer = $isOwner
+            || (bool) $status->is_visible_to_all
+            || !in_array($viewerId, $hiddenUserIds, true);
+
+        if (!$isVisibleToViewer) {
+            return null;
+        }
+
+        $owner = $status->relationLoaded('user')
+            ? $status->user
+            : $status->user()->first();
+
+        return [
+            'id' => (int) $status->id,
+            'user_id' => $ownerId,
+            'text' => $text,
+            'updated_at' => $status->updated_at?->toIso8601String(),
+            'is_owner' => $isOwner,
+            'visibility' => [
+                'is_visible_to_all' => (bool) $status->is_visible_to_all,
+                'hidden_user_ids' => $isOwner ? $hiddenUserIds : [],
+            ],
+            'user' => $owner ? [
+                'id' => (int) $owner->id,
+                'name' => $owner->name,
+                'display_name' => $owner->display_name,
+                'nickname' => $owner->nickname,
+                'avatar_url' => $owner->avatar_url,
+                'is_admin' => (bool) $owner->is_admin,
+            ] : null,
         ];
     }
 

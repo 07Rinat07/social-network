@@ -3,7 +3,13 @@
         <header class="post-head">
             <div class="post-author-row">
                 <router-link class="post-avatar-link" :to="{name: 'user.show', params: {id: post.user.id}}">
-                    <img v-if="avatarUrl(post.user)" class="avatar post-avatar" :src="avatarUrl(post.user)" :alt="displayName(post.user)">
+                    <img
+                        v-if="avatarUrl(post.user)"
+                        class="avatar post-avatar"
+                        :src="avatarUrl(post.user)"
+                        :alt="displayName(post.user)"
+                        @error="onAvatarImageError"
+                    >
                     <span v-else class="avatar post-avatar avatar-placeholder">{{ initials(post.user) }}</span>
                 </router-link>
 
@@ -44,7 +50,12 @@
                             @load="handlePreviewLoad"
                         >
                     </button>
-                    <MediaPlayer v-else type="video" :src="media.url" player-class="media-video"></MediaPlayer>
+                    <div v-else class="media-video-container">
+                        <MediaPlayer type="video" :src="media.url" player-class="media-video"></MediaPlayer>
+                        <a :href="media.url" :download="`video-${media.id || 'download'}.mp4`" class="btn btn-outline btn-sm media-download-btn" target="_blank">
+                            📥 Скачать MP4
+                        </a>
+                    </div>
                     <button
                         v-if="media.can_delete"
                         type="button"
@@ -85,7 +96,12 @@
                             @load="handlePreviewLoad"
                         >
                     </button>
-                    <MediaPlayer v-else type="video" :src="media.url" player-class="media-video"></MediaPlayer>
+                    <div v-else class="media-video-container">
+                        <MediaPlayer type="video" :src="media.url" player-class="media-video"></MediaPlayer>
+                        <a :href="media.url" :download="`video-${media.id || 'download'}.mp4`" class="btn btn-outline btn-sm media-download-btn" target="_blank">
+                            📥 Скачать MP4
+                        </a>
+                    </div>
                 </template>
             </div>
         </section>
@@ -217,6 +233,7 @@ export default {
             emojis: ['🔥', '👍', '❤️', '👏', '😂', '😎'],
             showCommentStickerTray: false,
             showRepostStickerTray: false,
+            failedAvatarUrls: {},
         }
     },
 
@@ -271,8 +288,50 @@ export default {
             this.$refs.mediaLightbox?.open(url, alt)
         },
 
+        normalizeAvatarUrl(value) {
+            const raw = String(value || '').trim()
+            if (raw === '') {
+                return ''
+            }
+
+            if (typeof window === 'undefined') {
+                return raw
+            }
+
+            try {
+                return new URL(raw, window.location.origin).href
+            } catch (_error) {
+                return raw
+            }
+        },
+
+        onAvatarImageError(event) {
+            const target = event?.target
+            const sources = [
+                target?.getAttribute?.('src') || '',
+                target?.currentSrc || '',
+                target?.src || '',
+            ]
+
+            const next = { ...this.failedAvatarUrls }
+            for (const source of sources) {
+                const normalized = this.normalizeAvatarUrl(source)
+                if (normalized !== '') {
+                    next[normalized] = true
+                }
+            }
+
+            this.failedAvatarUrls = next
+        },
+
         avatarUrl(user) {
-            return user?.avatar_url || null
+            const raw = String(user?.avatar_url || '').trim()
+            if (raw === '') {
+                return null
+            }
+
+            const normalized = this.normalizeAvatarUrl(raw)
+            return this.failedAvatarUrls[normalized] ? null : raw
         },
 
         initials(user) {

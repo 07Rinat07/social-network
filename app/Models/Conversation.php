@@ -41,6 +41,13 @@ class Conversation extends Model
         return $this->hasMany(ConversationMessage::class, 'conversation_id', 'id');
     }
 
+    public function moodStatuses(): HasMany
+    {
+        return $this->hasMany(ConversationMoodStatus::class, 'conversation_id', 'id')
+            ->orderByDesc('updated_at')
+            ->orderByDesc('id');
+    }
+
     public function lastMessage(): HasOne
     {
         return $this->hasOne(ConversationMessage::class, 'conversation_id', 'id')->latestOfMany();

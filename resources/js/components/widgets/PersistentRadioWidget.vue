@@ -262,7 +262,7 @@ const RADIO_PLAYBACK_READY_EVENT = 'social:radio:playback-ready'
 const RADIO_PLAYBACK_SOURCE_WIDGET = 'widget-radio'
 const RADIO_PLAYBACK_SOURCE_PAGE = 'radio-page'
 const DESKTOP_FLOATING_BREAKPOINT = 1241
-const WIDGET_EDGE_GAP = 12
+const WIDGET_EDGE_GAP = 72
 const RADIO_WIDGET_BUILTIN_STATIONS = RADIO_PRESET_CATALOG
 
 export default {
@@ -301,7 +301,7 @@ export default {
             boundPlayer: null,
             boundPlayerEvents: [],
             playbackSessionStartedAt: 0,
-            isPinned: false,
+            isPinned: true,
             floatingPosition: {
                 left: 0,
                 top: 0,
@@ -392,13 +392,17 @@ export default {
         },
 
         floatingStyle() {
-            if (!this.isMovableMode || !this.isFloatingReady) {
+            if (!this.isMovableMode) {
                 return null
             }
 
+            const basePosition = this.isFloatingReady
+                ? this.floatingPosition
+                : this.getDefaultFloatingPosition()
+
             return {
-                left: `${Math.round(this.floatingPosition.left)}px`,
-                top: `${Math.round(this.floatingPosition.top)}px`,
+                left: `${Math.round(basePosition.left)}px`,
+                top: `${Math.round(basePosition.top)}px`,
                 position: 'fixed',
             }
         },
@@ -554,7 +558,11 @@ export default {
 
             const forceDefault = Boolean(options?.forceDefault)
             this.$nextTick(() => {
-                const basePosition = forceDefault ? this.getDefaultFloatingPosition() : this.floatingPosition
+                const currentLeft = Number(this.floatingPosition?.left)
+                const currentTop = Number(this.floatingPosition?.top)
+                const hasStoredPosition = Number.isFinite(currentLeft) && Number.isFinite(currentTop) && currentLeft > 0 && currentTop > 0
+                const useDefault = forceDefault || this.isPinned || !hasStoredPosition
+                const basePosition = useDefault ? this.getDefaultFloatingPosition() : this.floatingPosition
 
                 this.floatingPosition = this.clampFloatingPosition(basePosition)
                 this.isFloatingReady = true
@@ -656,7 +664,7 @@ export default {
             this.autoplayNotice = ''
             this.unbindPlayerStateEvents()
             this.playbackSessionStartedAt = 0
-            this.isPinned = false
+            this.isPinned = true
             this.floatingPosition = {
                 left: 0,
                 top: 0,
@@ -709,7 +717,7 @@ export default {
                     ? parsedBuiltinCategory
                     : 'all'
                 this.shouldResumePlayback = Boolean(parsed?.shouldResumePlayback)
-                this.isPinned = parsed?.isPinned === true
+                this.isPinned = parsed?.isPinned !== false
 
                 const storedLeft = Number(parsed?.floatingPosition?.left)
                 const storedTop = Number(parsed?.floatingPosition?.top)
@@ -729,7 +737,7 @@ export default {
                 this.builtinCategory = 'all'
                 this.shouldResumePlayback = false
                 this.currentStation = null
-                this.isPinned = false
+                this.isPinned = true
                 this.floatingPosition = {
                     left: 0,
                     top: 0,

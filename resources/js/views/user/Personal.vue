@@ -20,11 +20,16 @@
                         style="width: auto;"
                         @click="openMedia(profileAvatarUrl, profileDisplayName)"
                     >
-                        <img :src="profileAvatarUrl" alt="avatar" class="avatar avatar-xl avatar-profile">
+                        <img
+                            :src="profileAvatarUrl"
+                            alt="avatar"
+                            class="avatar avatar-xl avatar-profile"
+                            @error="onProfileAvatarImageError"
+                        >
                     </button>
                     <span v-else class="avatar avatar-xl avatar-placeholder">{{ profileInitials }}</span>
 
-                    <div class="form-grid" style="min-width: 260px; flex: 1;">
+                    <div class="form-grid" style="min-width: min(260px, 100%); flex: 1;">
                         <input
                             v-model.trim="profileForm.name"
                             class="input-field"
@@ -245,6 +250,7 @@ export default {
             profileErrors: {},
             profileAvatarFile: null,
             profileAvatarPreview: null,
+            profileAvatarLoadFailed: false,
             postOptions: {
                 is_public: true,
                 show_in_feed: true,
@@ -269,7 +275,15 @@ export default {
         },
 
         profileAvatarUrl() {
-            return this.profileAvatarPreview || this.currentUser?.avatar_url || null
+            if (this.profileAvatarPreview) {
+                return this.profileAvatarPreview
+            }
+
+            if (this.profileAvatarLoadFailed) {
+                return null
+            }
+
+            return this.currentUser?.avatar_url || null
         },
 
         profileDisplayName() {
@@ -315,10 +329,12 @@ export default {
                 const user = response.data
 
                 this.currentUser = user
+                this.profileAvatarLoadFailed = false
                 this.profileForm.name = user?.name ?? ''
                 this.profileForm.nickname = user?.nickname ?? ''
             } catch (error) {
                 this.currentUser = null
+                this.profileAvatarLoadFailed = false
             }
         },
 
@@ -383,8 +399,13 @@ export default {
             }
 
             this.profileAvatarFile = file
+            this.profileAvatarLoadFailed = false
             this.clearProfileAvatarPreview()
             this.profileAvatarPreview = URL.createObjectURL(file)
+        },
+
+        onProfileAvatarImageError() {
+            this.profileAvatarLoadFailed = true
         },
 
         clearProfileAvatarPreview() {
@@ -421,6 +442,7 @@ export default {
                 const user = response.data.data ?? null
                 if (user) {
                     this.currentUser = user
+                    this.profileAvatarLoadFailed = false
                     this.profileForm.name = user.name ?? this.profileForm.name
                     this.profileForm.nickname = user.nickname ?? ''
                 }
@@ -443,6 +465,7 @@ export default {
 
         async removeProfileAvatar() {
             this.profileAvatarFile = null
+            this.profileAvatarLoadFailed = false
             this.clearProfileAvatarPreview()
 
             await this.saveProfile(true)

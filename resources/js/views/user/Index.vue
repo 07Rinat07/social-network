@@ -32,7 +32,13 @@
                 <div class="user-item" v-for="user in users" :key="user.id">
                     <router-link :to="localizedUserRoute(user)">
                         <div style="display: flex; align-items: center; gap: 0.55rem;">
-                            <img v-if="user.avatar_url" :src="user.avatar_url" alt="avatar" class="avatar avatar-sm">
+                            <img
+                                v-if="avatarUrl(user)"
+                                :src="avatarUrl(user)"
+                                alt="avatar"
+                                class="avatar avatar-sm"
+                                @error="onAvatarImageError"
+                            >
                             <span v-else class="avatar avatar-sm avatar-placeholder">{{ initials(user) }}</span>
                             <strong>{{ user.display_name || user.name }}</strong>
                         </div>
@@ -63,6 +69,7 @@ export default {
             isLoadingUsers: false,
             searchDebounceTimerId: null,
             usersRequestId: 0,
+            failedAvatarUrls: {},
         }
     },
 
@@ -91,6 +98,52 @@ export default {
         initials(user) {
             const source = (user?.display_name || user?.name || '').trim()
             return source ? source.slice(0, 1).toUpperCase() : 'U'
+        },
+
+        normalizeAvatarUrl(value) {
+            const raw = String(value || '').trim()
+            if (raw === '') {
+                return ''
+            }
+
+            if (typeof window === 'undefined') {
+                return raw
+            }
+
+            try {
+                return new URL(raw, window.location.origin).href
+            } catch (_error) {
+                return raw
+            }
+        },
+
+        onAvatarImageError(event) {
+            const target = event?.target
+            const sources = [
+                target?.getAttribute?.('src') || '',
+                target?.currentSrc || '',
+                target?.src || '',
+            ]
+
+            const next = { ...this.failedAvatarUrls }
+            for (const source of sources) {
+                const normalized = this.normalizeAvatarUrl(source)
+                if (normalized !== '') {
+                    next[normalized] = true
+                }
+            }
+
+            this.failedAvatarUrls = next
+        },
+
+        avatarUrl(user) {
+            const raw = String(user?.avatar_url || '').trim()
+            if (raw === '') {
+                return null
+            }
+
+            const normalized = this.normalizeAvatarUrl(raw)
+            return this.failedAvatarUrls[normalized] ? null : raw
         },
 
         handleSearchInput() {

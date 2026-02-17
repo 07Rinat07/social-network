@@ -61,7 +61,13 @@
                 </nav>
 
                 <div class="auth-chip" v-if="isAuthenticated">
-                    <img v-if="user?.avatar_url" :src="user.avatar_url" alt="avatar" class="avatar avatar-sm">
+                    <img
+                        v-if="avatarUrl(user)"
+                        :src="avatarUrl(user)"
+                        alt="avatar"
+                        class="avatar avatar-sm"
+                        @error="onAvatarImageError"
+                    >
                     <span v-else class="avatar avatar-sm avatar-placeholder">{{ initials(user) }}</span>
                     <span>{{ displayName(user) }}</span>
                     <span v-if="!isEmailVerified" class="badge">{{ $t('auth.emailNotVerified') }}</span>
@@ -113,6 +119,7 @@ export default {
             chatUnreadTotal: 0,
             unreadPollingTimerId: null,
             authSyncPromise: null,
+            failedAvatarUrls: {},
         }
     },
 
@@ -170,6 +177,52 @@ export default {
 
         displayName(user) {
             return user?.display_name || user?.name || this.$t('common.user')
+        },
+
+        normalizeAvatarUrl(value) {
+            const raw = String(value || '').trim()
+            if (raw === '') {
+                return ''
+            }
+
+            if (typeof window === 'undefined') {
+                return raw
+            }
+
+            try {
+                return new URL(raw, window.location.origin).href
+            } catch (_error) {
+                return raw
+            }
+        },
+
+        onAvatarImageError(event) {
+            const target = event?.target
+            const sources = [
+                target?.getAttribute?.('src') || '',
+                target?.currentSrc || '',
+                target?.src || '',
+            ]
+
+            const next = { ...this.failedAvatarUrls }
+            for (const source of sources) {
+                const normalized = this.normalizeAvatarUrl(source)
+                if (normalized !== '') {
+                    next[normalized] = true
+                }
+            }
+
+            this.failedAvatarUrls = next
+        },
+
+        avatarUrl(user) {
+            const raw = String(user?.avatar_url || '').trim()
+            if (raw === '') {
+                return null
+            }
+
+            const normalized = this.normalizeAvatarUrl(raw)
+            return this.failedAvatarUrls[normalized] ? null : raw
         },
 
         initials(user) {

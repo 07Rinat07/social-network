@@ -255,7 +255,7 @@
                             <p class="muted" style="margin: 0.2rem 0 0;">{{ item.email }}</p>
                         </div>
                         <div style="display: flex; gap: 0.45rem;">
-                            <select class="select-field" v-model="item.status" style="min-width: 170px;">
+                            <select class="select-field" v-model="item.status" style="min-width: min(170px, 100%);">
                                 <option value="new">new</option>
                                 <option value="in_progress">in_progress</option>
                                 <option value="resolved">resolved</option>
@@ -502,6 +502,10 @@
 import enMessages from '../../i18n/messages/en'
 import ruMessages from '../../i18n/messages/ru'
 
+const CHAT_WIDGET_SYNC_EVENT = 'social:chat:sync'
+const CHAT_WIDGET_SYNC_SOURCE_PAGE = 'chat-page'
+const CHAT_WIDGET_SYNC_TYPE_STATE_REFRESH = 'state-refresh'
+
 function resolveMessage(messages, key, fallback = '') {
     if (!messages || typeof messages !== 'object' || typeof key !== 'string' || key.trim() === '') {
         return fallback
@@ -742,6 +746,26 @@ export default {
             return firstError ?? error.response?.data?.message ?? fallback
         },
 
+        notifyChatSyncStateRefresh(options = {}) {
+            if (typeof window === 'undefined' || typeof CustomEvent === 'undefined') {
+                return
+            }
+
+            const rawConversationId = Number(options?.conversationId ?? 0)
+            const conversationId = Number.isFinite(rawConversationId) && rawConversationId > 0
+                ? rawConversationId
+                : null
+
+            window.dispatchEvent(new CustomEvent(CHAT_WIDGET_SYNC_EVENT, {
+                detail: {
+                    source: CHAT_WIDGET_SYNC_SOURCE_PAGE,
+                    type: CHAT_WIDGET_SYNC_TYPE_STATE_REFRESH,
+                    conversationId,
+                    sentAt: Date.now(),
+                },
+            }))
+        },
+
         async saveUser(user) {
             if (!this.canSaveUser(user)) {
                 return
@@ -947,6 +971,9 @@ export default {
 
             await axios.delete(`/api/admin/conversations/${conversation.id}/messages`)
             await Promise.all([this.loadConversations(), this.loadMessages(), this.loadSummary()])
+            this.notifyChatSyncStateRefresh({
+                conversationId: conversation?.id ?? null,
+            })
         },
 
         async removeConversation(conversation) {
@@ -956,6 +983,9 @@ export default {
 
             await axios.delete(`/api/admin/conversations/${conversation.id}`)
             await Promise.all([this.loadConversations(), this.loadMessages(), this.loadSummary()])
+            this.notifyChatSyncStateRefresh({
+                conversationId: conversation?.id ?? null,
+            })
         },
 
         async clearAllConversations() {
@@ -965,6 +995,7 @@ export default {
 
             await axios.delete('/api/admin/conversations/messages')
             await Promise.all([this.loadConversations(), this.loadMessages(), this.loadSummary()])
+            this.notifyChatSyncStateRefresh()
         },
 
         async removeAllConversations() {
@@ -974,6 +1005,7 @@ export default {
 
             await axios.delete('/api/admin/conversations')
             await Promise.all([this.loadConversations(), this.loadMessages(), this.loadSummary()])
+            this.notifyChatSyncStateRefresh()
         },
 
         async loadMessages() {
@@ -999,6 +1031,9 @@ export default {
             await axios.delete(`/api/admin/messages/${message.id}`)
             await this.loadMessages()
             await this.loadSummary()
+            this.notifyChatSyncStateRefresh({
+                conversationId: message?.conversation_id ?? null,
+            })
         },
 
         async saveBlock(block) {

@@ -96,6 +96,11 @@ class User extends Authenticatable implements MustVerifyEmail
         return $this->hasMany(ConversationMessageReaction::class, 'user_id', 'id');
     }
 
+    public function conversationMoodStatuses(): HasMany
+    {
+        return $this->hasMany(ConversationMoodStatus::class, 'user_id', 'id');
+    }
+
     public function chatSetting(): HasOne
     {
         return $this->hasOne(UserChatSetting::class, 'user_id', 'id');

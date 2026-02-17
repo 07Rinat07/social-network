@@ -90,6 +90,8 @@
                             :src="conversationAvatar(conversation)"
                             alt="avatar"
                             class="avatar avatar-sm chat-item-avatar"
+                            @error="onAvatarImageError"
+                            @click.stop="openUserAvatar(conversationPeer(conversation))"
                         >
                         <span
                             v-else
@@ -111,6 +113,12 @@
                             </div>
                             <span class="chat-item-time">{{ conversationTime(conversation) }}</span>
                         </div>
+                        <p
+                            v-if="conversation.type === 'direct' && conversationPeerMoodStatusLabel(conversation)"
+                            class="muted chat-item-status"
+                        >
+                            {{ $t('chats.dialogPeerMoodStatus', { status: conversationPeerMoodStatusLabel(conversation) }) }}
+                        </p>
                         <p class="muted chat-item-preview">{{ messagePreview(conversation) }}</p>
                         <p v-if="conversation.is_blocked" class="error-text chat-item-warning">{{ $t('chats.dialogBlocked') }}</p>
                     </div>
@@ -145,7 +153,14 @@
                     class="simple-item chat-user-card"
                 >
                     <div class="chat-user-head">
-                        <img v-if="avatarUrl(user)" :src="avatarUrl(user)" alt="avatar" class="avatar avatar-sm">
+                        <img
+                            v-if="avatarUrl(user)"
+                            :src="avatarUrl(user)"
+                            alt="avatar"
+                            class="avatar avatar-sm"
+                            @error="onAvatarImageError"
+                            @click.stop="openUserAvatar(user)"
+                        >
                         <span v-else class="avatar avatar-sm avatar-placeholder">{{ initials(user) }}</span>
                         <div>
                             <strong>{{ displayName(user) }}</strong>
@@ -172,6 +187,12 @@
                         class="muted chat-user-status"
                     >
                         {{ getMyBlockStatusLabel(user) }}
+                    </p>
+                    <p
+                        v-if="userMoodStatusLabel(user)"
+                        class="muted chat-user-status chat-user-status--mood"
+                    >
+                        {{ $t('chats.dialogPeerMoodStatus', { status: userMoodStatusLabel(user) }) }}
                     </p>
 
                     <div class="chat-user-actions">
@@ -211,8 +232,15 @@
                 </p>
             </div>
 
-            <details class="chat-sound-panel">
-                <summary>{{ $t('chats.notificationSound') }}</summary>
+            <details class="chat-sound-panel" @toggle="onNotificationSoundPanelToggle">
+                <summary
+                    :title="notificationSoundToggleTitle"
+                    :aria-label="notificationSoundToggleTitle"
+                >
+                    <span class="chat-sound-summary__icon" aria-hidden="true">♫</span>
+                    <span class="chat-sound-summary__title">{{ $t('chats.notificationSound') }}</span>
+                    <span class="chat-sound-summary__chevron" aria-hidden="true">{{ isNotificationSoundPanelOpen ? '▾' : '▸' }}</span>
+                </summary>
                 <div class="form-grid chat-sound-grid">
                     <label class="muted chat-sound-toggle">
                         <input type="checkbox" v-model="notificationSettings.enabled" @change="saveNotificationSettings">
@@ -263,6 +291,8 @@
                         :src="avatarUrl(activeConversationPeer)"
                         alt="avatar"
                         class="avatar avatar-sm chat-header-avatar"
+                        @error="onAvatarImageError"
+                        @click.stop="openUserAvatar(activeConversationPeer)"
                     >
                     <span v-else class="avatar avatar-sm avatar-placeholder chat-header-avatar">
                         {{ activeConversation ? conversationInitial(activeConversation) : '#' }}
@@ -276,7 +306,8 @@
                             {{ activeConversationPresenceLine }}
                         </p>
                         <p v-if="activeTypingStatusLine" class="chat-window-typing">
-                            {{ activeTypingStatusLine }}
+                            <span class="chat-typing-indicator__icon" aria-hidden="true">✍️</span>
+                            <span>{{ activeTypingStatusLine }}</span>
                         </p>
                         <p v-if="activeConversation && activeConversation.is_blocked" class="error-text chat-window-warning">
                             {{ $t('chats.dialogBlockedReadonly') }}
@@ -312,10 +343,42 @@
                             {{ $t('chats.filesOnly') }}
                         </button>
                     </div>
+                    <div
+                        v-if="activeConversation && hasSelectableDisplayedMessages"
+                        class="chat-message-bulk-row"
+                    >
+                        <button
+                            class="btn btn-outline btn-sm"
+                            type="button"
+                            :disabled="isBulkDeletingMessages"
+                            @click="toggleAllDisplayedMessagesSelection"
+                        >
+                            {{ allDisplayedDeletableSelected ? $t('chats.bulkUnselectAll') : $t('chats.bulkSelectAll') }}
+                        </button>
+                        <button
+                            class="btn btn-danger btn-sm"
+                            type="button"
+                            :disabled="selectedDisplayedMessagesCount === 0 || isBulkDeletingMessages"
+                            @click="deleteSelectedMessages"
+                        >
+                            {{ isBulkDeletingMessages
+                                ? $t('chats.deleting')
+                                : $t('chats.bulkDeleteSelected', { count: selectedDisplayedMessagesCount }) }}
+                        </button>
+                        <button
+                            class="btn btn-outline btn-sm"
+                            type="button"
+                            :disabled="selectedDisplayedMessagesCount === 0 || isBulkDeletingMessages"
+                            @click="clearSelectedMessages"
+                        >
+                            {{ $t('chats.bulkClearSelection') }}
+                        </button>
+                    </div>
                     <button class="btn btn-outline btn-sm" type="button" @click="scrollMessagesDown" :disabled="!activeConversation">
                         {{ $t('chats.down') }}
                     </button>
                 </div>
+
             </header>
 
             <div class="chat-messages" ref="messagesContainer">
@@ -331,6 +394,8 @@
                             :src="avatarUrl(message.user)"
                             alt="avatar"
                             class="avatar avatar-sm chat-message-avatar"
+                            @error="onAvatarImageError"
+                            @click.stop="openUserAvatar(message.user)"
                         >
                         <span
                             v-else-if="!isMine(message)"
@@ -341,6 +406,18 @@
 
                         <div class="chat-message" :class="{mine: isMine(message)}">
                             <div class="chat-message-head">
+                                <label
+                                    v-if="canDeleteMessage(message)"
+                                    class="chat-message-select"
+                                    :title="$t('chats.bulkSelectAll')"
+                                >
+                                    <input
+                                        type="checkbox"
+                                        :checked="isMessageSelected(message.id)"
+                                        :disabled="isBulkDeletingMessages"
+                                        @change="toggleMessageSelection(message)"
+                                    >
+                                </label>
                                 <div class="chat-meta">
                                     {{ displayName(message.user) }} · {{ message.date }}
                                 </div>
@@ -423,22 +500,43 @@
                                 </div>
                             </div>
 
-                            <div class="chat-message-reactions" v-if="Array.isArray(message.reactions) && message.reactions.length > 0">
+                            <div class="chat-message-reaction-row">
+                                <div class="chat-message-reactions" v-if="Array.isArray(message.reactions) && message.reactions.length > 0">
+                                    <button
+                                        v-for="reaction in message.reactions"
+                                        :key="`msg-reaction-${message.id}-${reaction.emoji}`"
+                                        class="chat-reaction-chip"
+                                        :class="{'is-active': reaction.reacted_by_me}"
+                                        type="button"
+                                        :disabled="isMessageReactionToggling(message.id, reaction.emoji)"
+                                        @click.stop="toggleMessageReaction(message, reaction.emoji)"
+                                    >
+                                        <span>{{ reaction.emoji }}</span>
+                                        <span>{{ reaction.count }}</span>
+                                    </button>
+                                </div>
+
                                 <button
-                                    v-for="reaction in message.reactions"
-                                    :key="`msg-reaction-${message.id}-${reaction.emoji}`"
-                                    class="chat-reaction-chip"
-                                    :class="{'is-active': reaction.reacted_by_me}"
+                                    class="chat-reaction-picker-toggle"
+                                    :class="{ 'is-open': isMessageReactionPickerOpen(message.id) }"
                                     type="button"
-                                    :disabled="isMessageReactionToggling(message.id, reaction.emoji)"
-                                    @click.stop="toggleMessageReaction(message, reaction.emoji)"
+                                    :title="isMessageReactionPickerOpen(message.id) ? $t('chats.reactionPickerCloseHint') : $t('chats.reactionPickerOpenHint')"
+                                    :aria-label="isMessageReactionPickerOpen(message.id) ? $t('chats.reactionPickerCloseHint') : $t('chats.reactionPickerOpenHint')"
+                                    :aria-expanded="isMessageReactionPickerOpen(message.id) ? 'true' : 'false'"
+                                    :aria-controls="`chat-reaction-picker-${message.id}`"
+                                    @click.stop="toggleMessageReactionPicker(message.id)"
                                 >
-                                    <span>{{ reaction.emoji }}</span>
-                                    <span>{{ reaction.count }}</span>
+                                    <span class="chat-reaction-picker-toggle__icon" aria-hidden="true">😊</span>
+                                    <span class="chat-reaction-picker-toggle__label">{{ $t('chats.reactionPickerLabel') }}</span>
+                                    <span class="chat-reaction-picker-toggle__dots" aria-hidden="true">⋯</span>
                                 </button>
                             </div>
 
-                            <div class="chat-message-reaction-picker">
+                            <div
+                                v-if="isMessageReactionPickerOpen(message.id)"
+                                :id="`chat-reaction-picker-${message.id}`"
+                                class="chat-message-reaction-picker"
+                            >
                                 <button
                                     v-for="emoji in messageReactionEmojis"
                                     :key="`msg-reaction-picker-${message.id}-${emoji}`"
@@ -460,7 +558,8 @@
                         {{ messageFilter === 'files_only' ? $t('chats.noMessagesWithFiles') : $t('chats.nothingFoundByQuery') }}
                     </p>
                     <div v-if="activeTypingStatusLine" class="chat-typing-bubble">
-                        {{ activeTypingStatusLine }}
+                        <span class="chat-typing-indicator__icon" aria-hidden="true">✍️</span>
+                        <span>{{ activeTypingStatusLine }}</span>
                     </div>
                 </template>
 
@@ -485,9 +584,18 @@
                     @input="handleComposerInput"
                     @focus="handleComposerInput"
                     @blur="notifyTypingStopped"
+                    @keydown.enter.exact.prevent="sendMessage"
                     @keydown.ctrl.enter.prevent="sendMessage"
                     @keydown.meta.enter.prevent="sendMessage"
                 ></textarea>
+
+                <div v-if="showComposerStickerPreview" class="chat-composer-sticker-preview">
+                    <StickerRichText
+                        as="div"
+                        class="chat-message-body"
+                        :text="composerStickerPreviewText"
+                    ></StickerRichText>
+                </div>
 
                 <div class="emoji-row chat-emoji-row">
                     <button v-for="emoji in emojis" :key="emoji" type="button" class="emoji-btn" @click="appendEmoji(emoji)">
@@ -495,50 +603,101 @@
                     </button>
                 </div>
 
-                <div class="chat-composer-actions">
+                <div class="chat-composer-tools-panel">
                     <input
                         ref="messageFiles"
                         type="file"
-                        accept="image/*,video/*,audio/*,.gif,.mp3,.wav,.ogg,.m4a,.aac,.opus,.weba,.webm,.pdf,.txt,.csv,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.rtf,.zip,.rar,.7z,.tar,.gz,.json,.xml"
+                        accept="image/*,video/*,audio/*,.gif,.mp3,.wav,.ogg,.m4a,.aac,.opus,.weba,.webm,.mp4,.pdf,.txt,.csv,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.rtf,.zip,.rar,.7z,.tar,.gz,.json,.xml"
                         multiple
                         class="hidden"
                         @change="onMessageFilesSelected"
                     >
-                    <button class="btn btn-outline" type="button" @click="openFileDialog" :disabled="isComposerDisabled">
-                        {{ $t('chats.addFileMedia') }}
-                    </button>
                     <button
-                        class="btn btn-outline chat-sticker-toggle"
+                        class="btn btn-outline chat-composer-tools-toggle"
                         type="button"
-                        @click="toggleStickerTray"
+                        :title="composerToolsToggleTitle"
+                        :aria-label="composerToolsToggleTitle"
+                        :aria-expanded="showComposerTools ? 'true' : 'false'"
+                        aria-controls="chat-composer-tools-panel"
                         :disabled="isComposerDisabled"
+                        @click="toggleComposerTools"
                     >
-                        {{ showStickerTray ? $t('chats.hideStickers') : $t('chats.stickers') }}
+                        <span class="chat-composer-tools-toggle__icon-group" aria-hidden="true">
+                            <span class="chat-composer-tools-toggle__icon">
+                                <svg viewBox="0 0 24 24" focusable="false" aria-hidden="true">
+                                    <path
+                                        fill="currentColor"
+                                        d="M12 8.6A3.4 3.4 0 1 0 12 15.4 3.4 3.4 0 0 0 12 8.6zm9 3.4-.02.56a1 1 0 0 1-.84.93l-1.64.25a6.86 6.86 0 0 1-.58 1.4l.99 1.35a1 1 0 0 1-.08 1.26l-.4.4a1 1 0 0 1-1.26.08l-1.35-.99c-.45.24-.92.44-1.4.58l-.25 1.64a1 1 0 0 1-.93.84L12 21l-.56-.02a1 1 0 0 1-.93-.84l-.25-1.64a6.86 6.86 0 0 1-1.4-.58l-1.35.99a1 1 0 0 1-1.26-.08l-.4-.4a1 1 0 0 1-.08-1.26l.99-1.35a6.86 6.86 0 0 1-.58-1.4l-1.64-.25a1 1 0 0 1-.84-.93L3 12l.02-.56a1 1 0 0 1 .84-.93l1.64-.25c.14-.48.34-.95.58-1.4l-.99-1.35a1 1 0 0 1 .08-1.26l.4-.4a1 1 0 0 1 1.26-.08l1.35.99c.45-.24.92-.44 1.4-.58l.25-1.64a1 1 0 0 1 .93-.84L12 3l.56.02a1 1 0 0 1 .93.84l.25 1.64c.48.14.95.34 1.4.58l1.35-.99a1 1 0 0 1 1.26.08l.4.4a1 1 0 0 1 .08 1.26l-.99 1.35c.24.45.44.92.58 1.4l1.64.25a1 1 0 0 1 .84.93L21 12z"
+                                    />
+                                </svg>
+                            </span>
+                            <span class="chat-composer-tools-toggle__icon">
+                                <svg viewBox="0 0 24 24" focusable="false" aria-hidden="true">
+                                    <path
+                                        fill="currentColor"
+                                        d="M15 10.5V8a3 3 0 0 0-3-3H6A3 3 0 0 0 3 8v8a3 3 0 0 0 3 3h6a3 3 0 0 0 3-3v-2.5l4.07 3.14A1 1 0 0 0 21 15.86V8.14a1 1 0 0 0-1.93-.78L15 10.5z"
+                                    />
+                                </svg>
+                            </span>
+                        </span>
+                        <span>{{ $t('chats.fileAndRecordingTools') }}</span>
+                        <span class="chat-composer-tools-toggle__chevron" aria-hidden="true">{{ showComposerTools ? '▾' : '▸' }}</span>
                     </button>
-                    <button
-                        class="btn btn-outline"
-                        type="button"
-                        @click="startVoiceRecording"
-                        :disabled="isComposerDisabled || isRecordingVoice || isProcessingVoice || voiceStopInProgress || isRecordingVideo || isProcessingVideo || videoStopInProgress || !canRecordVoice"
+
+                    <div
+                        v-if="showComposerTools"
+                        id="chat-composer-tools-panel"
+                        class="chat-composer-actions"
                     >
-                        {{ $t('chats.recordVoice') }}
-                    </button>
-                    <button
-                        class="btn btn-outline"
-                        type="button"
-                        @click="startVideoRecording"
-                        :disabled="isComposerDisabled || isRecordingVideo || isProcessingVideo || videoStopInProgress || isRecordingVoice || isProcessingVoice || voiceStopInProgress || !canRecordVideo"
-                    >
-                        {{ $t('chats.recordVideo') }}
-                    </button>
-                    <button
-                        class="btn btn-outline"
-                        type="button"
-                        @click="toggleVideoPreview"
-                        :disabled="isComposerDisabled || isRecordingVideo || isProcessingVideo || videoStopInProgress || isRecordingVoice || isProcessingVoice || voiceStopInProgress || !canRecordVideo"
-                    >
-                        {{ isVideoPreviewActive ? $t('chats.closeCameraPreview') : $t('chats.openCameraPreview') }}
-                    </button>
+                        <button
+                            class="btn btn-outline"
+                            type="button"
+                            :title="$t('chats.addFileMedia')"
+                            :disabled="isComposerDisabled"
+                            @click="openFileDialog"
+                        >
+                            {{ $t('chats.addFileMedia') }}
+                        </button>
+                        <button
+                            class="btn btn-outline chat-sticker-toggle"
+                            type="button"
+                            :title="showStickerTray ? $t('chats.hideStickers') : $t('chats.stickers')"
+                            :disabled="isComposerDisabled"
+                            @click="toggleStickerTray"
+                        >
+                            {{ showStickerTray ? $t('chats.hideStickers') : $t('chats.stickers') }}
+                        </button>
+                        <button
+                            class="btn btn-outline"
+                            type="button"
+                            :title="$t('chats.recordVoice')"
+                            :disabled="isComposerDisabled || isRecordingVoice || isProcessingVoice || voiceStopInProgress || isRecordingVideo || isProcessingVideo || videoStopInProgress || !canRecordVoice"
+                            @click="startVoiceRecording"
+                        >
+                            {{ $t('chats.recordVoice') }}
+                        </button>
+                        <button
+                            class="btn btn-outline"
+                            type="button"
+                            :title="$t('chats.recordVideo')"
+                            :disabled="isComposerDisabled || isRecordingVideo || isProcessingVideo || videoStopInProgress || isRecordingVoice || isProcessingVoice || voiceStopInProgress || !canRecordVideo"
+                            @click="startVideoRecording"
+                        >
+                            {{ $t('chats.recordVideo') }}
+                        </button>
+                        <button
+                            class="btn btn-outline"
+                            type="button"
+                            :title="isVideoPreviewActive ? $t('chats.closeCameraPreview') : $t('chats.openCameraPreview')"
+                            :disabled="isComposerDisabled || isRecordingVideo || isProcessingVideo || videoStopInProgress || isRecordingVoice || isProcessingVoice || voiceStopInProgress || !canRecordVideo"
+                            @click="toggleVideoPreview"
+                        >
+                            {{ isVideoPreviewActive ? $t('chats.closeCameraPreview') : $t('chats.openCameraPreview') }}
+                        </button>
+                    </div>
+                </div>
+
+                <div v-if="isRecordingVoice || isRecordingVideo" class="chat-composer-record-actions">
                     <button
                         class="btn btn-danger"
                         type="button"
@@ -592,57 +751,86 @@
                 <p class="muted" v-if="!canRecordVideo">
                     {{ $t('chats.cameraUnavailable') }}
                 </p>
-                <div v-if="canRecordVoice || canRecordVideo" class="section-card chat-device-card">
-                    <div class="chat-device-card__head">
-                        <strong>{{ $t('chats.recordingDevices') }}</strong>
-                        <button
-                            class="btn btn-outline btn-sm"
-                            type="button"
-                            @click="refreshMediaDeviceOptions(true)"
-                            :disabled="isLoadingMediaDevices"
-                        >
-                            {{ isLoadingMediaDevices ? $t('common.refreshing') : $t('common.refresh') }}
-                        </button>
-                    </div>
-                    <div class="chat-device-card__grid">
-                        <label v-if="canRecordVoice" class="chat-device-card__field">
-                            <span>{{ $t('chats.microphoneInput') }}</span>
-                            <select
-                                v-model="selectedAudioInputId"
-                                class="select-field chat-device-card__select"
-                                :disabled="isLoadingMediaDevices || isRecordingVoice || isProcessingVoice || voiceStopInProgress"
-                                @change="onSelectedAudioInputChanged"
+                <div v-if="canRecordVoice || canRecordVideo" class="chat-device-panel">
+                    <button
+                        class="btn btn-outline btn-sm chat-device-toggle-btn"
+                        type="button"
+                        :title="deviceSettingsToggleTitle"
+                        :aria-expanded="showDeviceSettings ? 'true' : 'false'"
+                        aria-controls="chat-device-settings-panel"
+                        @click="showDeviceSettings = !showDeviceSettings"
+                    >
+                        <span class="chat-device-toggle-btn__icon" aria-hidden="true">
+                            <svg viewBox="0 0 24 24" focusable="false" aria-hidden="true">
+                                <path
+                                    fill="currentColor"
+                                    d="M12 8.6A3.4 3.4 0 1 0 12 15.4 3.4 3.4 0 0 0 12 8.6zm9 3.4-.02.56a1 1 0 0 1-.84.93l-1.64.25a6.86 6.86 0 0 1-.58 1.4l.99 1.35a1 1 0 0 1-.08 1.26l-.4.4a1 1 0 0 1-1.26.08l-1.35-.99c-.45.24-.92.44-1.4.58l-.25 1.64a1 1 0 0 1-.93.84L12 21l-.56-.02a1 1 0 0 1-.93-.84l-.25-1.64a6.86 6.86 0 0 1-1.4-.58l-1.35.99a1 1 0 0 1-1.26-.08l-.4-.4a1 1 0 0 1-.08-1.26l.99-1.35a6.86 6.86 0 0 1-.58-1.4l-1.64-.25a1 1 0 0 1-.84-.93L3 12l.02-.56a1 1 0 0 1 .84-.93l1.64-.25c.14-.48.34-.95.58-1.4l-.99-1.35a1 1 0 0 1 .08-1.26l.4-.4a1 1 0 0 1 1.26-.08l1.35.99c.45-.24.92-.44 1.4-.58l.25-1.64a1 1 0 0 1 .93-.84L12 3l.56.02a1 1 0 0 1 .93.84l.25 1.64c.48.14.95.34 1.4.58l1.35-.99a1 1 0 0 1 1.26.08l.4.4a1 1 0 0 1 .08 1.26l-.99 1.35c.24.45.44.92.58 1.4l1.64.25a1 1 0 0 1 .84.93L21 12z"
+                                />
+                            </svg>
+                        </span>
+                        <span>{{ $t('chats.recordingDevices') }}</span>
+                        <span class="chat-device-toggle-btn__chevron" aria-hidden="true">{{ showDeviceSettings ? '▾' : '▸' }}</span>
+                    </button>
+
+                    <div
+                        v-if="showDeviceSettings"
+                        id="chat-device-settings-panel"
+                        class="section-card chat-device-card"
+                    >
+                        <div class="chat-device-card__head">
+                            <strong>{{ $t('chats.recordingDevices') }}</strong>
+                            <button
+                                class="btn btn-outline btn-sm"
+                                type="button"
+                                :title="$t('common.refresh')"
+                                @click="refreshMediaDeviceOptions(true)"
+                                :disabled="isLoadingMediaDevices"
                             >
-                                <option value="">{{ $t('chats.defaultDevice') }}</option>
-                                <option
-                                    v-for="device in audioInputDevices"
-                                    :key="`chat-mic-${device.deviceId}`"
-                                    :value="device.deviceId"
+                                {{ isLoadingMediaDevices ? $t('common.refreshing') : $t('common.refresh') }}
+                            </button>
+                        </div>
+                        <div class="chat-device-card__grid">
+                            <label v-if="canRecordVoice" class="chat-device-card__field">
+                                <span>{{ $t('chats.microphoneInput') }}</span>
+                                <select
+                                    v-model="selectedAudioInputId"
+                                    class="select-field chat-device-card__select"
+                                    :title="$t('chats.microphoneInput')"
+                                    :disabled="isLoadingMediaDevices || isRecordingVoice || isProcessingVoice || voiceStopInProgress"
+                                    @change="onSelectedAudioInputChanged"
                                 >
-                                    {{ device.label }}
-                                </option>
-                            </select>
-                        </label>
-                        <label v-if="canRecordVideo" class="chat-device-card__field">
-                            <span>{{ $t('chats.cameraInput') }}</span>
-                            <select
-                                v-model="selectedVideoInputId"
-                                class="select-field chat-device-card__select"
-                                :disabled="isLoadingMediaDevices || isRecordingVideo || isProcessingVideo || videoStopInProgress"
-                                @change="onSelectedVideoInputChanged"
-                            >
-                                <option value="">{{ $t('chats.defaultDevice') }}</option>
-                                <option
-                                    v-for="device in videoInputDevices"
-                                    :key="`chat-camera-${device.deviceId}`"
-                                    :value="device.deviceId"
+                                    <option value="">{{ $t('chats.defaultDevice') }}</option>
+                                    <option
+                                        v-for="device in audioInputDevices"
+                                        :key="`chat-mic-${device.deviceId}`"
+                                        :value="device.deviceId"
+                                    >
+                                        {{ device.label }}
+                                    </option>
+                                </select>
+                            </label>
+                            <label v-if="canRecordVideo" class="chat-device-card__field">
+                                <span>{{ $t('chats.cameraInput') }}</span>
+                                <select
+                                    v-model="selectedVideoInputId"
+                                    class="select-field chat-device-card__select"
+                                    :title="$t('chats.cameraInput')"
+                                    :disabled="isLoadingMediaDevices || isRecordingVideo || isProcessingVideo || videoStopInProgress"
+                                    @change="onSelectedVideoInputChanged"
                                 >
-                                    {{ device.label }}
-                                </option>
-                            </select>
-                        </label>
+                                    <option value="">{{ $t('chats.defaultDevice') }}</option>
+                                    <option
+                                        v-for="device in videoInputDevices"
+                                        :key="`chat-camera-${device.deviceId}`"
+                                        :value="device.deviceId"
+                                    >
+                                        {{ device.label }}
+                                    </option>
+                                </select>
+                            </label>
+                        </div>
+                        <p v-if="mediaDeviceError" class="error-text chat-device-card__error">{{ mediaDeviceError }}</p>
                     </div>
-                    <p v-if="mediaDeviceError" class="error-text chat-device-card__error">{{ mediaDeviceError }}</p>
                 </div>
                 <div v-if="isVideoPreviewActive || isVideoPreviewLoading" class="section-card chat-video-preview-card">
                     <p class="muted chat-video-preview-card__status">
@@ -783,11 +971,19 @@
                             :src="avatarUrl(activeConversationPeer)"
                             alt="avatar"
                             class="avatar avatar-sm"
+                            @error="onAvatarImageError"
+                            @click.stop="openUserAvatar(activeConversationPeer)"
                         >
                         <span v-else class="avatar avatar-sm avatar-placeholder">{{ conversationInitial(activeConversation) }}</span>
                         <div>
                             <strong>{{ activeConversation.title }}</strong>
                             <p class="muted" v-if="activeConversationPeer && activeConversationPeer.nickname">@{{ activeConversationPeer.nickname }}</p>
+                            <p
+                                v-if="activeConversation.type === 'direct' && activeConversationHeaderMoodStatus(activeConversation)"
+                                class="muted"
+                            >
+                                {{ $t('chats.dialogPeerMoodStatus', { status: activeConversationHeaderMoodStatus(activeConversation) }) }}
+                            </p>
                         </div>
                     </div>
 
@@ -876,6 +1072,115 @@
                 </div>
 
                 <div class="chat-inspector-card">
+                    <div class="chat-inspector-collapse-head">
+                        <h4 class="chat-inspector-card-title">{{ $t('chats.moodStatusTitle') }}</h4>
+                        <button
+                            class="btn btn-outline btn-sm chat-inspector-collapse-btn"
+                            type="button"
+                            :title="moodStatusSettingsToggleTitle"
+                            :aria-label="moodStatusSettingsToggleTitle"
+                            :aria-expanded="showMoodStatusSettings ? 'true' : 'false'"
+                            aria-controls="chat-mood-status-settings-panel"
+                            :disabled="!activeConversation || isSavingMoodStatus"
+                            @click="showMoodStatusSettings = !showMoodStatusSettings"
+                        >
+                            <span class="chat-inspector-collapse-btn__icon" aria-hidden="true">
+                                <svg viewBox="0 0 24 24" focusable="false" aria-hidden="true">
+                                    <path
+                                        fill="currentColor"
+                                        d="M12 8.6A3.4 3.4 0 1 0 12 15.4 3.4 3.4 0 0 0 12 8.6zm9 3.4-.02.56a1 1 0 0 1-.84.93l-1.64.25a6.86 6.86 0 0 1-.58 1.4l.99 1.35a1 1 0 0 1-.08 1.26l-.4.4a1 1 0 0 1-1.26.08l-1.35-.99c-.45.24-.92.44-1.4.58l-.25 1.64a1 1 0 0 1-.93.84L12 21l-.56-.02a1 1 0 0 1-.93-.84l-.25-1.64a6.86 6.86 0 0 1-1.4-.58l-1.35.99a1 1 0 0 1-1.26-.08l-.4-.4a1 1 0 0 1-.08-1.26l.99-1.35a6.86 6.86 0 0 1-.58-1.4l-1.64-.25a1 1 0 0 1-.84-.93L3 12l.02-.56a1 1 0 0 1 .84-.93l1.64-.25c.14-.48.34-.95.58-1.4l-.99-1.35a1 1 0 0 1 .08-1.26l.4-.4a1 1 0 0 1 1.26-.08l1.35.99c.45-.24.92-.44 1.4-.58l.25-1.64a1 1 0 0 1 .93-.84L12 3l.56.02a1 1 0 0 1 .93.84l.25 1.64c.48.14.95.34 1.4.58l1.35-.99a1 1 0 0 1 1.26.08l.4.4a1 1 0 0 1 .08 1.26l-.99 1.35c.24.45.44.92.58 1.4l1.64.25a1 1 0 0 1 .84.93L21 12z"
+                                    />
+                                </svg>
+                            </span>
+                            <span class="chat-inspector-collapse-btn__chevron" aria-hidden="true">{{ showMoodStatusSettings ? '▾' : '▸' }}</span>
+                        </button>
+                    </div>
+
+                    <div class="chat-mood-status-list" v-if="myMoodStatus">
+                        <article
+                            v-for="statusItem in visibleMoodStatuses"
+                            :key="`chat-mood-status-${statusItem.user_id}`"
+                            class="chat-mood-status-item"
+                            :class="{ 'is-own': statusItem.is_owner }"
+                        >
+                            <div class="chat-mood-status-item__head">
+                                <div class="chat-mood-status-item__author">
+                                    <img
+                                        v-if="avatarUrl(statusItem.user)"
+                                        :src="avatarUrl(statusItem.user)"
+                                        alt="avatar"
+                                        class="avatar avatar-sm"
+                                        @error="onAvatarImageError"
+                                        @click.stop="openUserAvatar(statusItem.user)"
+                                    >
+                                    <span v-else class="avatar avatar-sm avatar-placeholder">{{ initials(statusItem.user) }}</span>
+                                    <strong>{{ statusItem.user?.display_name || statusItem.user?.name || $t('chats.participant') }}</strong>
+                                </div>
+                                <span class="muted">{{ formatDateTime(statusItem.updated_at) }}</span>
+                            </div>
+                            <p class="chat-mood-status-item__text">{{ statusItem.text }}</p>
+                        </article>
+                    </div>
+
+                    <template v-if="showMoodStatusSettings">
+                        <label class="muted chat-mood-status-editor-label">{{ $t('chats.moodStatusYourComment') }}</label>
+                        <textarea
+                            v-model="moodStatusForm.text"
+                            class="textarea-field chat-mood-status-editor"
+                            :placeholder="$t('chats.moodStatusPlaceholder')"
+                            maxlength="500"
+                            :disabled="isSavingMoodStatus"
+                        ></textarea>
+
+                        <div class="chat-inspector-actions">
+                            <button
+                                class="btn btn-primary btn-sm"
+                                type="button"
+                                :disabled="isSavingMoodStatus"
+                                @click="saveMoodStatus"
+                            >
+                                {{ isSavingMoodStatus ? $t('admin.saving') : $t('chats.moodStatusSave') }}
+                            </button>
+                            <button
+                                class="btn btn-outline btn-sm"
+                                type="button"
+                                :disabled="isSavingMoodStatus"
+                                @click="resetMoodStatusForm"
+                            >
+                                {{ $t('chats.reset') }}
+                            </button>
+                        </div>
+                    </template>
+
+                    <div
+                        v-if="showMoodStatusSettings"
+                        id="chat-mood-status-settings-panel"
+                        class="chat-inspector-collapse-body chat-mood-status-settings"
+                    >
+                        <label class="chat-setting-check">
+                            <input type="checkbox" v-model="moodStatusForm.is_visible_to_all">
+                            <span>{{ $t('chats.moodStatusVisibleToAll') }}</span>
+                        </label>
+
+                        <div v-if="!moodStatusForm.is_visible_to_all" class="chat-mood-status-hidden-list">
+                            <p class="muted">{{ $t('chats.moodStatusHiddenUsers') }}</p>
+                            <label
+                                v-for="participant in moodStatusVisibilityCandidates"
+                                :key="`chat-mood-status-hidden-${participant.id}`"
+                                class="chat-setting-check"
+                            >
+                                <input
+                                    :value="participant.id"
+                                    type="checkbox"
+                                    v-model="moodStatusForm.hidden_user_ids"
+                                >
+                                <span>{{ displayName(participant) }}</span>
+                            </label>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="chat-inspector-card">
                     <h4 class="chat-inspector-card-title">{{ $t('chats.onlineNow') }}</h4>
                     <p class="muted">
                         {{ $t('chats.onlineUsersCount', { count: siteOnlineUsers.length }) }}
@@ -892,6 +1197,8 @@
                                     :src="avatarUrl(onlineUser)"
                                     alt="avatar"
                                     class="avatar avatar-sm"
+                                    @error="onAvatarImageError"
+                                    @click.stop="openUserAvatar(onlineUser)"
                                 >
                                 <span v-else class="avatar avatar-sm avatar-placeholder">{{ initials(onlineUser) }}</span>
                                 <div class="chat-online-user-meta">
@@ -911,120 +1218,175 @@
             </div>
 
             <div class="chat-inspector-card">
-                <h4 class="chat-inspector-card-title">{{ $t('chats.historyStorage') }}</h4>
-                <p class="muted chat-storage-note">
-                    {{ $t('chats.historyStorageNote') }}
-                </p>
-
-                <label class="chat-setting-check">
-                    <input type="checkbox" v-model="chatStorageForm.save_text_messages">
-                    <span>{{ $t('chats.saveTextMessages') }}</span>
-                </label>
-                <label class="chat-setting-check">
-                    <input type="checkbox" v-model="chatStorageForm.save_media_attachments">
-                    <span>{{ $t('chats.saveMediaAttachments') }}</span>
-                </label>
-                <label class="chat-setting-check">
-                    <input type="checkbox" v-model="chatStorageForm.save_file_attachments">
-                    <span>{{ $t('chats.saveFileAttachments') }}</span>
-                </label>
-                <label class="chat-setting-check">
-                    <input type="checkbox" v-model="chatStorageForm.auto_archive_enabled">
-                    <span>{{ $t('chats.enableAutoArchive') }}</span>
-                </label>
-
-                <div class="chat-setting-inline">
-                    <label for="chatRetentionDays" class="muted">{{ $t('chats.retentionDays') }}</label>
-                    <input
-                        id="chatRetentionDays"
-                        class="input-field"
-                        type="number"
-                        min="1"
-                        max="3650"
-                        step="1"
-                        v-model.trim="chatStorageForm.retention_days"
-                        :placeholder="$t('chats.emptyUnlimited')"
+                <div class="chat-inspector-collapse-head">
+                    <h4 class="chat-inspector-card-title">{{ $t('chats.historyStorage') }}</h4>
+                    <button
+                        class="btn btn-outline btn-sm chat-inspector-collapse-btn"
+                        type="button"
+                        :title="historyStorageToggleTitle"
+                        :aria-label="historyStorageToggleTitle"
+                        :aria-expanded="showHistoryStorageSettings ? 'true' : 'false'"
+                        aria-controls="chat-history-storage-panel"
+                        @click="showHistoryStorageSettings = !showHistoryStorageSettings"
                     >
+                        <span class="chat-inspector-collapse-btn__icon" aria-hidden="true">
+                            <svg viewBox="0 0 24 24" focusable="false" aria-hidden="true">
+                                <path
+                                    fill="currentColor"
+                                    d="M12 8.6A3.4 3.4 0 1 0 12 15.4 3.4 3.4 0 0 0 12 8.6zm9 3.4-.02.56a1 1 0 0 1-.84.93l-1.64.25a6.86 6.86 0 0 1-.58 1.4l.99 1.35a1 1 0 0 1-.08 1.26l-.4.4a1 1 0 0 1-1.26.08l-1.35-.99c-.45.24-.92.44-1.4.58l-.25 1.64a1 1 0 0 1-.93.84L12 21l-.56-.02a1 1 0 0 1-.93-.84l-.25-1.64a6.86 6.86 0 0 1-1.4-.58l-1.35.99a1 1 0 0 1-1.26-.08l-.4-.4a1 1 0 0 1-.08-1.26l.99-1.35a6.86 6.86 0 0 1-.58-1.4l-1.64-.25a1 1 0 0 1-.84-.93L3 12l.02-.56a1 1 0 0 1 .84-.93l1.64-.25c.14-.48.34-.95.58-1.4l-.99-1.35a1 1 0 0 1 .08-1.26l.4-.4a1 1 0 0 1 1.26-.08l1.35.99c.45-.24.92-.44 1.4-.58l.25-1.64a1 1 0 0 1 .93-.84L12 3l.56.02a1 1 0 0 1 .93.84l.25 1.64c.48.14.95.34 1.4.58l1.35-.99a1 1 0 0 1 1.26.08l.4.4a1 1 0 0 1 .08 1.26l-.99 1.35c.24.45.44.92.58 1.4l1.64.25a1 1 0 0 1 .84.93L21 12z"
+                                />
+                            </svg>
+                        </span>
+                        <span class="chat-inspector-collapse-btn__chevron" aria-hidden="true">{{ showHistoryStorageSettings ? '▾' : '▸' }}</span>
+                    </button>
                 </div>
 
-                <div class="chat-inspector-actions">
-                    <button
-                        class="btn btn-primary btn-sm"
-                        type="button"
-                        :disabled="isSavingChatStorageSettings || isLoadingChatStorageSettings"
-                        @click="saveChatStorageSettings"
-                    >
-                        {{ isSavingChatStorageSettings ? $t('admin.saving') : $t('chats.saveSettings') }}
-                    </button>
-                    <button
-                        class="btn btn-outline btn-sm"
-                        type="button"
-                        :disabled="isSavingChatStorageSettings || isLoadingChatStorageSettings"
-                        @click="resetChatStorageForm"
-                    >
-                        {{ $t('chats.reset') }}
-                    </button>
+                <div
+                    v-if="showHistoryStorageSettings"
+                    id="chat-history-storage-panel"
+                    class="chat-inspector-collapse-body"
+                >
+                    <p class="muted chat-storage-note">
+                        {{ $t('chats.historyStorageNote') }}
+                    </p>
+
+                    <label class="chat-setting-check">
+                        <input type="checkbox" v-model="chatStorageForm.save_text_messages">
+                        <span>{{ $t('chats.saveTextMessages') }}</span>
+                    </label>
+                    <label class="chat-setting-check">
+                        <input type="checkbox" v-model="chatStorageForm.save_media_attachments">
+                        <span>{{ $t('chats.saveMediaAttachments') }}</span>
+                    </label>
+                    <label class="chat-setting-check">
+                        <input type="checkbox" v-model="chatStorageForm.save_file_attachments">
+                        <span>{{ $t('chats.saveFileAttachments') }}</span>
+                    </label>
+                    <label class="chat-setting-check">
+                        <input type="checkbox" v-model="chatStorageForm.auto_archive_enabled">
+                        <span>{{ $t('chats.enableAutoArchive') }}</span>
+                    </label>
+
+                    <div class="chat-setting-inline">
+                        <label for="chatRetentionDays" class="muted">{{ $t('chats.retentionDays') }}</label>
+                        <input
+                            id="chatRetentionDays"
+                            class="input-field"
+                            type="number"
+                            min="1"
+                            max="3650"
+                            step="1"
+                            v-model.trim="chatStorageForm.retention_days"
+                            :placeholder="$t('chats.emptyUnlimited')"
+                        >
+                    </div>
+
+                    <div class="chat-inspector-actions">
+                        <button
+                            class="btn btn-primary btn-sm"
+                            type="button"
+                            :disabled="isSavingChatStorageSettings || isLoadingChatStorageSettings"
+                            @click="saveChatStorageSettings"
+                        >
+                            {{ isSavingChatStorageSettings ? $t('admin.saving') : $t('chats.saveSettings') }}
+                        </button>
+                        <button
+                            class="btn btn-outline btn-sm"
+                            type="button"
+                            :disabled="isSavingChatStorageSettings || isLoadingChatStorageSettings"
+                            @click="resetChatStorageForm"
+                        >
+                            {{ $t('chats.reset') }}
+                        </button>
+                    </div>
                 </div>
             </div>
 
             <div class="chat-inspector-card">
-                <h4 class="chat-inspector-card-title">{{ $t('chats.chatArchives') }}</h4>
-
-                <div class="chat-inspector-actions">
+                <div class="chat-inspector-collapse-head">
+                    <h4 class="chat-inspector-card-title">{{ $t('chats.chatArchives') }}</h4>
                     <button
-                        class="btn btn-outline btn-sm"
+                        class="btn btn-outline btn-sm chat-inspector-collapse-btn"
                         type="button"
-                        :disabled="archiveCreateScopeInProgress === 'all'"
-                        @click="createChatArchive('all')"
+                        :title="chatArchivesToggleTitle"
+                        :aria-label="chatArchivesToggleTitle"
+                        :aria-expanded="showChatArchivesPanel ? 'true' : 'false'"
+                        aria-controls="chat-archives-panel"
+                        @click="showChatArchivesPanel = !showChatArchivesPanel"
                     >
-                        {{ archiveCreateScopeInProgress === 'all' ? $t('chats.creating') : $t('chats.archiveAllChats') }}
-                    </button>
-                    <button
-                        class="btn btn-outline btn-sm"
-                        type="button"
-                        :disabled="!activeConversation || archiveCreateScopeInProgress === 'conversation'"
-                        @click="createChatArchive('conversation')"
-                    >
-                        {{ archiveCreateScopeInProgress === 'conversation' ? $t('chats.creating') : $t('chats.archiveCurrentChat') }}
+                        <span class="chat-inspector-collapse-btn__icon" aria-hidden="true">
+                            <svg viewBox="0 0 24 24" focusable="false" aria-hidden="true">
+                                <path
+                                    fill="currentColor"
+                                    d="M12 8.6A3.4 3.4 0 1 0 12 15.4 3.4 3.4 0 0 0 12 8.6zm9 3.4-.02.56a1 1 0 0 1-.84.93l-1.64.25a6.86 6.86 0 0 1-.58 1.4l.99 1.35a1 1 0 0 1-.08 1.26l-.4.4a1 1 0 0 1-1.26.08l-1.35-.99c-.45.24-.92.44-1.4.58l-.25 1.64a1 1 0 0 1-.93.84L12 21l-.56-.02a1 1 0 0 1-.93-.84l-.25-1.64a6.86 6.86 0 0 1-1.4-.58l-1.35.99a1 1 0 0 1-1.26-.08l-.4-.4a1 1 0 0 1-.08-1.26l.99-1.35a6.86 6.86 0 0 1-.58-1.4l-1.64-.25a1 1 0 0 1-.84-.93L3 12l.02-.56a1 1 0 0 1 .84-.93l1.64-.25c.14-.48.34-.95.58-1.4l-.99-1.35a1 1 0 0 1 .08-1.26l.4-.4a1 1 0 0 1 1.26-.08l1.35.99c.45-.24.92-.44 1.4-.58l.25-1.64a1 1 0 0 1 .93-.84L12 3l.56.02a1 1 0 0 1 .93.84l.25 1.64c.48.14.95.34 1.4.58l1.35-.99a1 1 0 0 1 1.26.08l.4.4a1 1 0 0 1 .08 1.26l-.99 1.35c.24.45.44.92.58 1.4l1.64.25a1 1 0 0 1 .84.93L21 12z"
+                                />
+                            </svg>
+                        </span>
+                        <span class="chat-inspector-collapse-btn__chevron" aria-hidden="true">{{ showChatArchivesPanel ? '▾' : '▸' }}</span>
                     </button>
                 </div>
 
-                <p v-if="isLoadingChatArchives" class="muted">{{ $t('chats.loadingArchives') }}</p>
-                <p v-else-if="chatArchives.length === 0" class="muted">{{ $t('chats.noArchivesYet') }}</p>
+                <div
+                    v-if="showChatArchivesPanel"
+                    id="chat-archives-panel"
+                    class="chat-inspector-collapse-body"
+                >
+                    <div class="chat-inspector-actions">
+                        <button
+                            class="btn btn-outline btn-sm"
+                            type="button"
+                            :disabled="archiveCreateScopeInProgress === 'all'"
+                            @click="createChatArchive('all')"
+                        >
+                            {{ archiveCreateScopeInProgress === 'all' ? $t('chats.creating') : $t('chats.archiveAllChats') }}
+                        </button>
+                        <button
+                            class="btn btn-outline btn-sm"
+                            type="button"
+                            :disabled="!activeConversation || archiveCreateScopeInProgress === 'conversation'"
+                            @click="createChatArchive('conversation')"
+                        >
+                            {{ archiveCreateScopeInProgress === 'conversation' ? $t('chats.creating') : $t('chats.archiveCurrentChat') }}
+                        </button>
+                    </div>
 
-                <ul v-else class="chat-archive-list">
-                    <li v-for="archive in chatArchives" :key="archive.id" class="chat-archive-item">
-                        <div class="chat-archive-head">
-                            <strong class="chat-archive-title">{{ archive.title }}</strong>
-                            <span class="muted">{{ formatDateTime(archive.created_at) }}</span>
-                        </div>
-                        <p class="muted chat-archive-meta">
-                            {{ $t('chats.archiveMeta', { messages: archive.messages_count, chats: archive.conversations_count }) }}
-                        </p>
-                        <p v-if="archive.restored_at" class="muted chat-archive-meta">
-                            {{ $t('chats.restoredAt', { date: formatDateTime(archive.restored_at) }) }}
-                        </p>
+                    <p v-if="isLoadingChatArchives" class="muted">{{ $t('chats.loadingArchives') }}</p>
+                    <p v-else-if="chatArchives.length === 0" class="muted">{{ $t('chats.noArchivesYet') }}</p>
 
-                        <div class="chat-inspector-actions">
-                            <button
-                                class="btn btn-outline btn-sm"
-                                type="button"
-                                :disabled="isArchiveDownloading(archive.id)"
-                                @click="downloadChatArchive(archive)"
-                            >
-                                {{ isArchiveDownloading(archive.id) ? $t('chats.downloading') : $t('chats.download') }}
-                            </button>
-                            <button
-                                class="btn btn-outline btn-sm"
-                                type="button"
-                                :disabled="isArchiveRestoring(archive.id)"
-                                @click="restoreChatArchive(archive)"
-                            >
-                                {{ isArchiveRestoring(archive.id) ? $t('chats.restoring') : $t('chats.restore') }}
-                            </button>
-                        </div>
-                    </li>
-                </ul>
+                    <ul v-else class="chat-archive-list">
+                        <li v-for="archive in chatArchives" :key="archive.id" class="chat-archive-item">
+                            <div class="chat-archive-head">
+                                <strong class="chat-archive-title">{{ archive.title }}</strong>
+                                <span class="muted">{{ formatDateTime(archive.created_at) }}</span>
+                            </div>
+                            <p class="muted chat-archive-meta">
+                                {{ $t('chats.archiveMeta', { messages: archive.messages_count, chats: archive.conversations_count }) }}
+                            </p>
+                            <p v-if="archive.restored_at" class="muted chat-archive-meta">
+                                {{ $t('chats.restoredAt', { date: formatDateTime(archive.restored_at) }) }}
+                            </p>
+
+                            <div class="chat-inspector-actions">
+                                <button
+                                    class="btn btn-outline btn-sm"
+                                    type="button"
+                                    :disabled="isArchiveDownloading(archive.id)"
+                                    @click="downloadChatArchive(archive)"
+                                >
+                                    {{ isArchiveDownloading(archive.id) ? $t('chats.downloading') : $t('chats.download') }}
+                                </button>
+                                <button
+                                    class="btn btn-outline btn-sm"
+                                    type="button"
+                                    :disabled="isArchiveRestoring(archive.id)"
+                                    @click="restoreChatArchive(archive)"
+                                >
+                                    {{ isArchiveRestoring(archive.id) ? $t('chats.restoring') : $t('chats.restore') }}
+                                </button>
+                            </div>
+                        </li>
+                    </ul>
+                </div>
             </div>
         </aside>
 
@@ -1111,7 +1473,10 @@ export default {
             selectedFilePreviews: [],
             deletingMessageIds: [],
             deletingAttachmentKeys: [],
+            selectedMessageIds: [],
+            isBulkDeletingMessages: false,
             togglingMessageReactionKeys: [],
+            openMessageReactionPickerId: null,
             subscribedChannels: {},
             sitePresenceSubscribed: false,
             siteOnlineUsers: [],
@@ -1123,6 +1488,8 @@ export default {
             typingLastSentAt: 0,
             emojis: ['😀', '🔥', '❤️', '😂', '👏', '😎', '👍', '🎉', '🤝', '🤩'],
             showStickerTray: false,
+            showComposerTools: false,
+            showDeviceSettings: false,
             messageReactionEmojis: CHAT_MESSAGE_REACTION_EMOJIS,
             canRecordVoice: false,
             canRecordVideo: false,
@@ -1175,6 +1542,7 @@ export default {
                 volume: 60,
                 customSoundDataUrl: null,
             },
+            isNotificationSoundPanelOpen: false,
             chatStorageSettings: null,
             chatStorageForm: {
                 save_text_messages: true,
@@ -1183,6 +1551,17 @@ export default {
                 retention_days: '',
                 auto_archive_enabled: true,
             },
+            moodStatusForm: {
+                text: '',
+                is_visible_to_all: true,
+                hidden_user_ids: [],
+            },
+            moodStatusSyncInFlight: {},
+            isSavingMoodStatus: false,
+            showMoodStatusSettings: false,
+            suppressMoodStatusFormSyncOnce: false,
+            showHistoryStorageSettings: false,
+            showChatArchivesPanel: false,
             isLoadingChatStorageSettings: false,
             isSavingChatStorageSettings: false,
             chatArchives: [],
@@ -1190,6 +1569,7 @@ export default {
             archiveCreateScopeInProgress: '',
             downloadingArchiveIds: [],
             restoringArchiveIds: [],
+            failedAvatarUrls: {},
         }
     },
 
@@ -1200,6 +1580,86 @@ export default {
 
         canSendCurrentMessage() {
             return this.messageBody.trim() !== '' || this.selectedFiles.length > 0
+        },
+
+        composerStickerPreviewText() {
+            return this.normalizeStickerAliases(this.messageBody)
+        },
+
+        showComposerStickerPreview() {
+            return this.composerStickerPreviewText.includes('[sticker:')
+        },
+
+        composerToolsToggleTitle() {
+            const label = this.$t('chats.fileAndRecordingTools')
+            return this.showComposerTools
+                ? `${this.$t('common.close')} · ${label}`
+                : label
+        },
+
+        deviceSettingsToggleTitle() {
+            const label = this.$t('chats.recordingDevices')
+            return this.showDeviceSettings
+                ? `${this.$t('common.close')} · ${label}`
+                : label
+        },
+
+        historyStorageToggleTitle() {
+            const label = this.$t('chats.historyStorage')
+            return this.showHistoryStorageSettings
+                ? `${this.$t('common.close')} · ${label}`
+                : label
+        },
+
+        chatArchivesToggleTitle() {
+            const label = this.$t('chats.chatArchives')
+            return this.showChatArchivesPanel
+                ? `${this.$t('common.close')} · ${label}`
+                : label
+        },
+
+        moodStatusSettingsToggleTitle() {
+            const label = this.$t('chats.moodStatusSettings')
+            return this.showMoodStatusSettings
+                ? `${this.$t('common.close')} · ${label}`
+                : label
+        },
+
+        visibleMoodStatuses() {
+            const list = Array.isArray(this.activeConversation?.mood_statuses)
+                ? this.activeConversation.mood_statuses
+                : []
+
+            return list
+                .map((status) => this.normalizeMoodStatus(status))
+                .filter((status) => status !== null)
+        },
+
+        myMoodStatus() {
+            const myId = Number(this.currentUser?.id ?? 0)
+            if (!Number.isFinite(myId) || myId <= 0) {
+                return null
+            }
+
+            return this.visibleMoodStatuses.find((status) => Number(status.user_id) === myId || status.is_owner) || null
+        },
+
+        moodStatusVisibilityCandidates() {
+            const myId = Number(this.currentUser?.id ?? 0)
+            const participants = Array.isArray(this.activeConversation?.participants)
+                ? this.activeConversation.participants
+                : []
+
+            return participants
+                .filter((participant) => Number(participant?.id ?? 0) > 0)
+                .filter((participant) => Number(participant.id) !== myId)
+        },
+
+        notificationSoundToggleTitle() {
+            const label = this.$t('chats.notificationSoundHint')
+            return this.isNotificationSoundPanelOpen
+                ? `${this.$t('common.close')} · ${label}`
+                : label
         },
 
         notificationSoundPresets() {
@@ -1263,6 +1723,10 @@ export default {
 
                 if (hasAttachments) {
                     return this.$t('chats.peerAttachingFiles', { name })
+                }
+
+                if (this.activeConversation?.type === 'direct') {
+                    return this.$t('chats.peerTypingGeneric')
                 }
 
                 return this.$t('chats.peerTyping', { name })
@@ -1426,6 +1890,36 @@ export default {
             })
         },
 
+        deletableDisplayedMessageIds() {
+            return this.displayedMessages
+                .filter((message) => this.canDeleteMessage(message))
+                .map((message) => Number(message.id))
+                .filter((id) => Number.isFinite(id) && id > 0)
+        },
+
+        selectedDisplayedMessageIds() {
+            const available = new Set(this.deletableDisplayedMessageIds)
+            return this.selectedMessageIds.filter((id) => available.has(Number(id)))
+        },
+
+        selectedDisplayedMessagesCount() {
+            return this.selectedDisplayedMessageIds.length
+        },
+
+        hasSelectableDisplayedMessages() {
+            return this.deletableDisplayedMessageIds.length > 0
+        },
+
+        allDisplayedDeletableSelected() {
+            const deletableIds = this.deletableDisplayedMessageIds
+            if (deletableIds.length === 0) {
+                return false
+            }
+
+            const selected = new Set(this.selectedDisplayedMessageIds.map((id) => Number(id)))
+            return deletableIds.every((id) => selected.has(Number(id)))
+        },
+
         activeConversationPeer() {
             return this.conversationPeer(this.activeConversation)
         },
@@ -1586,6 +2080,51 @@ export default {
 
         openMedia(url, alt = null) {
             this.$refs.mediaLightbox?.open(url, alt || this.$t('chats.photo'))
+        },
+
+        openUserAvatar(user) {
+            const avatar = this.avatarUrl(user)
+            if (!avatar) {
+                return
+            }
+
+            this.openMedia(avatar, this.displayName(user))
+        },
+
+        normalizeAvatarUrl(value) {
+            const raw = String(value || '').trim()
+            if (raw === '') {
+                return ''
+            }
+
+            if (typeof window === 'undefined') {
+                return raw
+            }
+
+            try {
+                return new URL(raw, window.location.origin).href
+            } catch (_error) {
+                return raw
+            }
+        },
+
+        onAvatarImageError(event) {
+            const target = event?.target
+            const sources = [
+                target?.getAttribute?.('src') || '',
+                target?.currentSrc || '',
+                target?.src || '',
+            ]
+
+            const next = { ...this.failedAvatarUrls }
+            for (const source of sources) {
+                const normalized = this.normalizeAvatarUrl(source)
+                if (normalized !== '') {
+                    next[normalized] = true
+                }
+            }
+
+            this.failedAvatarUrls = next
         },
 
         sharedSyncStorageKey() {
@@ -1792,6 +2331,11 @@ export default {
 
         handleComposerInput() {
             this.notifyTypingActivity()
+        },
+
+        normalizeStickerAliases(text) {
+            return String(text || '')
+                .replace(/\[sticker:file\]/gi, '[sticker:fire]')
         },
 
         normalizePresenceUser(user) {
@@ -2201,8 +2745,13 @@ export default {
             const link = document.createElement('a')
             link.href = sourceUrl
             link.download = fileName
-            link.rel = 'noopener'
+            link.rel = 'noopener noreferrer'
             link.style.display = 'none'
+
+            const userAgent = typeof navigator !== 'undefined' ? String(navigator.userAgent || '') : ''
+            if (/iphone|ipad|ipod|android/i.test(userAgent)) {
+                link.target = '_blank'
+            }
 
             document.body.appendChild(link)
             link.click()
@@ -2522,7 +3071,13 @@ export default {
         },
 
         avatarUrl(user) {
-            return user?.avatar_url || null
+            const raw = String(user?.avatar_url || '').trim()
+            if (raw === '') {
+                return null
+            }
+
+            const normalized = this.normalizeAvatarUrl(raw)
+            return this.failedAvatarUrls[normalized] ? null : raw
         },
 
         initials(user) {
@@ -2673,6 +3228,176 @@ export default {
             })
         },
 
+        conversationPeerMoodStatus(conversation) {
+            if (!conversation || String(conversation?.type || '') !== 'direct') {
+                return ''
+            }
+
+            const peerId = Number(this.conversationPeer(conversation)?.id ?? 0)
+            if (!Number.isFinite(peerId) || peerId <= 0) {
+                return ''
+            }
+
+            const directStatus = this.conversationUserMoodStatus(conversation, peerId)
+            if (directStatus !== '') {
+                return directStatus
+            }
+
+            return this.resolveUserMoodStatus(peerId, {
+                excludeConversationId: Number(conversation?.id ?? 0),
+            })
+        },
+
+        normalizeStatusText(text) {
+            return String(text || '')
+                .replace(/\s+/g, ' ')
+                .trim()
+        },
+
+        truncateStatusText(text, maxLength = 72) {
+            const normalized = this.normalizeStatusText(text)
+            if (normalized === '') {
+                return ''
+            }
+
+            if (normalized.length <= maxLength) {
+                return normalized
+            }
+
+            return `${normalized.slice(0, Math.max(1, maxLength - 1)).trimEnd()}…`
+        },
+
+        stripMessagePreviewAuthorPrefix(previewText) {
+            const text = this.normalizeStatusText(previewText)
+            const separatorIndex = text.indexOf(':')
+            if (separatorIndex <= 0) {
+                return text
+            }
+
+            return this.normalizeStatusText(text.slice(separatorIndex + 1))
+        },
+
+        isStatusDuplicateWithPreview(statusText, previewText) {
+            const status = this.normalizeStatusText(statusText).toLowerCase()
+            const preview = this.stripMessagePreviewAuthorPrefix(previewText).toLowerCase()
+            if (status === '' || preview === '') {
+                return false
+            }
+
+            return status === preview || preview.includes(status)
+        },
+
+        conversationPeerMoodStatusLabel(conversation) {
+            const statusText = this.conversationPeerMoodStatus(conversation)
+            if (statusText === '') {
+                return ''
+            }
+
+            if (this.isStatusDuplicateWithPreview(statusText, this.messagePreview(conversation))) {
+                return ''
+            }
+
+            return this.truncateStatusText(statusText, 68)
+        },
+
+        userMoodStatus(user) {
+            const userId = Number(user?.id ?? 0)
+            if (!Number.isFinite(userId) || userId <= 0) {
+                return ''
+            }
+
+            return this.resolveUserMoodStatus(userId)
+        },
+
+        userMoodStatusLabel(user) {
+            return this.truncateStatusText(this.userMoodStatus(user), 68)
+        },
+
+        conversationUserMoodStatus(conversation, userId) {
+            const normalizedUserId = Number(userId ?? 0)
+            if (!Number.isFinite(normalizedUserId) || normalizedUserId <= 0) {
+                return ''
+            }
+
+            const moodStatuses = Array.isArray(conversation?.mood_statuses)
+                ? conversation.mood_statuses
+                : []
+
+            const peerStatus = moodStatuses
+                .map((status) => this.normalizeMoodStatus(status))
+                .filter((status) => status !== null)
+                .find((status) => Number(status.user_id) === normalizedUserId)
+
+            return String(peerStatus?.text || '').trim()
+        },
+
+        resolveUserMoodStatus(userId, options = {}) {
+            const normalizedUserId = Number(userId ?? 0)
+            if (!Number.isFinite(normalizedUserId) || normalizedUserId <= 0) {
+                return ''
+            }
+
+            const excludeConversationId = Number(options?.excludeConversationId ?? 0)
+            const candidates = []
+
+            const directConversation = this.conversations.find((conversation) => {
+                if (String(conversation?.type || '') !== 'direct') {
+                    return false
+                }
+
+                if (excludeConversationId > 0 && Number(conversation?.id ?? 0) === excludeConversationId) {
+                    return false
+                }
+
+                const peerId = Number(this.conversationPeer(conversation)?.id ?? 0)
+                return peerId === normalizedUserId
+            })
+
+            if (directConversation) {
+                candidates.push(directConversation)
+            }
+
+            const globalConversation = this.conversations.find((conversation) => String(conversation?.type || '') === 'global')
+            if (globalConversation) {
+                candidates.push(globalConversation)
+            }
+
+            for (const conversation of this.conversations) {
+                const conversationId = Number(conversation?.id ?? 0)
+                if (!Number.isFinite(conversationId) || conversationId <= 0) {
+                    continue
+                }
+
+                if (excludeConversationId > 0 && conversationId === excludeConversationId) {
+                    continue
+                }
+
+                if (candidates.some((item) => Number(item?.id ?? 0) === conversationId)) {
+                    continue
+                }
+
+                candidates.push(conversation)
+            }
+
+            for (const conversation of candidates) {
+                const statusText = this.conversationUserMoodStatus(conversation, normalizedUserId)
+                if (statusText !== '') {
+                    return statusText
+                }
+            }
+
+            return ''
+        },
+
+        activeConversationHeaderMoodStatus(conversation) {
+            const peerStatus = this.conversationPeerMoodStatus(conversation)
+            if (peerStatus !== '') {
+                return peerStatus
+            }
+
+            return '😊'
+        },
+
         conversationMatchesFilter(conversation) {
             if (this.conversationFilter === 'unread') {
                 return Number(conversation?.unread_count ?? 0) > 0
@@ -2718,17 +3443,136 @@ export default {
             return `${author}: ${text}`
         },
 
+        normalizeMoodStatus(status) {
+            if (!status || typeof status !== 'object') {
+                return null
+            }
+
+            const userId = Number(status?.user_id ?? status?.user?.id ?? 0)
+            if (!Number.isFinite(userId) || userId <= 0) {
+                return null
+            }
+
+            const text = String(status?.text || '').trim()
+            if (text === '') {
+                return null
+            }
+
+            const visibility = status?.visibility && typeof status.visibility === 'object'
+                ? status.visibility
+                : {}
+
+            return {
+                ...status,
+                user_id: userId,
+                text,
+                is_owner: Boolean(status?.is_owner),
+                visibility: {
+                    is_visible_to_all: visibility?.is_visible_to_all !== false,
+                    hidden_user_ids: Array.isArray(visibility?.hidden_user_ids)
+                        ? [...new Set(visibility.hidden_user_ids
+                            .map((value) => Number(value))
+                            .filter((value) => Number.isFinite(value) && value > 0))]
+                        : [],
+                },
+            }
+        },
+
         normalizeConversation(conversation) {
             const normalizedLastMessage = conversation?.last_message
                 ? this.normalizeMessage(conversation.last_message)
                 : null
             const unreadCount = Number(conversation?.unread_count ?? 0)
+            const normalizedMoodStatuses = Array.isArray(conversation?.mood_statuses)
+                ? conversation.mood_statuses
+                    .map((status) => this.normalizeMoodStatus(status))
+                    .filter((status) => status !== null)
+                : []
 
             return {
                 ...conversation,
                 last_message: normalizedLastMessage,
+                mood_statuses: normalizedMoodStatuses,
                 unread_count: Number.isFinite(unreadCount) ? Math.max(0, unreadCount) : 0,
                 has_unread: Number.isFinite(unreadCount) ? unreadCount > 0 : Boolean(conversation?.has_unread),
+            }
+        },
+
+        syncMoodStatusFormFromActiveConversation() {
+            const ownStatus = this.myMoodStatus
+            const hiddenUserIds = Array.isArray(ownStatus?.visibility?.hidden_user_ids)
+                ? ownStatus.visibility.hidden_user_ids
+                : []
+
+            this.moodStatusForm.is_visible_to_all = ownStatus?.visibility?.is_visible_to_all !== false
+            this.moodStatusForm.hidden_user_ids = this.normalizeMoodStatusHiddenUserIds(hiddenUserIds)
+
+            if (this.suppressMoodStatusFormSyncOnce) {
+                this.suppressMoodStatusFormSyncOnce = false
+                this.moodStatusForm.text = ''
+                return
+            }
+
+            this.moodStatusForm.text = ownStatus?.text || ''
+        },
+
+        normalizeMoodStatusHiddenUserIds(userIds) {
+            const allowedIds = new Set(this.moodStatusVisibilityCandidates.map((participant) => Number(participant.id)))
+
+            return [...new Set((Array.isArray(userIds) ? userIds : [])
+                .map((value) => Number(value))
+                .filter((value) => Number.isFinite(value) && value > 0)
+                .filter((value) => allowedIds.has(value)))]
+        },
+
+        resetMoodStatusForm() {
+            this.suppressMoodStatusFormSyncOnce = false
+            this.syncMoodStatusFormFromActiveConversation()
+        },
+
+        async saveMoodStatus() {
+            if (!this.activeConversation || this.isSavingMoodStatus) {
+                return
+            }
+
+            this.isSavingMoodStatus = true
+
+            try {
+                const hiddenUserIds = this.moodStatusForm.is_visible_to_all
+                    ? []
+                    : this.normalizeMoodStatusHiddenUserIds(this.moodStatusForm.hidden_user_ids)
+
+                const payload = {
+                    text: String(this.moodStatusForm.text || '').trim(),
+                    is_visible_to_all: Boolean(this.moodStatusForm.is_visible_to_all),
+                    hidden_user_ids: hiddenUserIds,
+                }
+
+                const response = await axios.patch(`/api/chats/${this.activeConversation.id}/mood-status`, payload)
+                const normalizedConversation = this.normalizeConversation(response?.data?.data?.conversation)
+                if (normalizedConversation) {
+                    const targetId = Number(normalizedConversation.id)
+                    this.conversations = this.conversations.map((conversation) => {
+                        return Number(conversation?.id ?? 0) === targetId
+                            ? normalizedConversation
+                            : conversation
+                    })
+
+                    if (Number(this.activeConversation?.id ?? 0) === targetId) {
+                        this.activeConversation = normalizedConversation
+                    }
+                }
+
+                this.suppressMoodStatusFormSyncOnce = true
+                this.moodStatusForm.text = ''
+                this.showMoodStatusSettings = false
+                this.notifyChatSyncStateRefresh({
+                    conversationId: this.activeConversation?.id ?? null,
+                })
+            } catch (error) {
+                alert(this.resolveApiMessage(error, this.$t('chats.saveMoodStatusFailed')))
+            } finally {
+                this.isSavingMoodStatus = false
             }
         },
 
@@ -2829,10 +3673,17 @@ export default {
                 const updated = this.conversations.find((conversation) => conversation.id === this.activeConversation.id)
                 if (updated) {
                     this.activeConversation = updated
+                    this.syncMoodStatusFormFromActiveConversation()
                 } else {
                     this.activeConversation = null
+                    this.messages = []
+                    this.selectedMessageIds = []
+                    this.isBulkDeletingMessages = false
+                    this.syncMoodStatusFormFromActiveConversation()
                     this.persistSharedSyncConversationId(null)
                 }
+            } else {
+                this.syncMoodStatusFormFromActiveConversation()
             }
 
             this.syncActiveConversationPresenceChannel()
@@ -2966,6 +3817,11 @@ export default {
             this.persistSharedSyncConversationId(nextConversationId)
             this.leftPaneMode = 'conversations'
             this.showStickerTray = false
+            this.selectedMessageIds = []
+            this.isBulkDeletingMessages = false
+            this.openMessageReactionPickerId = null
+            this.showMoodStatusSettings = false
+            this.syncMoodStatusFormFromActiveConversation()
             this.saveChatUiSettings()
             this.messageSearch = ''
             this.syncActiveConversationPresenceChannel()
@@ -2979,6 +3835,9 @@ export default {
         async loadMessages(options = {}) {
             if (!this.activeConversation) {
                 this.messages = []
+                this.selectedMessageIds = []
+                this.isBulkDeletingMessages = false
+                this.openMessageReactionPickerId = null
                 return
             }
 
@@ -2988,6 +3847,9 @@ export default {
                 })
 
                 this.messages = (response.data.data ?? []).map((message) => this.normalizeMessage(message))
+                this.selectedMessageIds = []
+                this.isBulkDeletingMessages = false
+                this.openMessageReactionPickerId = null
                 this.setConversationReadLocally(this.activeConversation.id)
                 await this.markConversationRead(this.activeConversation.id, {
                     silentSync: Boolean(options?.silentSync),
@@ -2995,6 +3857,9 @@ export default {
                 this.$nextTick(() => this.scrollMessagesDown())
             } catch (error) {
                 this.messages = []
+                this.selectedMessageIds = []
+                this.isBulkDeletingMessages = false
+                this.openMessageReactionPickerId = null
                 if (error.response?.status === 403) {
                     alert(this.$t('chats.noAccessToChat'))
                 }
@@ -3037,6 +3902,19 @@ export default {
         appendEmoji(emoji) {
             this.messageBody = `${this.messageBody}${emoji}`
             this.notifyTypingActivity({ immediate: true })
+        },
+
+        toggleComposerTools() {
+            if (this.isComposerDisabled) {
+                this.showComposerTools = false
+                this.showStickerTray = false
+                return
+            }
+
+            this.showComposerTools = !this.showComposerTools
+            if (!this.showComposerTools) {
+                this.showStickerTray = false
+            }
         },
 
         toggleStickerTray() {
@@ -3652,28 +4530,39 @@ export default {
                 this.notifyTypingActivity({ immediate: true })
 
                 if (typeof window !== 'undefined' && typeof window.MediaRecorder !== 'undefined') {
-                    const options = {}
                     const preferredMimeType = this.getPreferredVideoMimeType()
-                    if (preferredMimeType !== '') {
-                        options.mimeType = preferredMimeType
-                    }
-
-                    try {
-                        const recorder = new MediaRecorder(stream, options)
-                        recorder.ondataavailable = (event) => {
-                            if (event.data && event.data.size > 0) {
-                                this.videoRecordedChunks.push(event.data)
-                                if (!this.videoRecordedMimeType && typeof event.data.type === 'string' && event.data.type.trim() !== '') {
-                                    this.videoRecordedMimeType = event.data.type
-                                }
+                    const tryCreateRecorder = () => {
+                        if (preferredMimeType !== '') {
+                            try {
+                                return new MediaRecorder(stream, { mimeType: preferredMimeType })
+                            } catch (_error) {
+                                // Fallback to browser default below.
                             }
                         }
 
-                        recorder.start(300)
-                        this.videoMediaRecorder = recorder
-                    } catch (error) {
-                        this.videoMediaRecorder = null
+                        try {
+                            return new MediaRecorder(stream)
+                        } catch (_error) {
+                            return null
+                        }
                     }
+
+                    const recorder = tryCreateRecorder()
+                    if (!recorder) {
+                        throw new Error('media-recorder-init-failed')
+                    }
+
+                    recorder.ondataavailable = (event) => {
+                        if (event.data && event.data.size > 0) {
+                            this.videoRecordedChunks.push(event.data)
+                            if (!this.videoRecordedMimeType && typeof event.data.type === 'string' && event.data.type.trim() !== '') {
+                                this.videoRecordedMimeType = event.data.type
+                            }
+                        }
+                    }
+
+                    recorder.start(300)
+                    this.videoMediaRecorder = recorder
                 }
 
                 this.videoRecordTimerId = window.setInterval(() => {
@@ -4182,7 +5071,10 @@ export default {
                 return 'ogg'
             }
             if (normalized.includes('mp4') || normalized.includes('m4a')) {
-                return 'm4a'
+                if (normalized.startsWith('audio/')) {
+                    return 'm4a'
+                }
+                return 'mp4'
             }
             if (normalized.includes('mpeg') || normalized.includes('mp3')) {
                 return 'mp3'
@@ -4230,7 +5122,7 @@ export default {
             const mime = String(file?.type || '').toLowerCase()
             const name = String(file?.name || '').toLowerCase()
 
-            if (mime.startsWith('video/')) {
+            if (mime.startsWith('video/') || /\.(mp4|m4v|mov|avi|webm)$/i.test(name)) {
                 return 'video'
             }
             if (mime.startsWith('audio/') || /\.(mp3|wav|ogg|m4a|aac|opus|weba|webm)$/i.test(name)) {
@@ -4281,10 +5173,11 @@ export default {
             this.notifyTypingActivity({ immediate: true, isSending: true })
             try {
                 let response
+                const normalizedBody = this.normalizeStickerAliases(this.messageBody)
 
                 if (this.selectedFiles.length > 0) {
                     const formData = new FormData()
-                    formData.append('body', this.messageBody)
+                    formData.append('body', normalizedBody)
 
                     for (const item of this.selectedFiles) {
                         formData.append('files[]', item.file)
@@ -4297,7 +5190,7 @@ export default {
                     })
                 } else {
                     response = await axios.post(`/api/chats/${this.activeConversation.id}/messages`, {
-                        body: this.messageBody,
+                        body: normalizedBody,
                     })
                 }
 
@@ -4374,6 +5267,9 @@ export default {
                     .listen('.chat.message.sent', (payload) => {
                         this.handleIncomingMessage(payload)
                     })
+                    .listen('.chat.mood-status.updated', (payload) => {
+                        this.handleMoodStatusRealtimeEvent(conversation.id, payload)
+                    })
                     .listenForWhisper('typing', (payload) => {
                         this.handleTypingWhisper(conversation.id, payload)
                     })
@@ -4395,6 +5291,71 @@ export default {
 
             this.subscribedChannels = {}
             this.clearTypingState()
+        },
+
+        async refreshConversationMoodStatus(conversationId, options = {}) {
+            const normalizedConversationId = Number(conversationId)
+            if (!Number.isFinite(normalizedConversationId) || normalizedConversationId <= 0) {
+                return
+            }
+
+            if (this.moodStatusSyncInFlight[normalizedConversationId]) {
+                return
+            }
+
+            this.moodStatusSyncInFlight = {
+                ...this.moodStatusSyncInFlight,
+                [normalizedConversationId]: true,
+            }
+
+            try {
+                const response = await axios.get(`/api/chats/${normalizedConversationId}`)
+                const normalizedConversation = this.normalizeConversation(response?.data?.data)
+                if (!normalizedConversation) {
+                    return
+                }
+
+                let hasConversation = false
+                this.conversations = this.conversations.map((conversation) => {
+                    if (Number(conversation?.id ?? 0) !== normalizedConversationId) {
+                        return conversation
+                    }
+
+                    hasConversation = true
+                    return normalizedConversation
+                })
+
+                if (!hasConversation) {
+                    this.conversations.push(normalizedConversation)
+                }
+
+                this.sortConversationsByActivity()
+                this.emitUnreadTotal()
+
+                if (Number(this.activeConversation?.id ?? 0) === normalizedConversationId) {
+                    this.activeConversation = normalizedConversation
+                    if (Boolean(options?.syncMoodForm)) {
+                        this.syncMoodStatusFormFromActiveConversation()
+                    }
+                }
+            } catch (_error) {
+                // Realtime mood sync must not block chat flow.
+            } finally {
+                const next = { ...this.moodStatusSyncInFlight }
+                delete next[normalizedConversationId]
+                this.moodStatusSyncInFlight = next
+            }
+        },
+
+        async handleMoodStatusRealtimeEvent(conversationId, payload = {}) {
+            const normalizedConversationId = Number(payload?.conversation_id ?? conversationId ?? 0)
+            if (!Number.isFinite(normalizedConversationId) || normalizedConversationId <= 0) {
+                return
+            }
+
+            await this.refreshConversationMoodStatus(normalizedConversationId, {
+                syncMoodForm: true,
+            })
         },
 
         handleIncomingMessage(payload) {
@@ -4463,6 +5424,7 @@ export default {
 
             if (this.activeConversation && this.activeConversation.id === target.id) {
                 this.activeConversation = target
+                this.syncMoodStatusFormFromActiveConversation()
             }
         },
 
@@ -4520,6 +5482,22 @@ export default {
             return this.togglingMessageReactionKeys.includes(this.messageReactionKey(messageId, emoji))
         },
 
+        isMessageReactionPickerOpen(messageId) {
+            return Number(this.openMessageReactionPickerId) === Number(messageId)
+        },
+
+        toggleMessageReactionPicker(messageId) {
+            const normalizedId = Number(messageId)
+            if (!Number.isFinite(normalizedId) || normalizedId <= 0) {
+                this.openMessageReactionPickerId = null
+                return
+            }
+
+            this.openMessageReactionPickerId = this.isMessageReactionPickerOpen(normalizedId)
+                ? null
+                : normalizedId
+        },
+
         hasMessageReactionFromMe(message, emoji) {
             if (!Array.isArray(message?.reactions)) {
                 return false
@@ -4562,6 +5540,7 @@ export default {
                 return
             }
 
+            this.openMessageReactionPickerId = null
             this.togglingMessageReactionKeys = [...this.togglingMessageReactionKeys, key]
 
             try {
@@ -4574,6 +5553,9 @@ export default {
                 if (updatedMessage) {
                     this.upsertMessage(updatedMessage)
                     this.syncMessageAcrossConversationCards(updatedMessage)
+                    this.notifyChatSyncMessage(updatedMessage, {
+                        markRead: false,
+                    })
                 }
             } catch (error) {
                 alert(this.resolveApiMessage(error, this.$t('chats.updateReactionFailed')))
@@ -4587,7 +5569,15 @@ export default {
         },
 
         canDeleteMessage(message) {
-            if (!this.currentUser || !message?.user) {
+            if (!this.currentUser || !message?.id) {
+                return false
+            }
+
+            if (Boolean(this.currentUser?.is_admin)) {
+                return true
+            }
+
+            if (!message?.user) {
                 return false
             }
 
@@ -4595,6 +5585,116 @@ export default {
             const authorId = Number(message.user.id)
 
             return Number.isFinite(viewerId) && Number.isFinite(authorId) && viewerId === authorId
+        },
+
+        isMessageSelected(messageId) {
+            return this.selectedMessageIds.includes(Number(messageId))
+        },
+
+        toggleMessageSelection(message) {
+            const messageId = Number(message?.id ?? 0)
+            if (!Number.isFinite(messageId) || messageId <= 0) {
+                return
+            }
+
+            if (!this.canDeleteMessage(message)) {
+                return
+            }
+
+            if (this.isMessageSelected(messageId)) {
+                this.selectedMessageIds = this.selectedMessageIds.filter((id) => id !== messageId)
+                return
+            }
+
+            this.selectedMessageIds = [...this.selectedMessageIds, messageId]
+        },
+
+        clearSelectedMessages() {
+            this.selectedMessageIds = []
+        },
+
+        toggleAllDisplayedMessagesSelection() {
+            const deletableIds = this.deletableDisplayedMessageIds
+            if (deletableIds.length === 0) {
+                this.selectedMessageIds = []
+                return
+            }
+
+            if (this.allDisplayedDeletableSelected) {
+                const deletable = new Set(deletableIds.map((id) => Number(id)))
+                this.selectedMessageIds = this.selectedMessageIds.filter((id) => !deletable.has(Number(id)))
+                return
+            }
+
+            const merged = new Set(this.selectedMessageIds.map((id) => Number(id)))
+            for (const id of deletableIds) {
+                merged.add(Number(id))
+            }
+            this.selectedMessageIds = [...merged]
+        },
+
+        async deleteSelectedMessages() {
+            if (!this.activeConversation || this.isBulkDeletingMessages) {
+                return
+            }
+
+            const messageIds = this.selectedDisplayedMessageIds
+                .map((id) => Number(id))
+                .filter((id) => Number.isFinite(id) && id > 0)
+
+            if (messageIds.length === 0) {
+                return
+            }
+
+            const confirmed = window.confirm(this.$t('chats.bulkDeleteSelectedConfirm', { count: messageIds.length }))
+            if (!confirmed) {
+                return
+            }
+
+            const deletingNow = new Set(this.deletingMessageIds.map((id) => Number(id)))
+            for (const id of messageIds) {
+                deletingNow.add(id)
+            }
+            this.deletingMessageIds = [...deletingNow]
+            this.isBulkDeletingMessages = true
+
+            try {
+                const results = await Promise.allSettled(messageIds.map((id) => {
+                    return axios.delete(`/api/chats/${this.activeConversation.id}/messages/${id}`)
+                }))
+
+                const deletedIds = []
+                const failedIds = []
+
+                for (let index = 0; index < results.length; index += 1) {
+                    const result = results[index]
+                    const id = messageIds[index]
+                    if (result.status === 'fulfilled') {
+                        deletedIds.push(id)
+                    } else {
+                        failedIds.push(id)
+                    }
+                }
+
+                for (const id of deletedIds) {
+                    this.removeMessageLocally(id)
+                }
+
+                if (deletedIds.length > 0) {
+                    await this.loadConversations()
+                    this.notifyChatSyncStateRefresh({
+                        conversationId: this.activeConversation?.id ?? null,
+                    })
+                }
+
+                if (failedIds.length > 0) {
+                    alert(this.$t('chats.bulkDeleteSelectedFailed'))
+                }
+            } finally {
+                const deletedSet = new Set(messageIds.map((id) => Number(id)))
+                this.deletingMessageIds = this.deletingMessageIds.filter((id) => !deletedSet.has(Number(id)))
+                this.isBulkDeletingMessages = false
+            }
         },
 
         isMessageDeleting(messageId) {
@@ -4615,7 +5715,16 @@ export default {
             }
 
             const messageId = Number(message.id)
-            if (!Number.isFinite(messageId) || this.isMessageDeleting(messageId)) {
+            if (!Number.isFinite(messageId) || this.isMessageDeleting(messageId) || this.isBulkDeletingMessages) {
+                return
+            }
+
+            const selectedIds = this.selectedDeletableMessageIds
+                .map((id) => Number(id))
+                .filter((id) => Number.isFinite(id) && id > 0)
+            const bulkSelectedCount = selectedIds.length
+            if (bulkSelectedCount > 0 && this.isMessageSelected(messageId)) {
+                await this.deleteSelectedMessages()
                 return
             }
 
@@ -4629,6 +5738,7 @@ export default {
             try {
                 await axios.delete(`/api/chats/${this.activeConversation.id}/messages/${messageId}`)
                 this.removeMessageLocally(messageId)
+                this.selectedMessageIds = this.selectedMessageIds.filter((id) => id !== messageId)
                 await this.loadConversations()
                 this.notifyChatSyncStateRefresh({
                     conversationId: this.activeConversation?.id ?? null,
@@ -4688,6 +5798,7 @@ export default {
         removeMessageLocally(messageId) {
             const normalizedId = Number(messageId)
             this.messages = this.messages.filter((item) => Number(item.id) !== normalizedId)
+            this.selectedMessageIds = this.selectedMessageIds.filter((id) => Number(id) !== normalizedId)
         },
 
         removeAttachmentLocally(messageId, attachmentId) {
@@ -4736,6 +5847,10 @@ export default {
                 URL.revokeObjectURL(source)
                 this.notificationSettings.customSoundDataUrl = null
             }
+        },
+
+        onNotificationSoundPanelToggle(event) {
+            this.isNotificationSoundPanelOpen = Boolean(event?.target?.open)
         },
 
         loadNotificationSettings() {

@@ -3,6 +3,7 @@
 namespace Tests\Feature;
 
 use App\Events\ConversationMessageSent;
+use App\Events\ConversationMoodStatusUpdated;
 use App\Models\ChatArchive;
 use App\Models\Conversation;
 use App\Models\ConversationMessage;
@@ -878,7 +879,7 @@ class ChatFeatureTest extends TestCase
         ]);
     }
 
-    public function test_admin_cannot_delete_foreign_message_via_user_message_delete_endpoint(): void
+    public function test_admin_can_delete_foreign_message_via_user_message_delete_endpoint(): void
     {
         $author = User::factory()->create();
         $admin = User::factory()->create(['is_admin' => true]);
@@ -897,13 +898,69 @@ class ChatFeatureTest extends TestCase
         $response = $this->deleteJson("/api/chats/{$conversationId}/messages/{$message->id}");
 
         $response
-            ->assertStatus(403)
-            ->assertJsonPath('message', 'Access denied to delete this message.');
+            ->assertOk()
+            ->assertJsonPath('data.conversation_id', $conversationId)
+            ->assertJsonPath('data.message_id', $message->id)
+            ->assertJsonPath('data.message_deleted', true);
+
+        $this->assertDatabaseMissing('conversation_messages', [
+            'id' => $message->id,
+        ]);
+    }
+
+    public function test_admin_can_delete_foreign_attachment_via_user_attachment_delete_endpoint(): void
+    {
+        Storage::fake('public');
+
+        $author = User::factory()->create();
+        $admin = User::factory()->create(['is_admin' => true]);
+
+        Sanctum::actingAs($author);
+        $conversationId = (int) $this->postJson("/api/chats/direct/{$admin->id}")->json('data.id');
+
+        $message = ConversationMessage::query()->create([
+            'conversation_id' => $conversationId,
+            'user_id' => $author->id,
+            'body' => 'Message with removable audio',
+        ]);
+
+        $path = 'chat/audio/admin-delete-attachment.ogg';
+        Storage::disk('public')->put($path, 'audio-content');
+
+        $attachment = ConversationMessageAttachment::query()->create([
+            'conversation_message_id' => $message->id,
+            'path' => $path,
+            'storage_disk' => 'public',
+            'type' => ConversationMessageAttachment::TYPE_AUDIO,
+            'mime_type' => 'audio/ogg',
+            'size' => 512,
+            'original_name' => 'admin-delete-attachment.ogg',
+        ]);
+
+        Sanctum::actingAs($admin);
+
+        $response = $this->deleteJson(
+            "/api/chats/{$conversationId}/messages/{$message->id}/attachments/{$attachment->id}"
+        );
+
+        $response
+            ->assertOk()
+            ->assertJsonPath('data.conversation_id', $conversationId)
+            ->assertJsonPath('data.message_id', $message->id)
+            ->assertJsonPath('data.attachment_id', $attachment->id)
+            ->assertJsonPath('data.message_deleted', false)
+            ->assertJsonPath('data.remaining_attachments', 0);
 
         $this->assertDatabaseHas('conversation_messages', [
             'id' => $message->id,
-            'user_id' => $author->id,
+            'body' => 'Message with removable audio',
         ]);
+
+        $this->assertDatabaseMissing('conversation_message_attachments', [
+            'id' => $attachment->id,
+        ]);
+
+        Storage::disk('public')->assertMissing($path);
     }
 
     public function test_user_can_delete_attachment_without_removing_message_when_text_exists(): void
@@ -1201,6 +1258,156 @@ class ChatFeatureTest extends TestCase
 
         $this->postJson("/api/chats/archives/{$archive->id}/restore")
             ->assertStatus(403);
+    }
+
+    public function test_user_can_save_mood_status_and_owner_receives_visibility_payload(): void
+    {
+        $author = User::factory()->create();
+        $peer = User::factory()->create();
+
+        Sanctum::actingAs($author);
+        $conversationId = (int) $this->postJson("/api/chats/direct/{$peer->id}")->json('data.id');
+
+        $response = $this->patchJson("/api/chats/{$conversationId}/mood-status", [
+            'text' => 'Сегодня в хорошем настроении.',
+            'is_visible_to_all' => true,
+            'hidden_user_ids' => [$peer->id],
+        ]);
+
+        $response
+            ->assertOk()
+            ->assertJsonPath('data.conversation.id', $conversationId);
+
+        $ownerStatus = collect($response->json('data.conversation.mood_statuses'))
+            ->firstWhere('user_id', $author->id);
+
+        $this->assertNotNull($ownerStatus);
+        $this->assertSame('Сегодня в хорошем настроении.', $ownerStatus['text']);
+        $this->assertTrue((bool) ($ownerStatus['visibility']['is_visible_to_all'] ?? false));
+        $this->assertSame([], $ownerStatus['visibility']['hidden_user_ids'] ?? null);
+
+        $this->assertDatabaseHas('conversation_mood_statuses', [
+            'conversation_id' => $conversationId,
+            'user_id' => $author->id,
+            'text' => 'Сегодня в хорошем настроении.',
+            'is_visible_to_all' => true,
+        ]);
+    }
+
+    public function test_mood_status_can_be_hidden_from_selected_participant(): void
+    {
+        $author = User::factory()->create();
+        $hiddenPeer = User::factory()->create();
+
+        Sanctum::actingAs($author);
+        $conversationId = (int) $this->postJson("/api/chats/direct/{$hiddenPeer->id}")->json('data.id');
+
+        $this->patchJson("/api/chats/{$conversationId}/mood-status", [
+            'text' => 'Скрытый для собеседника статус.',
+            'is_visible_to_all' => false,
+            'hidden_user_ids' => [$hiddenPeer->id],
+        ])->assertOk();
+
+        Sanctum::actingAs($hiddenPeer);
+        $hiddenViewResponse = $this->getJson("/api/chats/{$conversationId}");
+        $hiddenViewResponse->assertOk();
+
+        $hiddenViewStatus = collect($hiddenViewResponse->json('data.mood_statuses'))
+            ->firstWhere('user_id', $author->id);
+        $this->assertNull($hiddenViewStatus);
+
+        Sanctum::actingAs($author);
+        $ownerViewResponse = $this->getJson("/api/chats/{$conversationId}");
+        $ownerViewResponse->assertOk();
+
+        $ownerViewStatus = collect($ownerViewResponse->json('data.mood_statuses'))
+            ->firstWhere('user_id', $author->id);
+
+        $this->assertNotNull($ownerViewStatus);
+        $this->assertFalse((bool) ($ownerViewStatus['visibility']['is_visible_to_all'] ?? true));
+        $this->assertContains($hiddenPeer->id, $ownerViewStatus['visibility']['hidden_user_ids'] ?? []);
+    }
+
+    public function test_user_can_clear_own_mood_status_with_empty_text(): void
+    {
+        $author = User::factory()->create();
+        $peer = User::factory()->create();
+
+        Sanctum::actingAs($author);
+        $conversationId = (int) $this->postJson("/api/chats/direct/{$peer->id}")->json('data.id');
+
+        $this->patchJson("/api/chats/{$conversationId}/mood-status", [
+            'text' => 'Временный статус.',
+            'is_visible_to_all' => true,
+            'hidden_user_ids' => [],
+        ])->assertOk();
+
+        $clearResponse = $this->patchJson("/api/chats/{$conversationId}/mood-status", [
+            'text' => '   ',
+            'is_visible_to_all' => true,
+            'hidden_user_ids' => [],
+        ]);
+
+        $clearResponse->assertOk();
+
+        $this->assertDatabaseMissing('conversation_mood_statuses', [
+            'conversation_id' => $conversationId,
+            'user_id' => $author->id,
+        ]);
+
+        $statusesAfterClear = collect($clearResponse->json('data.conversation.mood_statuses'));
+        $this->assertNull($statusesAfterClear->firstWhere('user_id', $author->id));
+    }
+
+    public function test_non_participant_cannot_update_mood_status_for_direct_chat(): void
+    {
+        $firstUser = User::factory()->create();
+        $secondUser = User::factory()->create();
+        $intruder = User::factory()->create();
+
+        Sanctum::actingAs($firstUser);
+        $conversationId = (int) $this->postJson("/api/chats/direct/{$secondUser->id}")->json('data.id');
+
+        Sanctum::actingAs($intruder);
+
+        $response = $this->patchJson("/api/chats/{$conversationId}/mood-status", [
+            'text' => 'Чужой статус.',
+            'is_visible_to_all' => true,
+            'hidden_user_ids' => [],
+        ]);
+
+        $response->assertStatus(403);
+
+        $this->assertDatabaseMissing('conversation_mood_statuses', [
+            'conversation_id' => $conversationId,
+            'user_id' => $intruder->id,
+        ]);
+    }
+
+    public function test_updating_mood_status_broadcasts_realtime_event(): void
+    {
+        Event::fake([
+            ConversationMoodStatusUpdated::class,
+        ]);
+
+        $firstUser = User::factory()->create();
+        $secondUser = User::factory()->create();
+
+        Sanctum::actingAs($firstUser);
+        $conversationId = (int) $this->postJson("/api/chats/direct/{$secondUser->id}")->json('data.id');
+
+        $response = $this->patchJson("/api/chats/{$conversationId}/mood-status", [
+            'text' => 'Онлайн и на связи',
+            'is_visible_to_all' => true,
+            'hidden_user_ids' => [],
+        ]);
+
+        $response->assertOk();
+
+        Event::assertDispatched(ConversationMoodStatusUpdated::class, function (ConversationMoodStatusUpdated $event) use ($conversationId, $firstUser) {
+            return (int) $event->conversationId === $conversationId
+                && (int) $event->actorUserId === $firstUser->id;
+        });
     }
 
     public function test_sending_message_broadcasts_realtime_event(): void
