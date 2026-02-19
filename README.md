@@ -246,7 +246,7 @@ docker/
 3. Настройте подключение к БД в `.env`.
 4. Выполните инициализацию:
    - `php artisan key:generate`
-   - `php artisan migrate --seed`
+   - `php artisan migrate --seed` (или `php artisan db:seed --class=IptvSeedSeeder` для IPTV каналов)
    - `php artisan storage:link`
 5. Запустите процессы:
    - `php artisan serve`
@@ -270,6 +270,7 @@ docker/
 ### Полезные Docker команды
 - Миграции вручную: `docker compose exec app php artisan migrate --seed`
 - Сиды: `docker compose exec app php artisan db:seed`
+- Наполнение IPTV каналов: `docker compose exec app php artisan db:seed --class=IptvSeedSeeder`
 - Проверка раздачи радио-избранного админа: `docker compose exec app php artisan radio:distribute-admin-favorites --dry-run`
 - Тесты: `docker compose --profile test run --rm test`
 - Логи: `docker compose logs --tail=100 app`
@@ -302,6 +303,7 @@ docker/
 - Все тесты: `php artisan test`
 - Feature suite: `php artisan test --testsuite=Feature`
 - IPTV: `php artisan test tests/Feature/IptvFeatureTest.php`
+- IPTV Админка (Сидеры): `php artisan test tests/Feature/AdminIptvSeedFeatureTest.php`
 - Чаты и realtime: `php artisan test tests/Feature/ChatFeatureTest.php`
 - Broadcast channels: `php artisan test tests/Feature/BroadcastChannelsFeatureTest.php`
 - Админка: `php artisan test tests/Feature/AdminPanelFeatureTest.php`

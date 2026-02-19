@@ -15,6 +15,7 @@ use App\Models\LikedPost;
 use App\Models\Post;
 use App\Models\PostImage;
 use App\Models\SubscriberFollowing;
+use App\Models\IptvSeed;
 use App\Models\User;
 use App\Models\UserBlock;
 use Illuminate\Http\JsonResponse;
@@ -579,6 +580,59 @@ class AdminController extends Controller
 
         return response()->json([
             'message' => 'Block deleted successfully.',
+        ]);
+    }
+
+    public function iptvSeeds(Request $request): JsonResponse
+    {
+        $seeds = IptvSeed::query()
+            ->orderBy('sort_order')
+            ->orderBy('id')
+            ->get();
+
+        return response()->json($seeds);
+    }
+
+    public function storeIptvSeed(Request $request): JsonResponse
+    {
+        $validated = $request->validate([
+            'name' => ['required', 'string', 'max:255'],
+            'url' => ['required', 'url', 'max:500'],
+            'sort_order' => ['nullable', 'integer'],
+            'is_active' => ['nullable', 'boolean'],
+        ]);
+
+        $seed = IptvSeed::create($validated);
+
+        return response()->json([
+            'message' => 'IPTV Seed created successfully.',
+            'data' => $seed,
+        ]);
+    }
+
+    public function updateIptvSeed(IptvSeed $iptvSeed, Request $request): JsonResponse
+    {
+        $validated = $request->validate([
+            'name' => ['required', 'string', 'max:255'],
+            'url' => ['required', 'url', 'max:500'],
+            'sort_order' => ['nullable', 'integer'],
+            'is_active' => ['nullable', 'boolean'],
+        ]);
+
+        $iptvSeed->update($validated);
+
+        return response()->json([
+            'message' => 'IPTV Seed updated successfully.',
+            'data' => $iptvSeed,
+        ]);
+    }
+
+    public function destroyIptvSeed(IptvSeed $iptvSeed): JsonResponse
+    {
+        $iptvSeed->delete();
+
+        return response()->json([
+            'message' => 'IPTV Seed deleted successfully.',
         ]);
     }
 

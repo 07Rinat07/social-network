@@ -568,28 +568,7 @@ const IPTV_MAX_PARSED_CHANNELS = 8000
 const IPTV_MAX_SAVED_IMPORT_BYTES = 3 * 1024 * 1024
 const IPTV_MAX_SAVED_IMPORT_PLAYLISTS = 200
 const IPTV_MAX_SAVED_IMPORT_CHANNELS = 500
-const IPTV_BUILTIN_SEED_SOURCES = [
-    {
-        id: 'dimonovich-tv',
-        nameKey: 'iptv.seedPlaylistTv',
-        url: 'https://raw.githubusercontent.com/Dimonovich/TV/Dimonovich/FREE/TV',
-    },
-    {
-        id: 'tv-collection',
-        nameKey: 'iptv.seedTvCollection',
-        url: 'https://raw.githubusercontent.com/Voxlist/voxlist/refs/heads/main/voxlist.m3u',
-    },
-    {
-        id: 'dimonovich-zarub',
-        nameKey: 'iptv.seedInternational',
-        url: 'https://raw.githubusercontent.com/naggdd/iptv/main/ru.m3u',
-    },
-    {
-        id: 'world-countries-priority',
-        nameKey: 'iptv.seedWorldCountries',
-        url: 'https://iptv-org.github.io/iptv/index.country.m3u',
-    },
-]
+const IPTV_BUILTIN_SEED_SOURCES = []
 
 export default {
     name: 'Iptv',
@@ -691,6 +670,7 @@ export default {
             copiedChannelId: '',
             exitCleanupDone: false,
             isSwitchingSource: false,
+            dynamicBuiltinSeeds: [],
         }
     },
 
@@ -704,11 +684,12 @@ export default {
         },
 
         builtinSeedSources() {
-            return IPTV_BUILTIN_SEED_SOURCES.map((seed) => ({
+            const staticSeeds = IPTV_BUILTIN_SEED_SOURCES.map((seed) => ({
                 id: seed.id,
                 url: seed.url,
                 name: this.$t(seed.nameKey),
             }))
+            return [...staticSeeds, ...this.dynamicBuiltinSeeds]
         },
 
         seedSources() {
@@ -1236,6 +1217,7 @@ export default {
     mounted() {
         this.preferHttpsUpgrade = this.isPageHttps
         this.hideListLogosOnMobile = this.isMobileViewport()
+        this.loadBuiltinSeeds()
         this.loadCustomSeedSources()
         this.loadSavedLibrarySources()
         this.loadPersistedState()
@@ -2163,6 +2145,19 @@ export default {
                 this.savedLibraryError = error.response?.data?.message || this.$t('iptv.savedLoadFailed')
             } finally {
                 this.isLoadingSavedLibrary = false
+            }
+        },
+
+        async loadBuiltinSeeds() {
+            try {
+                const response = await axios.get('/api/iptv/seeds')
+                this.dynamicBuiltinSeeds = (response.data?.data || []).map((item) => ({
+                    id: `builtin-${item.id}`,
+                    name: item.name,
+                    url: item.url,
+                }))
+            } catch (_error) {
+                // ignore
             }
         },
 
@@ -3790,3 +3785,6 @@ export default {
     },
 }
 </script>
+
+<style scoped>
+</style>

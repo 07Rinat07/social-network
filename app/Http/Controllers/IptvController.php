@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\IptvSavedChannel;
 use App\Models\IptvSavedPlaylist;
+use App\Models\IptvSeed;
 use App\Services\IptvPlaylistService;
 use App\Services\IptvProxyService;
 use App\Services\IptvTranscodeService;
@@ -54,6 +55,19 @@ class IptvController extends Controller
                 'source_url' => $payload['url'],
                 'size' => strlen($playlist),
             ],
+        ]);
+    }
+
+    public function seeds(): JsonResponse
+    {
+        $seeds = IptvSeed::query()
+            ->where('is_active', true)
+            ->orderBy('sort_order')
+            ->orderBy('id')
+            ->get(['id', 'name', 'url']);
+
+        return response()->json([
+            'data' => $seeds,
         ]);
     }
 

@@ -51,6 +51,7 @@
                 <button class="btn" :class="activeTab === 'conversations' ? 'btn-primary' : 'btn-outline'" @click="selectTab('conversations')">{{ $t('admin.tabConversations') }}</button>
                 <button class="btn" :class="activeTab === 'messages' ? 'btn-primary' : 'btn-outline'" @click="selectTab('messages')">{{ $t('admin.tabMessages') }}</button>
                 <button class="btn" :class="activeTab === 'blocks' ? 'btn-primary' : 'btn-outline'" @click="selectTab('blocks')">{{ $t('admin.tabBlocks') }}</button>
+                <button class="btn" :class="activeTab === 'iptvSeeds' ? 'btn-primary' : 'btn-outline'" @click="selectTab('iptvSeeds')">{{ $t('admin.tabIptvSeeds') }}</button>
                 <button class="btn" :class="activeTab === 'settings' ? 'btn-primary' : 'btn-outline'" @click="selectTab('settings')">{{ $t('admin.tabSettings') }}</button>
             </div>
 
@@ -346,6 +347,54 @@
                 </div>
             </div>
 
+            <div v-if="activeTab === 'iptvSeeds'" class="simple-list fade-in">
+                <div class="simple-item" style="display: block;">
+                    <strong style="display: block; margin-bottom: 0.5rem;">{{ $t('admin.iptvSeedsTitle') }}</strong>
+                    <p class="muted" style="margin: 0 0 1rem;">{{ $t('admin.iptvSeedsSubtitle') }}</p>
+
+                    <div style="display: flex; flex-direction: column; gap: 0.75rem; margin-bottom: 2rem; border-bottom: 1px solid var(--line); padding-bottom: 1.5rem;">
+                        <div style="display: flex; gap: 0.75rem; flex-wrap: wrap;">
+                            <input class="input-field" type="text" v-model.trim="newIptvSeed.name" :placeholder="$t('admin.name')" style="flex: 1; min-width: 200px;">
+                            <input class="input-field" type="url" v-model.trim="newIptvSeed.url" placeholder="URL (m3u/m3u8)" style="flex: 2; min-width: 300px;">
+                        </div>
+                        <div style="display: flex; gap: 1rem; align-items: center; justify-content: space-between; flex-wrap: wrap;">
+                            <div style="display: flex; gap: 1rem; align-items: center;">
+                                <input class="input-field" type="number" v-model.number="newIptvSeed.sort_order" :placeholder="$t('admin.sortOrder')" style="width: 100px;">
+                                <label style="display: flex; gap: 0.4rem; align-items: center; cursor: pointer;">
+                                    <input type="checkbox" v-model="newIptvSeed.is_active">
+                                    <small>{{ $t('admin.isActive') }}</small>
+                                </label>
+                            </div>
+                            <button class="btn btn-primary" @click="createIptvSeed" :disabled="!newIptvSeed.name || !newIptvSeed.url">
+                                {{ $t('admin.create') }}
+                            </button>
+                        </div>
+                    </div>
+
+                    <div v-for="seed in iptvSeeds" :key="`admin-seed-${seed.id}`" class="simple-item" style="border-left: 3px solid var(--accent); padding: 1rem;">
+                        <div style="display: flex; flex-direction: column; gap: 0.75rem; width: 100%;">
+                            <div style="display: flex; gap: 0.75rem; flex-wrap: wrap;">
+                                <input class="input-field" type="text" v-model.trim="seed.name" :placeholder="$t('admin.name')" style="flex: 1; min-width: 200px;">
+                                <input class="input-field" type="url" v-model.trim="seed.url" placeholder="URL" style="flex: 2; min-width: 300px;">
+                            </div>
+                            <div style="display: flex; gap: 1rem; align-items: center; justify-content: space-between; flex-wrap: wrap;">
+                                <div style="display: flex; gap: 1rem; align-items: center;">
+                                    <input class="input-field" type="number" v-model.number="seed.sort_order" :placeholder="$t('admin.sortOrder')" style="width: 100px;">
+                                    <label style="display: flex; gap: 0.4rem; align-items: center; cursor: pointer;">
+                                        <input type="checkbox" v-model="seed.is_active">
+                                        <small>{{ $t('admin.isActive') }}</small>
+                                    </label>
+                                </div>
+                                <div style="display: flex; gap: 0.5rem;">
+                                    <button class="btn btn-success btn-sm" @click="updateIptvSeed(seed)">{{ $t('admin.save') }}</button>
+                                    <button class="btn btn-danger btn-sm" @click="removeIptvSeed(seed)">{{ $t('common.delete') }}</button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
             <div v-if="activeTab === 'settings'" class="simple-list fade-in">
                 <div class="simple-item" style="display: block;">
                     <strong style="display: block; margin-bottom: 0.5rem;">{{ $t('admin.homeContentTitle') }}</strong>
@@ -570,6 +619,13 @@ export default {
             conversations: [],
             messages: [],
             blocks: [],
+            iptvSeeds: [],
+            newIptvSeed: {
+                name: '',
+                url: '',
+                sort_order: 0,
+                is_active: true,
+            },
             settings: [],
             homeContentActiveLocale: 'ru',
             homeContentForm: buildDefaultHomeContentLocalesPayload(),
@@ -634,6 +690,10 @@ export default {
             }
             if (tab === 'blocks') {
                 await this.loadBlocks()
+                return
+            }
+            if (tab === 'iptvSeeds') {
+                await this.loadIptvSeeds()
                 return
             }
             if (tab === 'settings') {
@@ -1073,6 +1133,53 @@ export default {
             await axios.delete(`/api/admin/blocks/${block.id}`)
             await this.loadBlocks()
             await this.loadSummary()
+        },
+
+        async loadIptvSeeds() {
+            const response = await axios.get('/api/admin/iptv-seeds')
+            this.iptvSeeds = response.data ?? []
+        },
+
+        async createIptvSeed() {
+            try {
+                await axios.post('/api/admin/iptv-seeds', this.newIptvSeed)
+                this.newIptvSeed = {
+                    name: '',
+                    url: '',
+                    sort_order: 0,
+                    is_active: true,
+                }
+                await this.loadIptvSeeds()
+            } catch (error) {
+                alert(error.response?.data?.message ?? this.$t('admin.createIptvSeedFailed'))
+            }
+        },
+
+        async updateIptvSeed(seed) {
+            try {
+                await axios.patch(`/api/admin/iptv-seeds/${seed.id}`, {
+                    name: seed.name,
+                    url: seed.url,
+                    sort_order: seed.sort_order,
+                    is_active: seed.is_active,
+                })
+                await this.loadIptvSeeds()
+            } catch (error) {
+                alert(error.response?.data?.message ?? this.$t('admin.updateIptvSeedFailed'))
+            }
+        },
+
+        async removeIptvSeed(seed) {
+            if (!confirm(this.$t('admin.confirmDeleteIptvSeed', { name: seed.name }))) {
+                return
+            }
+
+            try {
+                await axios.delete(`/api/admin/iptv-seeds/${seed.id}`)
+                await this.loadIptvSeeds()
+            } catch (error) {
+                alert(error.response?.data?.message ?? this.$t('admin.deleteIptvSeedFailed'))
+            }
         },
 
         async loadSettings() {

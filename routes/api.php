@@ -71,6 +71,7 @@ Route::middleware(['auth:sanctum', 'verified'])->group(function () {
     Route::get('/site/config', [SiteSettingController::class, 'publicConfig']);
     Route::patch('/site/storage-preference', [SiteSettingController::class, 'updateUserStoragePreference']);
 
+    Route::get('/iptv/seeds', [IptvController::class, 'seeds']);
     Route::get('/radio/stations', [RadioController::class, 'stations']);
     Route::get('/radio/favorites', [RadioController::class, 'favorites']);
     Route::post('/radio/favorites', [RadioController::class, 'storeFavorite']);
@@ -146,6 +147,11 @@ Route::middleware(['auth:sanctum', 'verified'])->group(function () {
         Route::get('/blocks', [AdminController::class, 'blocks']);
         Route::patch('/blocks/{userBlock}', [AdminController::class, 'updateBlock']);
         Route::delete('/blocks/{userBlock}', [AdminController::class, 'destroyBlock']);
+
+        Route::get('/iptv-seeds', [AdminController::class, 'iptvSeeds']);
+        Route::post('/iptv-seeds', [AdminController::class, 'storeIptvSeed']);
+        Route::patch('/iptv-seeds/{iptvSeed}', [AdminController::class, 'updateIptvSeed']);
+        Route::delete('/iptv-seeds/{iptvSeed}', [AdminController::class, 'destroyIptvSeed']);
 
         Route::get('/settings', [SiteSettingController::class, 'index']);
         Route::post('/settings', [SiteSettingController::class, 'store']);
