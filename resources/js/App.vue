@@ -103,6 +103,7 @@
 import BrandLogo from './components/BrandLogo.vue'
 import PersistentRadioWidget from './components/widgets/PersistentRadioWidget.vue'
 import PersistentChatWidget from './components/widgets/PersistentChatWidget.vue'
+import globalTropicalBeachBackground from '../images/home-tropical-beach.jpg'
 
 export default {
     name: 'App',
@@ -124,10 +125,12 @@ export default {
     },
 
     mounted() {
+        this.applyGlobalBackground()
         this.syncAuthState()
     },
 
     beforeUnmount() {
+        this.clearGlobalBackground()
         this.stopUnreadPolling()
     },
 
@@ -160,6 +163,24 @@ export default {
     },
 
     methods: {
+        applyGlobalBackground() {
+            if (typeof document === 'undefined') {
+                return
+            }
+
+            document.body.classList.add('home-route-bg')
+            document.body.style.setProperty('--home-route-bg-image', `url(${globalTropicalBeachBackground})`)
+        },
+
+        clearGlobalBackground() {
+            if (typeof document === 'undefined') {
+                return
+            }
+
+            document.body.classList.remove('home-route-bg')
+            document.body.style.removeProperty('--home-route-bg-image')
+        },
+
         localizedRoute(name, options = {}) {
             const sourceParams = (options && typeof options.params === 'object' && options.params !== null)
                 ? options.params

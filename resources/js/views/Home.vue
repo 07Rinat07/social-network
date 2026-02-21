@@ -1,5 +1,5 @@
 <template>
-    <div class="page-wrap grid-layout home-page-bg" :style="homePageStyle">
+    <div class="page-wrap grid-layout home-page-bg">
         <section class="section-card hero-grid home-hero-card">
             <div class="home-hero-main">
                 <div class="home-hero-copy">
@@ -327,7 +327,6 @@
 import MediaLightbox from '../components/MediaLightbox.vue'
 import Post from '../components/Post.vue'
 import { applyImagePreviewFallback, resetImagePreviewFallback } from '../utils/mediaPreview'
-import homeSocialMapBackground from '../../images/home-social-map.jpg'
 import enMessages from '../i18n/messages/en'
 import ruMessages from '../i18n/messages/ru'
 
@@ -411,12 +410,6 @@ export default {
 
         isEnglishLocale() {
             return this.resolveHomeContentLocale() === 'en'
-        },
-
-        homePageStyle() {
-            return {
-                '--home-bg-image': `url(${homeSocialMapBackground})`
-            }
         },
 
         carouselConveyorItems() {
