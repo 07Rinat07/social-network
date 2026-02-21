@@ -206,7 +206,7 @@
                 v-if="!isWidgetPlaybackBridgeEnabled"
                 ref="radioPlayer"
                 type="audio"
-                :src="currentStation.stream_url"
+                :src="playableCurrentStationStreamUrl"
                 player-class="media-audio"
                 :mime-type="currentStation.codec ? `audio/${String(currentStation.codec).toLowerCase()}` : ''"
             ></MediaPlayer>
@@ -539,6 +539,10 @@ export default {
             }
         },
 
+        playableCurrentStationStreamUrl() {
+            return this.buildPlayableStreamUrl(this.currentStation?.stream_url)
+        },
+
         currentStationVotesLabel() {
             const votes = Number(this.currentStation?.votes || 0)
             if (!Number.isFinite(votes) || votes <= 0) {
@@ -772,6 +776,29 @@ export default {
                 votes: Number(station?.votes || 0),
                 is_favorite: Boolean(station?.is_favorite),
             }
+        },
+
+        buildPlayableStreamUrl(streamUrl) {
+            const raw = String(streamUrl || '').trim()
+            if (raw === '') {
+                return ''
+            }
+
+            if (typeof window === 'undefined') {
+                return raw
+            }
+
+            try {
+                const parsed = new URL(raw, window.location.origin)
+                const isSecurePage = window.location.protocol === 'https:'
+                if (isSecurePage && parsed.protocol === 'http:') {
+                    return `/api/radio/stream?url=${encodeURIComponent(parsed.href)}`
+                }
+            } catch (_error) {
+                return raw
+            }
+
+            return raw
         },
 
         normalizeLookupText(value) {

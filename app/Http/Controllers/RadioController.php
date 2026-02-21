@@ -3,15 +3,23 @@
 namespace App\Http\Controllers;
 
 use App\Models\RadioFavorite;
+use App\Services\IptvPlaylistService;
 use App\Services\RadioBrowserService;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Http\Client\ConnectionException;
+use Illuminate\Http\Client\RequestException;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Http;
+use InvalidArgumentException;
+use Psr\Http\Message\StreamInterface;
+use Symfony\Component\HttpFoundation\StreamedResponse;
 use Throwable;
 
 class RadioController extends Controller
 {
     public function __construct(
-        private readonly RadioBrowserService $radioBrowserService
+        private readonly RadioBrowserService $radioBrowserService,
+        private readonly IptvPlaylistService $iptvPlaylistService
     )
     {
     }
@@ -54,6 +62,71 @@ class RadioController extends Controller
                     return $station;
                 })
                 ->values(),
+        ]);
+    }
+
+    public function stream(Request $request): JsonResponse|StreamedResponse
+    {
+        $payload = $request->validate([
+            'url' => ['required', 'string', 'max:2000'],
+        ]);
+
+        try {
+            $streamUrl = $this->iptvPlaylistService->validateExternalUrl($payload['url']);
+        } catch (InvalidArgumentException $exception) {
+            return response()->json([
+                'message' => $exception->getMessage(),
+            ], 422);
+        }
+
+        try {
+            $upstreamResponse = Http::withOptions([
+                'stream' => true,
+                'connect_timeout' => 8,
+                'read_timeout' => 20,
+            ])
+                ->timeout(0)
+                ->withHeaders([
+                    'Accept' => '*/*',
+                    'User-Agent' => 'SolidSocial-RadioProxy/1.0',
+                ])
+                ->get($streamUrl)
+                ->throw();
+        } catch (ConnectionException|RequestException|Throwable) {
+            return response()->json([
+                'message' => 'Не удалось подключиться к радиопотоку.',
+            ], 503);
+        }
+
+        $contentType = trim((string) $upstreamResponse->header('Content-Type', 'audio/mpeg'));
+        /** @var StreamInterface $stream */
+        $stream = $upstreamResponse->toPsrResponse()->getBody();
+
+        return response()->stream(function () use ($stream): void {
+            try {
+                while (!$stream->eof()) {
+                    $chunk = $stream->read(8192);
+                    if ($chunk === '') {
+                        usleep(30000);
+                        continue;
+                    }
+
+                    echo $chunk;
+                    if (ob_get_level() > 0) {
+                        @ob_flush();
+                    }
+                    flush();
+                }
+            } finally {
+                if (method_exists($stream, 'close')) {
+                    $stream->close();
+                }
+            }
+        }, 200, [
+            'Content-Type' => $contentType,
+            'Cache-Control' => 'no-store, no-cache, must-revalidate',
+            'Pragma' => 'no-cache',
+            'X-Accel-Buffering' => 'no',
         ]);
     }
 

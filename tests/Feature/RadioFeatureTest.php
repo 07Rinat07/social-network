@@ -138,4 +138,34 @@ class RadioFeatureTest extends TestCase
             'station_uuid' => 'station-abc',
         ]);
     }
+
+    public function test_radio_stream_proxy_returns_upstream_audio_stream(): void
+    {
+        $user = User::factory()->create();
+        Sanctum::actingAs($user);
+
+        Http::fake([
+            'http://stream.example.com/live*' => Http::response('audio-frame', 200, [
+                'Content-Type' => 'audio/mpeg',
+            ]),
+        ]);
+
+        $response = $this->get('/api/radio/stream?url=' . urlencode('http://stream.example.com/live'));
+
+        $response->assertOk();
+        $response->assertHeader('Content-Type', 'audio/mpeg');
+        $this->assertStringContainsString('audio-frame', $response->streamedContent());
+    }
+
+    public function test_radio_stream_proxy_rejects_private_or_local_hosts(): void
+    {
+        $user = User::factory()->create();
+        Sanctum::actingAs($user);
+
+        $response = $this->getJson('/api/radio/stream?url=' . urlencode('http://127.0.0.1/private-stream'));
+
+        $response
+            ->assertStatus(422)
+            ->assertJsonStructure(['message']);
+    }
 }

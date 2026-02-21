@@ -83,7 +83,7 @@
                     <MediaPlayer
                         ref="player"
                         type="audio"
-                        :src="currentStation.stream_url"
+                        :src="playableCurrentStationStreamUrl"
                         player-class="widget-radio-player"
                         :mime-type="currentStation.codec ? `audio/${String(currentStation.codec).toLowerCase()}` : ''"
                     ></MediaPlayer>
@@ -445,6 +445,10 @@ export default {
 
             return this.builtinStations.filter((preset) => preset.category === this.builtinCategory)
         },
+
+        playableCurrentStationStreamUrl() {
+            return this.buildPlayableStreamUrl(this.currentStation?.stream_url)
+        },
     },
 
     mounted() {
@@ -787,6 +791,29 @@ export default {
                 bitrate: Number(station.bitrate || 0),
                 votes: Number(station.votes || 0),
             }
+        },
+
+        buildPlayableStreamUrl(streamUrl) {
+            const raw = String(streamUrl || '').trim()
+            if (raw === '') {
+                return ''
+            }
+
+            if (typeof window === 'undefined') {
+                return raw
+            }
+
+            try {
+                const parsed = new URL(raw, window.location.origin)
+                const isSecurePage = window.location.protocol === 'https:'
+                if (isSecurePage && parsed.protocol === 'http:') {
+                    return `/api/radio/stream?url=${encodeURIComponent(parsed.href)}`
+                }
+            } catch (_error) {
+                return raw
+            }
+
+            return raw
         },
 
         stationMeta(station) {

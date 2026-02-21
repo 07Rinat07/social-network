@@ -73,6 +73,7 @@ Route::middleware(['auth:sanctum', 'verified'])->group(function () {
 
     Route::get('/iptv/seeds', [IptvController::class, 'seeds']);
     Route::get('/radio/stations', [RadioController::class, 'stations']);
+    Route::get('/radio/stream', [RadioController::class, 'stream'])->name('api.radio.stream');
     Route::get('/radio/favorites', [RadioController::class, 'favorites']);
     Route::post('/radio/favorites', [RadioController::class, 'storeFavorite']);
     Route::delete('/radio/favorites/{stationUuid}', [RadioController::class, 'destroyFavorite']);
