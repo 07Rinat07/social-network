@@ -502,9 +502,6 @@
                         >
                             {{ compatModeEnabled ? $t('iptv.compatOff') : $t('iptv.compatOn') }}
                         </button>
-                        <button class="btn btn-outline btn-sm" type="button" @click="toggleFullscreenAction">
-                            {{ $t('iptv.fullscreen') }}
-                        </button>
                     </div>
 
                     <p class="muted iptv-shortcuts" v-if="keyboardEnabled">

@@ -46,6 +46,12 @@ class IptvSeedSeeder extends Seeder
                 'sort_order' => 50,
                 'is_active' => true,
             ],
+             [
+                'name' => 'FreeTV_World',
+                'url' => 'https://raw.githubusercontent.com/iprtl/m3u/live/Freetv.m3u',
+                'sort_order' => 60,
+                'is_active' => true,
+            ],
         ];
 
         foreach ($seeds as $seed) {

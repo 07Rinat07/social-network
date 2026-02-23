@@ -202,6 +202,7 @@ export default {
             video.addEventListener('stalled', this.handleWaiting)
             video.addEventListener('error', this.handleNativeError)
             video.addEventListener('volumechange', this.handleVolumeChange)
+            video.addEventListener('dblclick', this.handleVideoDoubleClick)
         },
 
         unbindVideoEvents() {
@@ -217,6 +218,7 @@ export default {
             video.removeEventListener('stalled', this.handleWaiting)
             video.removeEventListener('error', this.handleNativeError)
             video.removeEventListener('volumechange', this.handleVolumeChange)
+            video.removeEventListener('dblclick', this.handleVideoDoubleClick)
         },
 
         initPlayer() {
@@ -230,11 +232,11 @@ export default {
 
             try {
                 this.player = new Plyr(element, {
-                    controls: ['play-large', 'play', 'progress', 'current-time', 'duration', 'mute', 'volume', 'settings', 'pip', 'airplay'],
+                    controls: ['play-large', 'play', 'progress', 'current-time', 'duration', 'mute', 'volume', 'settings', 'pip', 'airplay', 'fullscreen'],
                     settings: ['speed'],
                     fullscreen: {
-                        enabled: false,
-                        fallback: false,
+                        enabled: true,
+                        fallback: true,
                         iosNative: false,
                     },
                     keyboard: {
@@ -2177,6 +2179,14 @@ export default {
 
             video.muted = !video.muted
             this.handleVolumeChange()
+        },
+
+        handleVideoDoubleClick(event) {
+            if (event && typeof event.preventDefault === 'function') {
+                event.preventDefault()
+            }
+
+            this.toggleFullscreen()
         },
 
         toggleFullscreen() {
