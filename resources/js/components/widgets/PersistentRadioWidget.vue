@@ -285,7 +285,7 @@ export default {
 
     data() {
         return {
-            expanded: false,
+            expanded: true,
             searchQuery: '',
             builtinCategory: 'all',
             showPremiumList: false,
@@ -309,6 +309,7 @@ export default {
             isFloatingReady: false,
             isDragging: false,
             dragState: null,
+            floatingRecheckTimerId: null,
             viewportWidth: typeof window !== 'undefined' ? window.innerWidth : 0,
             builtinResolvedMap: {},
             builtinLoadingMap: {},
@@ -342,6 +343,7 @@ export default {
         expanded() {
             this.persistWidgetState()
             this.refreshFloatingPosition()
+            this.scheduleFloatingPositionRecheck()
         },
 
         currentStation() {
@@ -469,6 +471,7 @@ export default {
         this.stopPlayback({preserveResumeIntent: true})
         this.unbindPlayerStateEvents()
         this.persistWidgetState()
+        this.clearFloatingPositionRecheckTimer()
 
         if (typeof window !== 'undefined') {
             window.removeEventListener(RADIO_FAVORITES_SYNC_EVENT, this.handleFavoritesSyncEvent)
@@ -497,6 +500,30 @@ export default {
 
             this.viewportWidth = window.innerWidth
             this.refreshFloatingPosition()
+            this.scheduleFloatingPositionRecheck()
+        },
+
+        scheduleFloatingPositionRecheck() {
+            if (typeof window === 'undefined') {
+                return
+            }
+
+            this.clearFloatingPositionRecheckTimer()
+            this.floatingRecheckTimerId = window.setTimeout(() => {
+                this.floatingRecheckTimerId = null
+                this.refreshFloatingPosition()
+            }, 280)
+        },
+
+        clearFloatingPositionRecheckTimer() {
+            if (typeof window === 'undefined') {
+                return
+            }
+
+            if (this.floatingRecheckTimerId) {
+                window.clearTimeout(this.floatingRecheckTimerId)
+                this.floatingRecheckTimerId = null
+            }
         },
 
         getWidgetSize() {
@@ -657,6 +684,7 @@ export default {
         },
 
         resetRuntimeState() {
+            this.expanded = true
             this.searchStationsList = []
             this.favorites = []
             this.currentStation = null
@@ -689,6 +717,7 @@ export default {
             }
 
             this.loadWidgetState()
+            this.expanded = true
             await this.loadFavorites()
 
             if (this.currentStation && this.shouldResumePlayback) {
@@ -713,7 +742,7 @@ export default {
                 }
 
                 const parsed = JSON.parse(raw)
-                this.expanded = parsed?.expanded === true
+                this.expanded = parsed?.expanded !== false
                 this.searchQuery = typeof parsed?.searchQuery === 'string' ? parsed.searchQuery : ''
                 this.showPremiumList = parsed?.showPremiumList === true
                 const parsedBuiltinCategory = String(parsed?.builtinCategory || 'all')
@@ -735,7 +764,7 @@ export default {
                 const station = this.normalizeStationPayload(parsed?.currentStation)
                 this.currentStation = station?.stream_url ? station : null
             } catch (_error) {
-                this.expanded = false
+                this.expanded = true
                 this.searchQuery = ''
                 this.showPremiumList = false
                 this.builtinCategory = 'all'

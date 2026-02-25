@@ -903,7 +903,7 @@ export default {
 
     data() {
         return {
-            expanded: false,
+            expanded: true,
             leftPaneMode: 'conversations',
             conversationSearch: '',
             userSearch: '',
@@ -994,6 +994,7 @@ export default {
             isFloatingReady: false,
             isDragging: false,
             dragState: null,
+            floatingRecheckTimerId: null,
             viewportWidth: typeof window !== 'undefined' ? window.innerWidth : 0,
             failedAvatarUrls: {},
         }
@@ -1028,6 +1029,7 @@ export default {
         expanded() {
             this.persistWidgetState()
             this.refreshFloatingPosition()
+            this.scheduleFloatingPositionRecheck()
         },
 
         conversationSearch() {
@@ -1388,6 +1390,7 @@ export default {
         this.stopVoiceRecording(true)
         this.stopVideoRecording(true)
         this.stopVideoPreview()
+        this.clearFloatingPositionRecheckTimer()
         this.teardownWidgetState()
         this.stopDragging()
 
@@ -2116,6 +2119,30 @@ export default {
 
             this.viewportWidth = window.innerWidth
             this.refreshFloatingPosition()
+            this.scheduleFloatingPositionRecheck()
+        },
+
+        scheduleFloatingPositionRecheck() {
+            if (typeof window === 'undefined') {
+                return
+            }
+
+            this.clearFloatingPositionRecheckTimer()
+            this.floatingRecheckTimerId = window.setTimeout(() => {
+                this.floatingRecheckTimerId = null
+                this.refreshFloatingPosition()
+            }, 280)
+        },
+
+        clearFloatingPositionRecheckTimer() {
+            if (typeof window === 'undefined') {
+                return
+            }
+
+            if (this.floatingRecheckTimerId) {
+                window.clearTimeout(this.floatingRecheckTimerId)
+                this.floatingRecheckTimerId = null
+            }
         },
 
         getWidgetSize() {
@@ -2286,6 +2313,7 @@ export default {
 
             try {
                 this.loadWidgetState()
+                this.expanded = true
                 await Promise.all([
                     this.loadConversations(),
                     this.loadUsers({silent: true}),
@@ -2315,6 +2343,7 @@ export default {
         },
 
         teardownWidgetState() {
+            this.clearFloatingPositionRecheckTimer()
             this.notifyTypingStopped(this.activeConversationId)
             this.stopVoiceRecording(true)
             this.stopVideoRecording(true)
@@ -2402,7 +2431,7 @@ export default {
                 }
 
                 const parsed = JSON.parse(raw)
-                this.expanded = parsed?.expanded === true
+                this.expanded = parsed?.expanded !== false
                 this.leftPaneMode = parsed?.leftPaneMode === 'users' ? 'users' : 'conversations'
                 this.conversationSearch = typeof parsed?.conversationSearch === 'string'
                     ? parsed.conversationSearch
@@ -2426,7 +2455,7 @@ export default {
                     }
                 }
             } catch (_error) {
-                this.expanded = false
+                this.expanded = true
                 this.leftPaneMode = 'conversations'
                 this.conversationSearch = ''
                 this.userSearch = ''

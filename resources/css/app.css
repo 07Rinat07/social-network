@@ -7887,14 +7887,12 @@ img.avatar {
 }
 
 @media (min-width: 1241px) and (max-width: 1680px) {
-    .side-widget,
-    .side-widget--chat,
     .side-widget.is-collapsed {
         width: 3.55rem;
     }
 
-    .app-widget--left .side-widget-panel,
-    .app-widget--right .side-widget-panel {
+    .app-widget--left .side-widget.is-collapsed .side-widget-panel,
+    .app-widget--right .side-widget.is-collapsed .side-widget-panel {
         position: absolute;
         top: 0;
         width: min(20rem, calc(100vw - 8.2rem));
@@ -7902,21 +7900,21 @@ img.avatar {
         animation: widgetPopoverIn 0.2s ease;
     }
 
-    .app-widget--left .side-widget--chat .side-widget-panel,
-    .app-widget--right .side-widget--chat .side-widget-panel {
+    .app-widget--left .side-widget--chat.is-collapsed .side-widget-panel,
+    .app-widget--right .side-widget--chat.is-collapsed .side-widget-panel {
         width: min(22rem, calc(100vw - 8.2rem));
     }
 
-    .app-widget--left .side-widget-panel {
+    .app-widget--left .side-widget.is-collapsed .side-widget-panel {
         left: calc(100% + 0.52rem);
     }
 
-    .app-widget--right .side-widget-panel {
+    .app-widget--right .side-widget.is-collapsed .side-widget-panel {
         right: calc(100% + 0.52rem);
     }
 
-    .app-widget--left .side-widget-panel::before,
-    .app-widget--right .side-widget-panel::before {
+    .app-widget--left .side-widget.is-collapsed .side-widget-panel::before,
+    .app-widget--right .side-widget.is-collapsed .side-widget-panel::before {
         content: "";
         position: absolute;
         top: 1.2rem;
@@ -7928,11 +7926,11 @@ img.avatar {
         transform: rotate(45deg);
     }
 
-    .app-widget--left .side-widget-panel::before {
+    .app-widget--left .side-widget.is-collapsed .side-widget-panel::before {
         left: -0.38rem;
     }
 
-    .app-widget--right .side-widget-panel::before {
+    .app-widget--right .side-widget.is-collapsed .side-widget-panel::before {
         right: -0.38rem;
         transform: rotate(-135deg);
     }

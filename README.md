@@ -257,6 +257,8 @@ docker/
 ### 2) Docker режим
 1. Запуск:
    - `docker compose up -d --build`
+   - Если порты заняты, задайте forward-порты перед запуском (PowerShell):
+     `$env:WEB_FORWARD_PORT=8081; $env:DB_FORWARD_PORT=3308; $env:VITE_FORWARD_PORT=5174; $env:REVERB_FORWARD_PORT=6002; docker compose up -d --build`
 2. Проверка:
    - `docker compose ps`
    - `docker compose top websocket`
@@ -266,6 +268,7 @@ docker/
 - миграции запускаются автоматически (`RUN_MIGRATIONS=1`);
 - `ffmpeg` уже установлен в образе `app`;
 - отдельный websocket сервис поднимает Reverb на `6001`.
+- при первом запуске зависимости (`composer`/`npm`) могут ставиться несколько минут, это нормально.
 
 ### Полезные Docker команды
 - Миграции вручную: `docker compose exec app php artisan migrate --seed`
@@ -277,10 +280,10 @@ docker/
 - Остановка: `docker compose down`
 
 ### Docker порты и БД
-- App: `http://localhost:8080`
-- Vite dev (`profile dev`): `http://localhost:5173`
-- Reverb websocket: `ws://localhost:6001`
-- MySQL с хоста: `127.0.0.1:3307`
+- App: `http://localhost:8080` (переменная `WEB_FORWARD_PORT`)
+- Vite dev (`profile dev`): `http://localhost:5173` (переменная `VITE_FORWARD_PORT`)
+- Reverb websocket: `ws://localhost:6001` (переменная `REVERB_FORWARD_PORT`)
+- MySQL с хоста: `127.0.0.1:3307` (переменная `DB_FORWARD_PORT`)
 - MySQL внутри сети Docker: `db:3306`
 
 ## Переменные окружения
@@ -297,6 +300,7 @@ docker/
 - Realtime: `REVERB_*`, `VITE_REVERB_*`
 - IPTV: `IPTV_FFMPEG_BIN`
 - Radio API: `RADIO_BROWSER_BASE_URL`
+- Docker Compose (host only): `WEB_FORWARD_PORT`, `DB_FORWARD_PORT`, `VITE_FORWARD_PORT`, `REVERB_FORWARD_PORT`, `APP_HEALTHCHECK_START_PERIOD`, `RUN_MIGRATIONS`
 
 ## Тестирование
 Локально:
@@ -371,6 +375,11 @@ docker/
 
 ### `Access denied`
 - Проверьте `DB_USERNAME`/`DB_PASSWORD` и пользователя в MySQL.
+
+### `ports are not available` / `bind ... already in use`
+- Порт уже занят другим приложением.
+- Запустите Docker с другими host-портами через переменные:
+  `WEB_FORWARD_PORT`, `DB_FORWARD_PORT`, `VITE_FORWARD_PORT`, `REVERB_FORWARD_PORT`.
 
 ### Пустая страница / сломанный фронт
 - Локально: запущен ли `npm run dev`.

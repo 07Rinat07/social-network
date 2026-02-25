@@ -3,6 +3,28 @@ set -e
 
 cd /var/www/html
 
+run_with_retry() {
+    max_attempts="$1"
+    delay_seconds="$2"
+    shift 2
+
+    attempt=1
+    while true; do
+        if "$@"; then
+            return 0
+        fi
+
+        if [ "$attempt" -ge "$max_attempts" ]; then
+            echo "ERROR: command failed after ${max_attempts} attempts: $*" >&2
+            return 1
+        fi
+
+        echo "WARN: command failed (attempt ${attempt}/${max_attempts}), retrying in ${delay_seconds}s: $*" >&2
+        attempt=$((attempt + 1))
+        sleep "$delay_seconds"
+    done
+}
+
 if [ ! -f .env ]; then
     if [ -f .env.docker.example ]; then
         cp .env.docker.example .env
@@ -12,11 +34,11 @@ if [ ! -f .env ]; then
 fi
 
 if [ ! -f vendor/autoload.php ]; then
-    composer install --no-interaction --prefer-dist --optimize-autoloader
+    run_with_retry 5 5 composer install --no-interaction --prefer-dist --optimize-autoloader
 fi
 
 if [ -f composer.lock ] && [ composer.lock -nt vendor/autoload.php ]; then
-    composer install --no-interaction --prefer-dist --optimize-autoloader
+    run_with_retry 5 5 composer install --no-interaction --prefer-dist --optimize-autoloader
 fi
 
 if ! grep -Eq '^APP_KEY=base64:' .env; then
@@ -24,7 +46,7 @@ if ! grep -Eq '^APP_KEY=base64:' .env; then
 fi
 
 if [ "${RUN_MIGRATIONS:-0}" = "1" ]; then
-    php artisan migrate --force --no-interaction
+    run_with_retry 20 3 php artisan migrate --force --no-interaction
 fi
 
 # Docker profile expects ffmpeg preinstalled in the image.
