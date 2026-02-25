@@ -208,7 +208,7 @@
                 type="audio"
                 :src="playableCurrentStationStreamUrl"
                 player-class="media-audio"
-                :mime-type="currentStation.codec ? `audio/${String(currentStation.codec).toLowerCase()}` : ''"
+                :mime-type="resolveStationMimeType(currentStation)"
             ></MediaPlayer>
 
             <p v-else class="muted radio-sync-note">
@@ -776,6 +776,47 @@ export default {
                 votes: Number(station?.votes || 0),
                 is_favorite: Boolean(station?.is_favorite),
             }
+        },
+
+        resolveStationMimeType(station) {
+            const codec = String(station?.codec || '')
+                .trim()
+                .toLowerCase()
+                .replace(/[^a-z0-9+]/g, '')
+
+            if (codec === '') {
+                return ''
+            }
+
+            if (codec.includes('mp3') || codec.includes('mpeg')) {
+                return 'audio/mpeg'
+            }
+
+            if (codec.includes('aac')) {
+                return 'audio/aac'
+            }
+
+            if (codec.includes('ogg') || codec.includes('opus') || codec.includes('vorbis')) {
+                return 'audio/ogg'
+            }
+
+            if (codec.includes('flac')) {
+                return 'audio/flac'
+            }
+
+            if (codec.includes('wav') || codec.includes('pcm')) {
+                return 'audio/wav'
+            }
+
+            if (codec.includes('m4a') || codec.includes('mp4')) {
+                return 'audio/mp4'
+            }
+
+            if (codec.includes('webm')) {
+                return 'audio/webm'
+            }
+
+            return ''
         },
 
         buildPlayableStreamUrl(streamUrl) {

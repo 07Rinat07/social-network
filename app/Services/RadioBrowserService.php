@@ -9,6 +9,7 @@ class RadioBrowserService
     public function searchStations(array $filters = []): array
     {
         $baseUrl = rtrim((string) config('services.radio_browser.base_url', 'https://all.api.radio-browser.info'), '/');
+        $proxy = $this->resolveProxyOption();
 
         $query = [
             'hidebroken' => 1,
@@ -39,6 +40,9 @@ class RadioBrowserService
         }
 
         $response = Http::acceptJson()
+            ->withOptions([
+                'proxy' => $proxy,
+            ])
             ->timeout(12)
             ->retry(2, 300)
             ->get($baseUrl . '/json/stations/search', $query)
@@ -47,5 +51,26 @@ class RadioBrowserService
         $payload = $response->json();
 
         return is_array($payload) ? $payload : [];
+    }
+
+    private function resolveProxyOption(): string|array|bool
+    {
+        $proxy = config('services.radio_browser.proxy', false);
+
+        if (!is_string($proxy)) {
+            return $proxy ?: false;
+        }
+
+        $normalized = trim($proxy);
+        if ($normalized === '') {
+            return false;
+        }
+
+        $lower = strtolower($normalized);
+        if (in_array($lower, ['false', 'off', 'none', 'no'], true)) {
+            return false;
+        }
+
+        return $normalized;
     }
 }

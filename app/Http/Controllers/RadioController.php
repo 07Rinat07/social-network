@@ -10,6 +10,7 @@ use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Http\Client\RequestException;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Log;
 use InvalidArgumentException;
 use Psr\Http\Message\StreamInterface;
 use Symfony\Component\HttpFoundation\StreamedResponse;
@@ -37,7 +38,12 @@ class RadioController extends Controller
 
         try {
             $stations = $this->radioBrowserService->searchStations($filters);
-        } catch (Throwable) {
+        } catch (Throwable $exception) {
+            Log::warning('Radio stations lookup failed.', [
+                'filters' => $filters,
+                'error' => $exception->getMessage(),
+            ]);
+
             return response()->json([
                 'message' => 'Не удалось получить список радиостанций. Попробуйте позже.',
                 'data' => [],
@@ -80,10 +86,13 @@ class RadioController extends Controller
         }
 
         try {
+            $proxy = $this->resolveProxyOption();
+
             $upstreamResponse = Http::withOptions([
                 'stream' => true,
                 'connect_timeout' => 8,
                 'read_timeout' => 20,
+                'proxy' => $proxy,
             ])
                 ->timeout(0)
                 ->withHeaders([
@@ -92,7 +101,12 @@ class RadioController extends Controller
                 ])
                 ->get($streamUrl)
                 ->throw();
-        } catch (ConnectionException|RequestException|Throwable) {
+        } catch (ConnectionException|RequestException|Throwable $exception) {
+            Log::warning('Radio stream proxy failed.', [
+                'url' => $streamUrl,
+                'error' => $exception->getMessage(),
+            ]);
+
             return response()->json([
                 'message' => 'Не удалось подключиться к радиопотоку.',
             ], 503);
@@ -231,5 +245,26 @@ class RadioController extends Controller
             'bitrate' => (int) ($station['bitrate'] ?? 0),
             'votes' => (int) ($station['votes'] ?? 0),
         ];
+    }
+
+    private function resolveProxyOption(): string|array|bool
+    {
+        $proxy = config('services.radio_browser.proxy', false);
+
+        if (!is_string($proxy)) {
+            return $proxy ?: false;
+        }
+
+        $normalized = trim($proxy);
+        if ($normalized === '') {
+            return false;
+        }
+
+        $lower = strtolower($normalized);
+        if (in_array($lower, ['false', 'off', 'none', 'no'], true)) {
+            return false;
+        }
+
+        return $normalized;
     }
 }

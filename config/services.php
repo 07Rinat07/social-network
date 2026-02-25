@@ -33,6 +33,7 @@ return [
 
     'radio_browser' => [
         'base_url' => env('RADIO_BROWSER_BASE_URL', 'https://all.api.radio-browser.info'),
+        'proxy' => env('RADIO_HTTP_PROXY', false),
     ],
 
 ];
