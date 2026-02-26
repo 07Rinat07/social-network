@@ -33,7 +33,7 @@
             >
                 <div class="side-widget-panel__title-wrap">
                     <strong class="side-widget-panel__title">{{ $t('nav.radio') }}</strong>
-                    <span v-if="isPlaying" class="badge side-widget-panel__status">{{ $t('radio.live') }}</span>
+                    <span v-if="isPlaying" class="badge side-widget-panel__status">{{ `${siteSessionLabel} · ${$t('radio.live')}` }}</span>
                 </div>
 
                 <div class="side-widget-panel__actions">
@@ -128,10 +128,23 @@
                 <div class="widget-radio-list">
                     <div class="widget-radio-list__head">
                         <strong>{{ $t('radio.favoriteStations') }}</strong>
-                        <span class="badge">{{ favorites.length }}</span>
+                        <div class="widget-radio-list__head-actions">
+                            <span class="badge">{{ favorites.length }}</span>
+                            <button
+                                v-if="isMobileWidgetLayout"
+                                type="button"
+                                class="btn btn-outline btn-sm widget-radio-collapse-toggle"
+                                @click="toggleWidgetSectionCollapse('favorites')"
+                            >
+                                {{ widgetSectionToggleLabel('favorites') }}
+                            </button>
+                        </div>
                     </div>
 
-                    <p v-if="isLoadingFavorites" class="muted">{{ $t('radio.loadingFavorites') }}</p>
+                    <p v-if="isWidgetSectionCollapsed('favorites')" class="muted widget-radio-notice widget-radio-collapsed-note">
+                        {{ $t('radio.listCollapsedHint') }}
+                    </p>
+                    <p v-else-if="isLoadingFavorites" class="muted">{{ $t('radio.loadingFavorites') }}</p>
                     <p v-else-if="favorites.length === 0" class="muted">{{ $t('radio.emptyFavorites') }}</p>
 
                     <div v-else class="widget-radio-list__items">
@@ -152,86 +165,114 @@
                 <div class="widget-radio-list widget-radio-list--builtin" v-if="showPremiumList">
                     <div class="widget-radio-list__head">
                         <strong>{{ $t('radio.premiumList') }}</strong>
-                        <span class="badge">{{ builtinStations.length }}</span>
-                    </div>
-                    <p class="muted widget-radio-notice">{{ $t('radio.premiumListSyncHint') }}</p>
-                    <div class="widget-radio-filter-row">
-                        <label for="widget-radio-genre-filter" class="widget-radio-filter-label">
-                            {{ $t('radio.genreFilterLabel') }}
-                        </label>
-                        <select
-                            id="widget-radio-genre-filter"
-                            v-model="builtinCategory"
-                            class="select-field widget-radio-category-select"
-                        >
-                            <option
-                                v-for="item in builtinCategoryOptions"
-                                :key="`widget-radio-category-${item.id}`"
-                                :value="item.id"
+                        <div class="widget-radio-list__head-actions">
+                            <span class="badge">{{ builtinStations.length }}</span>
+                            <button
+                                v-if="isMobileWidgetLayout"
+                                type="button"
+                                class="btn btn-outline btn-sm widget-radio-collapse-toggle"
+                                @click="toggleWidgetSectionCollapse('builtin')"
                             >
-                                {{ item.label }} ({{ item.count }})
-                            </option>
-                        </select>
+                                {{ widgetSectionToggleLabel('builtin') }}
+                            </button>
+                        </div>
                     </div>
-
-                    <p
-                        v-if="filteredBuiltinStations.length === 0"
-                        class="muted widget-radio-notice"
-                    >
-                        {{ $t('radio.emptyBuiltinForCategory') }}
+                    <p v-if="isWidgetSectionCollapsed('builtin')" class="muted widget-radio-notice widget-radio-collapsed-note">
+                        {{ $t('radio.listCollapsedHint') }}
                     </p>
+                    <template v-else>
+                        <p class="muted widget-radio-notice">{{ $t('radio.premiumListSyncHint') }}</p>
+                        <div class="widget-radio-filter-row">
+                            <label for="widget-radio-genre-filter" class="widget-radio-filter-label">
+                                {{ $t('radio.genreFilterLabel') }}
+                            </label>
+                            <select
+                                id="widget-radio-genre-filter"
+                                v-model="builtinCategory"
+                                class="select-field widget-radio-category-select"
+                            >
+                                <option
+                                    v-for="item in builtinCategoryOptions"
+                                    :key="`widget-radio-category-${item.id}`"
+                                    :value="item.id"
+                                >
+                                    {{ item.label }} ({{ item.count }})
+                                </option>
+                            </select>
+                        </div>
 
-                    <div v-else class="widget-radio-list__items">
-                        <article
-                            v-for="preset in filteredBuiltinStations"
-                            :key="`widget-builtin-${preset.id}`"
-                            class="widget-radio-station"
+                        <p
+                            v-if="filteredBuiltinStations.length === 0"
+                            class="muted widget-radio-notice"
                         >
-                            <span class="widget-radio-station__name">{{ preset.name }}</span>
-                            <span class="widget-radio-station__meta">{{ builtinStationMeta(preset) }}</span>
-                            <div class="widget-radio-station__actions">
-                                <button
-                                    type="button"
-                                    class="btn btn-primary btn-sm widget-radio-station__action-btn"
-                                    :disabled="isBuiltinLoading(preset.id)"
-                                    @click="playBuiltinStation(preset)"
-                                >
-                                    {{ $t('radio.listen') }}
-                                </button>
-                                <button
-                                    type="button"
-                                    class="btn btn-outline btn-sm widget-radio-station__action-btn"
-                                    :disabled="isBuiltinLoading(preset.id)"
-                                    @click="refreshBuiltinStation(preset)"
-                                >
-                                    {{ $t('radio.featuredRefresh') }}
-                                </button>
-                                <button
-                                    type="button"
-                                    class="btn btn-outline btn-sm widget-radio-station__action-btn"
-                                    :disabled="isBuiltinLoading(preset.id)"
-                                    @click="toggleBuiltinFavorite(preset)"
-                                >
-                                    {{ isBuiltinFavorite(preset) ? $t('common.remove') : $t('common.favorites') }}
-                                </button>
-                            </div>
-                            <span v-if="isBuiltinLoading(preset.id)" class="widget-radio-station__hint muted">
-                                {{ $t('radio.featuredLoading') }}
-                            </span>
-                            <span v-else-if="builtinErrorMap[preset.id]" class="widget-radio-station__hint error-text">
-                                {{ builtinErrorMap[preset.id] }}
-                            </span>
-                        </article>
-                    </div>
+                            {{ $t('radio.emptyBuiltinForCategory') }}
+                        </p>
+
+                        <div v-else class="widget-radio-list__items">
+                            <article
+                                v-for="preset in filteredBuiltinStations"
+                                :key="`widget-builtin-${preset.id}`"
+                                class="widget-radio-station"
+                            >
+                                <span class="widget-radio-station__name">{{ preset.name }}</span>
+                                <span class="widget-radio-station__meta">{{ builtinStationMeta(preset) }}</span>
+                                <div class="widget-radio-station__actions">
+                                    <button
+                                        type="button"
+                                        class="btn btn-primary btn-sm widget-radio-station__action-btn"
+                                        :disabled="isBuiltinLoading(preset.id)"
+                                        @click="playBuiltinStation(preset)"
+                                    >
+                                        {{ $t('radio.listen') }}
+                                    </button>
+                                    <button
+                                        type="button"
+                                        class="btn btn-outline btn-sm widget-radio-station__action-btn"
+                                        :disabled="isBuiltinLoading(preset.id)"
+                                        @click="refreshBuiltinStation(preset)"
+                                    >
+                                        {{ $t('radio.featuredRefresh') }}
+                                    </button>
+                                    <button
+                                        type="button"
+                                        class="btn btn-outline btn-sm widget-radio-station__action-btn"
+                                        :disabled="isBuiltinLoading(preset.id)"
+                                        @click="toggleBuiltinFavorite(preset)"
+                                    >
+                                        {{ isBuiltinFavorite(preset) ? $t('common.remove') : $t('common.favorites') }}
+                                    </button>
+                                </div>
+                                <span v-if="isBuiltinLoading(preset.id)" class="widget-radio-station__hint muted">
+                                    {{ $t('radio.featuredLoading') }}
+                                </span>
+                                <span v-else-if="builtinErrorMap[preset.id]" class="widget-radio-station__hint error-text">
+                                    {{ builtinErrorMap[preset.id] }}
+                                </span>
+                            </article>
+                        </div>
+                    </template>
                 </div>
 
                 <div class="widget-radio-list" v-if="searchStationsList.length > 0">
                     <div class="widget-radio-list__head">
                         <strong>{{ $t('radio.foundStations') }}</strong>
-                        <span class="badge">{{ searchStationsList.length }}</span>
+                        <div class="widget-radio-list__head-actions">
+                            <span class="badge">{{ searchStationsList.length }}</span>
+                            <button
+                                v-if="isMobileWidgetLayout"
+                                type="button"
+                                class="btn btn-outline btn-sm widget-radio-collapse-toggle"
+                                @click="toggleWidgetSectionCollapse('search')"
+                            >
+                                {{ widgetSectionToggleLabel('search') }}
+                            </button>
+                        </div>
                     </div>
 
-                    <div class="widget-radio-list__items">
+                    <p v-if="isWidgetSectionCollapsed('search')" class="muted widget-radio-notice widget-radio-collapsed-note">
+                        {{ $t('radio.listCollapsedHint') }}
+                    </p>
+                    <div v-else class="widget-radio-list__items">
                         <button
                             v-for="station in searchStationsList"
                             :key="`widget-search-${station.station_uuid}`"
@@ -253,6 +294,12 @@
 <script>
 import MediaPlayer from '../MediaPlayer.vue'
 import { RADIO_PRESET_CATALOG } from '../../data/radioPresetCatalog'
+import {
+    formatPlaybackTime as formatPlaybackTimeHelper,
+    isMobileViewport,
+    resolvePersistedPlaybackSessionStartedAt,
+    resolveSiteSessionStartedAt as resolveSiteSessionStartedAtHelper,
+} from '../../utils/radioSession.mjs'
 
 const RADIO_WIDGET_STORAGE_PREFIX = 'social.widgets.radio'
 const RADIO_FAVORITES_SYNC_EVENT = 'social:radio:favorites-updated'
@@ -301,6 +348,9 @@ export default {
             boundPlayer: null,
             boundPlayerEvents: [],
             playbackSessionStartedAt: 0,
+            siteSessionStartedAt: 0,
+            uiNowTimestamp: Date.now(),
+            uiNowTimerId: null,
             isPinned: true,
             floatingPosition: {
                 left: 0,
@@ -311,6 +361,11 @@ export default {
             dragState: null,
             floatingRecheckTimerId: null,
             viewportWidth: typeof window !== 'undefined' ? window.innerWidth : 0,
+            collapsedWidgetSections: {
+                builtin: true,
+                favorites: true,
+                search: true,
+            },
             builtinResolvedMap: {},
             builtinLoadingMap: {},
             builtinErrorMap: {},
@@ -354,6 +409,10 @@ export default {
             this.persistWidgetState()
         },
 
+        playbackSessionStartedAt() {
+            this.persistWidgetState()
+        },
+
         searchQuery() {
             this.persistWidgetState()
         },
@@ -391,6 +450,10 @@ export default {
 
         isMovableMode() {
             return this.viewportWidth >= DESKTOP_FLOATING_BREAKPOINT
+        },
+
+        isMobileWidgetLayout() {
+            return isMobileViewport(this.viewportWidth)
         },
 
         floatingStyle() {
@@ -451,6 +514,16 @@ export default {
         playableCurrentStationStreamUrl() {
             return this.buildPlayableStreamUrl(this.currentStation?.stream_url)
         },
+
+        siteSessionLabel() {
+            const startedAt = Number(this.siteSessionStartedAt || 0)
+            if (!Number.isFinite(startedAt) || startedAt <= 0) {
+                return this.formatPlaybackTime(0)
+            }
+
+            const diffSeconds = Math.max(0, Math.floor((this.uiNowTimestamp - startedAt) / 1000))
+            return this.formatPlaybackTime(diffSeconds)
+        },
     },
 
     mounted() {
@@ -463,11 +536,14 @@ export default {
             this.notifyPlaybackReady(true)
         }
 
+        this.siteSessionStartedAt = this.resolveSiteSessionStartedAt()
+        this.startUiTicker()
         this.refreshFloatingPosition({forceDefault: !this.isPinned})
         this.notifyPlaybackState({reason: 'widget-mounted'})
     },
 
     beforeUnmount() {
+        this.stopUiTicker()
         this.stopPlayback({preserveResumeIntent: true})
         this.unbindPlayerStateEvents()
         this.persistWidgetState()
@@ -485,6 +561,81 @@ export default {
     },
 
     methods: {
+        isWidgetSectionCollapsed(sectionKey) {
+            if (!this.isMobileWidgetLayout) {
+                return false
+            }
+
+            return Boolean(this.collapsedWidgetSections?.[sectionKey])
+        },
+
+        toggleWidgetSectionCollapse(sectionKey) {
+            if (!this.isMobileWidgetLayout) {
+                return
+            }
+
+            this.collapsedWidgetSections = {
+                ...this.collapsedWidgetSections,
+                [sectionKey]: !Boolean(this.collapsedWidgetSections?.[sectionKey]),
+            }
+        },
+
+        widgetSectionToggleLabel(sectionKey) {
+            return this.isWidgetSectionCollapsed(sectionKey)
+                ? this.$t('radio.expandList')
+                : this.$t('radio.collapseList')
+        },
+
+        applyMobileCompactDefaults() {
+            if (!this.isMobileWidgetLayout) {
+                return
+            }
+
+            this.expanded = true
+            this.collapsedWidgetSections = {
+                ...this.collapsedWidgetSections,
+                favorites: true,
+                builtin: true,
+                search: true,
+            }
+        },
+
+        resolveSiteSessionStartedAt() {
+            if (typeof window === 'undefined') {
+                return resolveSiteSessionStartedAtHelper()
+            }
+
+            return resolveSiteSessionStartedAtHelper({
+                storage: window.sessionStorage,
+            })
+        },
+
+        startUiTicker() {
+            this.stopUiTicker()
+            if (typeof window === 'undefined') {
+                return
+            }
+
+            this.uiNowTimerId = window.setInterval(() => {
+                this.uiNowTimestamp = Date.now()
+            }, 1000)
+        },
+
+        stopUiTicker() {
+            if (typeof window === 'undefined') {
+                return
+            }
+
+            if (this.uiNowTimerId) {
+                window.clearInterval(this.uiNowTimerId)
+                this.uiNowTimerId = null
+            }
+        },
+
+        formatPlaybackTime(value) {
+            return formatPlaybackTimeHelper(value)
+        },
+
         collapse() {
             this.expanded = false
         },
@@ -498,7 +649,11 @@ export default {
                 return
             }
 
+            const wasMobileLayout = this.isMobileWidgetLayout
             this.viewportWidth = window.innerWidth
+            if (!wasMobileLayout && this.isMobileWidgetLayout) {
+                this.applyMobileCompactDefaults()
+            }
             this.refreshFloatingPosition()
             this.scheduleFloatingPositionRecheck()
         },
@@ -705,6 +860,11 @@ export default {
             this.isDragging = false
             this.dragState = null
             this.showPremiumList = false
+            this.collapsedWidgetSections = {
+                builtin: true,
+                favorites: true,
+                search: true,
+            }
             this.builtinCategory = 'all'
             this.builtinResolvedMap = {}
             this.builtinLoadingMap = {}
@@ -717,6 +877,7 @@ export default {
             }
 
             this.loadWidgetState()
+            this.applyMobileCompactDefaults()
             this.expanded = true
             await this.loadFavorites()
 
@@ -751,6 +912,7 @@ export default {
                     : 'all'
                 this.shouldResumePlayback = Boolean(parsed?.shouldResumePlayback)
                 this.isPinned = parsed?.isPinned !== false
+                const now = Date.now()
 
                 const storedLeft = Number(parsed?.floatingPosition?.left)
                 const storedTop = Number(parsed?.floatingPosition?.top)
@@ -763,6 +925,10 @@ export default {
 
                 const station = this.normalizeStationPayload(parsed?.currentStation)
                 this.currentStation = station?.stream_url ? station : null
+                this.playbackSessionStartedAt = resolvePersistedPlaybackSessionStartedAt(parsed?.playbackSessionStartedAt, {
+                    now,
+                    hasCurrentStation: Boolean(this.currentStation),
+                })
             } catch (_error) {
                 this.expanded = true
                 this.searchQuery = ''
@@ -770,6 +936,7 @@ export default {
                 this.builtinCategory = 'all'
                 this.shouldResumePlayback = false
                 this.currentStation = null
+                this.playbackSessionStartedAt = 0
                 this.isPinned = true
                 this.floatingPosition = {
                     left: 0,
@@ -790,6 +957,7 @@ export default {
                     showPremiumList: this.showPremiumList,
                     builtinCategory: this.builtinCategory,
                     shouldResumePlayback: this.shouldResumePlayback,
+                    playbackSessionStartedAt: Number(this.playbackSessionStartedAt || 0),
                     currentStation: this.currentStation,
                     isPinned: this.isPinned,
                     floatingPosition: this.floatingPosition,
@@ -1398,6 +1566,13 @@ export default {
                     .map((item) => this.normalizeStationPayload(item))
                     .filter((item) => item && item.stream_url)
 
+                if (this.isMobileWidgetLayout) {
+                    this.collapsedWidgetSections = {
+                        ...this.collapsedWidgetSections,
+                        search: true,
+                    }
+                }
+
                 if (this.searchStationsList.length === 0) {
                     this.searchError = this.$t('radio.emptySearch')
                 }
@@ -1411,6 +1586,12 @@ export default {
 
         togglePremiumList() {
             this.showPremiumList = !this.showPremiumList
+            if (this.showPremiumList && this.isMobileWidgetLayout) {
+                this.collapsedWidgetSections = {
+                    ...this.collapsedWidgetSections,
+                    builtin: true,
+                }
+            }
         },
 
         bindPlayerStateEvents() {
@@ -1477,7 +1658,9 @@ export default {
             const started = await playerComponent.play()
             this.isPlaying = Boolean(started)
             this.shouldResumePlayback = Boolean(started)
-            this.playbackSessionStartedAt = started ? Date.now() : this.playbackSessionStartedAt
+            if (started && this.playbackSessionStartedAt <= 0) {
+                this.playbackSessionStartedAt = Date.now()
+            }
             this.autoplayNotice = started ? '' : this.$t('radio.autoplayBlocked')
             this.persistWidgetState()
 

@@ -2,7 +2,8 @@
     "private": true,
     "scripts": {
         "dev": "vite",
-        "build": "vite build"
+        "build": "vite build",
+        "test:js": "node tests/js/radioSession.test.mjs"
     },
     "devDependencies": {
         "@tailwindcss/postcss": "^4.1.18",

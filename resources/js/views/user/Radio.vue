@@ -27,9 +27,17 @@
                 >
                     {{ isCheckingFeatured ? $t('radio.featuredChecking') : $t('radio.featuredCheckAll') }}
                 </button>
+                <button
+                    v-if="isMobileLayout"
+                    class="btn btn-outline btn-sm radio-collapse-toggle"
+                    type="button"
+                    @click="toggleSectionCollapse('featured')"
+                >
+                    {{ sectionToggleLabel('featured') }}
+                </button>
             </div>
 
-            <div class="radio-featured-grid">
+            <div v-if="!isSectionCollapsed('featured')" class="radio-featured-grid">
                 <article
                     v-for="preset in visibleFeaturedPresets"
                     :key="`radio-preset-${preset.id}`"
@@ -107,6 +115,7 @@
                     </div>
                 </article>
             </div>
+            <p v-else class="muted radio-collapsed-note">{{ $t('radio.listCollapsedHint') }}</p>
 
             <div class="radio-search-panel">
                 <p class="radio-search-title">{{ $t('radio.searchPanelTitle') }}</p>
@@ -241,10 +250,21 @@
         <section class="section-card radio-favorites-card">
             <div class="radio-section-head">
                 <h3 class="section-title" style="font-size: 1.1rem; margin: 0;">{{ $t('radio.favoriteStations') }}</h3>
-                <span class="badge">{{ favorites.length }}</span>
+                <div class="radio-section-head-actions">
+                    <span class="badge">{{ favorites.length }}</span>
+                    <button
+                        v-if="isMobileLayout"
+                        class="btn btn-outline btn-sm radio-collapse-toggle"
+                        type="button"
+                        @click="toggleSectionCollapse('favorites')"
+                    >
+                        {{ sectionToggleLabel('favorites') }}
+                    </button>
+                </div>
             </div>
 
-            <p v-if="isLoadingFavorites" class="muted" style="margin: 0;">{{ $t('radio.loadingFavorites') }}</p>
+            <p v-if="isSectionCollapsed('favorites')" class="muted radio-collapsed-note">{{ $t('radio.listCollapsedHint') }}</p>
+            <p v-else-if="isLoadingFavorites" class="muted" style="margin: 0;">{{ $t('radio.loadingFavorites') }}</p>
             <p v-else-if="favorites.length === 0" class="muted" style="margin: 0;">{{ $t('radio.emptyFavorites') }}</p>
 
             <div v-else class="simple-list radio-favorites-list">
@@ -302,10 +322,21 @@
         <section class="section-card">
             <div class="radio-section-head">
                 <h3 class="section-title" style="font-size: 1.1rem; margin: 0;">{{ $t('radio.foundStations') }}</h3>
-                <span class="badge">{{ stations.length }}</span>
+                <div class="radio-section-head-actions">
+                    <span class="badge">{{ stations.length }}</span>
+                    <button
+                        v-if="isMobileLayout"
+                        class="btn btn-outline btn-sm radio-collapse-toggle"
+                        type="button"
+                        @click="toggleSectionCollapse('stations')"
+                    >
+                        {{ sectionToggleLabel('stations') }}
+                    </button>
+                </div>
             </div>
 
-            <p v-if="isLoadingStations" class="muted" style="margin: 0;">{{ $t('radio.loadingStations') }}</p>
+            <p v-if="isSectionCollapsed('stations')" class="muted radio-collapsed-note">{{ $t('radio.listCollapsedHint') }}</p>
+            <p v-else-if="isLoadingStations" class="muted" style="margin: 0;">{{ $t('radio.loadingStations') }}</p>
             <p v-else-if="!hasSearchResults" class="muted" style="margin: 0;">{{ $t('radio.useSearchHint') }}</p>
             <p v-else-if="stations.length === 0" class="muted" style="margin: 0;">{{ $t('radio.emptySearch') }}</p>
 
@@ -357,6 +388,12 @@
 <script>
 import MediaPlayer from '../../components/MediaPlayer.vue'
 import { RADIO_PRESET_CATALOG } from '../../data/radioPresetCatalog'
+import {
+    formatPlaybackTime as formatPlaybackTimeHelper,
+    isMobileViewport,
+    resolveSiteSessionStartedAt as resolveSiteSessionStartedAtHelper,
+    resolveStationSessionStateFromSnapshot,
+} from '../../utils/radioSession.mjs'
 
 const RADIO_FEATURED_PRESETS = RADIO_PRESET_CATALOG
 
@@ -397,9 +434,17 @@ export default {
             featuredErrorMap: {},
             isCheckingFeatured: false,
             radioNotice: '',
+            siteSessionStartedAt: 0,
             stationSessionStartedAt: 0,
+            stationSessionAccumulatedMs: 0,
             uiNowTimestamp: Date.now(),
             uiNowTimerId: null,
+            isMobileLayout: false,
+            collapsedSections: {
+                featured: false,
+                favorites: false,
+                stations: false,
+            },
             playbackState: {
                 isPlaying: false,
                 currentTime: 0,
@@ -416,9 +461,12 @@ export default {
             window.addEventListener(RADIO_FAVORITES_SYNC_EVENT, this.handleWidgetFavoritesSync)
             window.addEventListener(RADIO_PLAYBACK_SYNC_EVENT, this.handleWidgetPlaybackSync)
             window.addEventListener(RADIO_PLAYBACK_READY_EVENT, this.handleWidgetPlaybackReady)
+            window.addEventListener('resize', this.syncMobileLayoutState)
             this.widgetPlaybackBridgeReady = Boolean(window.__socialRadioWidgetReady)
+            this.syncMobileLayoutState()
         }
 
+        this.siteSessionStartedAt = this.resolveSiteSessionStartedAt()
         this.startUiTicker()
         await this.loadFavorites()
 
@@ -435,7 +483,14 @@ export default {
             window.removeEventListener(RADIO_FAVORITES_SYNC_EVENT, this.handleWidgetFavoritesSync)
             window.removeEventListener(RADIO_PLAYBACK_SYNC_EVENT, this.handleWidgetPlaybackSync)
             window.removeEventListener(RADIO_PLAYBACK_READY_EVENT, this.handleWidgetPlaybackReady)
+            window.removeEventListener('resize', this.syncMobileLayoutState)
         }
+    },
+
+    watch: {
+        'playbackState.isPlaying'() {
+            this.syncStationSessionTimer()
+        },
     },
 
     computed: {
@@ -500,11 +555,11 @@ export default {
         },
 
         playbackTimeLabel() {
-            const current = this.formatPlaybackTime(this.playbackState.currentTime)
             if (!this.isPlaybackSeekEnabled) {
-                return `${current} · ${this.$t('radio.live')}`
+                return `${this.siteSessionLabel} · ${this.$t('radio.live')}`
             }
 
+            const current = this.formatPlaybackTime(this.playbackState.currentTime)
             const duration = this.formatPlaybackTime(this.playbackState.duration)
             return `${current} / ${duration}`
         },
@@ -517,12 +572,27 @@ export default {
             return this.playbackState.isPlaying ? this.$t('radio.statusPlaying') : this.$t('radio.statusPaused')
         },
 
-        stationSessionLabel() {
-            if (!this.currentStation || this.stationSessionStartedAt <= 0) {
+        siteSessionLabel() {
+            const startedAt = Number(this.siteSessionStartedAt || 0)
+            if (!Number.isFinite(startedAt) || startedAt <= 0) {
                 return this.formatPlaybackTime(0)
             }
 
-            const diffSeconds = Math.max(0, Math.floor((this.uiNowTimestamp - this.stationSessionStartedAt) / 1000))
+            const diffSeconds = Math.max(0, Math.floor((this.uiNowTimestamp - startedAt) / 1000))
+            return this.formatPlaybackTime(diffSeconds)
+        },
+
+        stationSessionLabel() {
+            if (!this.currentStation) {
+                return this.formatPlaybackTime(0)
+            }
+
+            let elapsedMs = Math.max(0, Number(this.stationSessionAccumulatedMs || 0))
+            if (this.playbackState.isPlaying && this.stationSessionStartedAt > 0) {
+                elapsedMs += Math.max(0, this.uiNowTimestamp - this.stationSessionStartedAt)
+            }
+
+            const diffSeconds = Math.floor(elapsedMs / 1000)
             return this.formatPlaybackTime(diffSeconds)
         },
 
@@ -572,14 +642,101 @@ export default {
     },
 
     methods: {
+        syncMobileLayoutState() {
+            if (typeof window === 'undefined') {
+                this.isMobileLayout = false
+                return
+            }
+
+            this.isMobileLayout = isMobileViewport(window.innerWidth)
+        },
+
+        isSectionCollapsed(sectionKey) {
+            if (!this.isMobileLayout) {
+                return false
+            }
+
+            return Boolean(this.collapsedSections?.[sectionKey])
+        },
+
+        toggleSectionCollapse(sectionKey) {
+            if (!this.isMobileLayout) {
+                return
+            }
+
+            this.collapsedSections = {
+                ...this.collapsedSections,
+                [sectionKey]: !Boolean(this.collapsedSections?.[sectionKey]),
+            }
+        },
+
+        sectionToggleLabel(sectionKey) {
+            return this.isSectionCollapsed(sectionKey)
+                ? this.$t('radio.expandList')
+                : this.$t('radio.collapseList')
+        },
+
         setRadioNotice(message = '') {
             this.radioNotice = String(message || '').trim()
+        },
+
+        resolveSiteSessionStartedAt() {
+            if (typeof window === 'undefined') {
+                return resolveSiteSessionStartedAtHelper()
+            }
+
+            return resolveSiteSessionStartedAtHelper({
+                storage: window.sessionStorage,
+            })
+        },
+
+        resetStationSessionTimer() {
+            this.stationSessionAccumulatedMs = 0
+            this.stationSessionStartedAt = 0
+        },
+
+        syncStationSessionTimer() {
+            const now = Date.now()
+            if (!this.currentStation) {
+                this.stationSessionStartedAt = 0
+                return
+            }
+
+            if (this.playbackState.isPlaying) {
+                if (this.stationSessionStartedAt <= 0) {
+                    this.stationSessionStartedAt = now
+                }
+                return
+            }
+
+            if (this.stationSessionStartedAt > 0) {
+                this.stationSessionAccumulatedMs += Math.max(0, now - this.stationSessionStartedAt)
+                this.stationSessionStartedAt = 0
+            }
+        },
+
+        syncStationSessionFromSnapshot(snapshot = {}) {
+            const now = Date.now()
+            const isPlaying = Boolean(snapshot?.isPlaying)
+            const currentTime = Number(snapshot?.currentTime || 0)
+            const sessionStartedAt = Number(snapshot?.sessionStartedAt || 0)
+            const nextSession = resolveStationSessionStateFromSnapshot({
+                hasCurrentStation: Boolean(this.currentStation),
+                isPlaying,
+                currentTime,
+                sessionStartedAt,
+                now,
+            })
+
+            this.stationSessionAccumulatedMs = nextSession.accumulatedMs
+            this.stationSessionStartedAt = nextSession.startedAt
         },
 
         startUiTicker() {
             this.stopUiTicker()
             this.uiNowTimerId = window.setInterval(() => {
                 this.uiNowTimestamp = Date.now()
+                this.syncStationSessionTimer()
             }, 1000)
         },
 
@@ -593,21 +750,7 @@ export default {
         },
 
         formatPlaybackTime(value) {
-            const totalSeconds = Number(value)
-            if (!Number.isFinite(totalSeconds) || totalSeconds < 0) {
-                return '00:00'
-            }
-
-            const rounded = Math.floor(totalSeconds)
-            const hours = Math.floor(rounded / 3600)
-            const minutes = Math.floor((rounded % 3600) / 60)
-            const seconds = rounded % 60
-
-            if (hours > 0) {
-                return `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`
-            }
-
-            return `${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`
+            return formatPlaybackTimeHelper(value)
         },
 
         getActivePlayer() {
@@ -643,6 +786,7 @@ export default {
                 currentTime: Number.isFinite(currentTime) && currentTime > 0 ? currentTime : 0,
                 duration,
             }
+            this.syncStationSessionTimer()
         },
 
         bindPlayerStateEvents() {
@@ -710,6 +854,7 @@ export default {
                     ...this.playbackState,
                     isPlaying: command === 'play',
                 }
+                this.syncStationSessionTimer()
                 this.autoplayNotice = ''
                 return
             }
@@ -1343,23 +1488,27 @@ export default {
                 const previousStationUuid = String(this.currentStation?.station_uuid || '')
                 this.currentStation = normalizedStation
 
-                if (normalizedStation.station_uuid !== previousStationUuid || this.stationSessionStartedAt <= 0) {
-                    const syncedStart = Number(event?.detail?.sessionStartedAt || 0)
-                    this.stationSessionStartedAt = Number.isFinite(syncedStart) && syncedStart > 0
-                        ? syncedStart
-                        : Date.now()
+                if (normalizedStation.station_uuid !== previousStationUuid) {
+                    this.resetStationSessionTimer()
                 }
             }
 
             const currentTime = Number(event?.detail?.currentTime || 0)
             const duration = Number(event?.detail?.duration || 0)
+            const isPlaying = Boolean(event?.detail?.isPlaying)
+            const sessionStartedAt = Number(event?.detail?.sessionStartedAt || 0)
 
             this.playbackState = {
-                isPlaying: Boolean(event?.detail?.isPlaying),
+                isPlaying,
                 currentTime: Number.isFinite(currentTime) && currentTime > 0 ? currentTime : 0,
                 duration: Number.isFinite(duration) && duration > 0 ? duration : 0,
             }
 
+            this.syncStationSessionFromSnapshot({
+                isPlaying,
+                currentTime,
+                sessionStartedAt,
+            })
             this.autoplayNotice = ''
             this.pauseLocalPlaybackForBridgeSync()
         },
@@ -1386,8 +1535,9 @@ export default {
 
             const previousStationUuid = String(this.currentStation?.station_uuid || '')
             this.currentStation = normalizedStation
-            if (normalizedStation.station_uuid !== previousStationUuid || this.stationSessionStartedAt <= 0) {
-                this.stationSessionStartedAt = Date.now()
+            if (normalizedStation.station_uuid !== previousStationUuid) {
+                this.resetStationSessionTimer()
+                this.syncStationSessionTimer()
             }
 
             this.autoplayNotice = ''

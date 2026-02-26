@@ -2443,6 +2443,8 @@ img.avatar {
 .radio-featured-controls {
     display: flex;
     justify-content: flex-end;
+    flex-wrap: wrap;
+    gap: 0.4rem;
 }
 
 .radio-category-chip {
@@ -2600,6 +2602,22 @@ img.avatar {
     justify-content: space-between;
     gap: 0.6rem;
     margin-bottom: 0.58rem;
+}
+
+.radio-section-head-actions {
+    display: flex;
+    align-items: center;
+    gap: 0.35rem;
+}
+
+.radio-collapse-toggle {
+    white-space: nowrap;
+}
+
+.radio-collapsed-note {
+    margin: 0;
+    font-size: 0.74rem;
+    line-height: 1.35;
 }
 
 .radio-stations-grid {
@@ -5272,6 +5290,14 @@ img.avatar {
         width: 100%;
     }
 
+    .radio-section-head {
+        align-items: flex-start;
+    }
+
+    .radio-section-head-actions {
+        margin-left: auto;
+    }
+
     .radio-search-actions .btn {
         width: 100%;
     }
@@ -6276,6 +6302,10 @@ img.avatar {
     line-height: 1.2;
 }
 
+.side-widget .widget-radio-current .plyr--audio .plyr__controls__item.plyr__time {
+    display: none;
+}
+
 .widget-radio-current__actions {
     display: flex;
     gap: 0.42rem;
@@ -6334,6 +6364,20 @@ img.avatar {
     justify-content: space-between;
     align-items: center;
     gap: 0.5rem;
+}
+
+.widget-radio-list__head-actions {
+    display: flex;
+    align-items: center;
+    gap: 0.35rem;
+}
+
+.widget-radio-collapse-toggle {
+    white-space: nowrap;
+}
+
+.widget-radio-collapsed-note {
+    margin: 0;
 }
 
 .widget-radio-list__head strong {
