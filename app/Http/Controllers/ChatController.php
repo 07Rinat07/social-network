@@ -28,6 +28,16 @@ use Illuminate\Validation\Rule;
 use Symfony\Component\Process\Process;
 use Symfony\Component\HttpFoundation\StreamedResponse;
 
+/**
+ * Realtime chat API controller.
+ *
+ * Covers:
+ * - conversation discovery and unread counters;
+ * - direct-chat access rules (including block checks);
+ * - message and attachment lifecycle;
+ * - per-conversation mood statuses;
+ * - archive export/restore flows.
+ */
 class ChatController extends Controller
 {
     protected const CHAT_MESSAGE_REACTION_EMOJIS = ['👍', '❤️', '🔥', '😂', '👏', '😮'];
@@ -39,6 +49,9 @@ class ChatController extends Controller
     {
     }
 
+    /**
+     * List conversations available for current user with unread counters.
+     */
     public function index(Request $request): JsonResponse
     {
         $user = $request->user();
@@ -84,6 +97,9 @@ class ChatController extends Controller
         ]);
     }
 
+    /**
+     * Search users for direct chats and include block flags.
+     */
     public function users(Request $request): JsonResponse
     {
         $viewer = $request->user();
@@ -137,6 +153,9 @@ class ChatController extends Controller
         return response()->json($users);
     }
 
+    /**
+     * Return chat storage preferences for current user.
+     */
     public function settings(Request $request): JsonResponse
     {
         $settings = $this->resolveUserChatSetting($request->user());
@@ -146,6 +165,9 @@ class ChatController extends Controller
         ]);
     }
 
+    /**
+     * Update chat storage/retention preferences.
+     */
     public function updateSettings(Request $request): JsonResponse
     {
         $validated = $request->validate([
@@ -172,6 +194,9 @@ class ChatController extends Controller
         ]);
     }
 
+    /**
+     * Return archive history list for current user.
+     */
     public function archives(Request $request): JsonResponse
     {
         $user = $request->user();
@@ -193,6 +218,9 @@ class ChatController extends Controller
         ]);
     }
 
+    /**
+     * Create chat archive snapshot for all chats or single conversation.
+     */
     public function createArchive(Request $request): JsonResponse
     {
         $user = $request->user();
@@ -269,6 +297,7 @@ class ChatController extends Controller
                     continue;
                 }
 
+                // Persist source storage metadata for possible restore operation later.
                 $preparedPayload['attachments'] = collect($preparedPayload['attachments'])
                     ->map(function (array $attachment) use ($message): array {
                         $source = $message->attachments->firstWhere('id', (int) ($attachment['id'] ?? 0));
@@ -324,6 +353,9 @@ class ChatController extends Controller
         ], Response::HTTP_CREATED);
     }
 
+    /**
+     * Download archive payload as JSON file.
+     */
     public function downloadArchive(ChatArchive $archive, Request $request): StreamedResponse
     {
         $this->ensureArchiveAccess($archive, $request->user()->id);
@@ -346,6 +378,9 @@ class ChatController extends Controller
         );
     }
 
+    /**
+     * Restore selected archive into a dedicated archive conversation.
+     */
     public function restoreArchive(ChatArchive $archive, Request $request): JsonResponse
     {
         $user = $request->user();
@@ -469,6 +504,9 @@ class ChatController extends Controller
         );
     }
 
+    /**
+     * Normalize user chat-setting model to API payload.
+     */
     protected function chatSettingPayload(UserChatSetting $settings): array
     {
         return [
@@ -482,6 +520,9 @@ class ChatController extends Controller
         ];
     }
 
+    /**
+     * Normalize archive model to lightweight list payload.
+     */
     protected function chatArchivePayload(ChatArchive $archive): array
     {
         $payload = is_array($archive->payload) ? $archive->payload : [];
@@ -513,6 +554,11 @@ class ChatController extends Controller
         ];
     }
 
+    /**
+     * Apply user archive storage rules (text/files/media toggles) to message payload.
+     *
+     * @return array<string,mixed>|null
+     */
     protected function applyArchiveStorageRules(array $messagePayload, UserChatSetting $settings): ?array
     {
         $prepared = $messagePayload;
@@ -546,6 +592,9 @@ class ChatController extends Controller
         return $prepared;
     }
 
+    /**
+     * Build human-readable archive title.
+     */
     protected function buildArchiveTitle(string $scope, ?Conversation $conversation = null): string
     {
         $timestamp = now()->format('d.m.Y H:i');
@@ -562,6 +611,9 @@ class ChatController extends Controller
         return sprintf('Архив всех чатов от %s', $timestamp);
     }
 
+    /**
+     * Ensure archive belongs to current user.
+     */
     protected function ensureArchiveAccess(ChatArchive $archive, int $userId): void
     {
         if ((int) $archive->user_id !== $userId) {
@@ -569,6 +621,11 @@ class ChatController extends Controller
         }
     }
 
+    /**
+     * Restore archived attachment into currently configured media storage.
+     *
+     * @return array<string,mixed>|null
+     */
     protected function restoreArchiveAttachment(array $attachmentData, User $viewer): ?array
     {
         $sourcePath = trim((string) ($attachmentData['path'] ?? ''));
@@ -628,6 +685,7 @@ class ChatController extends Controller
         try {
             Storage::disk($targetDisk)->put($targetPath, $content);
         } catch (\Throwable) {
+            // Fallback to local public disk when preferred storage is unavailable.
             $targetDisk = 'public';
             try {
                 Storage::disk($targetDisk)->put($targetPath, $content);
@@ -651,6 +709,9 @@ class ChatController extends Controller
         ];
     }
 
+    /**
+     * Create direct conversation with target user or return existing one.
+     */
     public function createOrGetDirect(User $user, Request $request): JsonResponse
     {
         $viewer = $request->user();
@@ -709,6 +770,9 @@ class ChatController extends Controller
         ]);
     }
 
+    /**
+     * Return full conversation payload for selected conversation.
+     */
     public function show(Conversation $conversation, Request $request): JsonResponse
     {
         $this->ensureAccess($conversation, $request->user()->id);
@@ -734,6 +798,9 @@ class ChatController extends Controller
         ]);
     }
 
+    /**
+     * Create/update viewer mood status inside conversation.
+     */
     public function upsertMoodStatus(Conversation $conversation, Request $request): JsonResponse
     {
         $viewer = $request->user();
@@ -818,6 +885,9 @@ class ChatController extends Controller
         ]);
     }
 
+    /**
+     * Return paginated messages and mark conversation as read for viewer.
+     */
     public function messages(Conversation $conversation, Request $request): JsonResponse
     {
         $viewerId = $request->user()->id;
@@ -847,6 +917,9 @@ class ChatController extends Controller
         ]);
     }
 
+    /**
+     * Return unread counters summary for all viewer conversations.
+     */
     public function unreadSummary(Request $request): JsonResponse
     {
         $viewer = $request->user();
@@ -879,6 +952,9 @@ class ChatController extends Controller
         ]);
     }
 
+    /**
+     * Mark selected conversation as read.
+     */
     public function markRead(Conversation $conversation, Request $request): JsonResponse
     {
         $viewerId = $request->user()->id;
@@ -893,6 +969,9 @@ class ChatController extends Controller
         ]);
     }
 
+    /**
+     * Store message with optional attachments.
+     */
     public function storeMessage(Conversation $conversation, Request $request): JsonResponse
     {
         $viewer = $request->user();
@@ -957,6 +1036,7 @@ class ChatController extends Controller
                 'body' => $body !== '' ? $body : null,
             ]);
 
+            // Persist each attachment atomically with message creation.
             foreach ($uploadedFiles as $file) {
                 $this->storeAttachment($createdMessage, $file, $viewer);
             }
@@ -975,6 +1055,9 @@ class ChatController extends Controller
         ], 201);
     }
 
+    /**
+     * Toggle single emoji reaction for viewer on message.
+     */
     public function toggleMessageReaction(
         Conversation $conversation,
         ConversationMessage $message,
@@ -1031,6 +1114,9 @@ class ChatController extends Controller
         ]);
     }
 
+    /**
+     * Delete message (author or admin only).
+     */
     public function destroyMessage(Conversation $conversation, ConversationMessage $message, Request $request): JsonResponse
     {
         $viewer = $request->user();
@@ -1068,6 +1154,9 @@ class ChatController extends Controller
         ]);
     }
 
+    /**
+     * Delete single message attachment, and optionally auto-delete empty message.
+     */
     public function destroyMessageAttachment(
         Conversation $conversation,
         ConversationMessage $message,
@@ -1122,6 +1211,9 @@ class ChatController extends Controller
         ]);
     }
 
+    /**
+     * Classify and persist uploaded chat attachment to selected storage disk.
+     */
     protected function storeAttachment(ConversationMessage $message, UploadedFile $file, User $viewer): void
     {
         $mimeType = strtolower((string) ($file->getMimeType() ?: $file->getClientMimeType() ?: ''));
@@ -1161,6 +1253,7 @@ class ChatController extends Controller
         $disk = $this->siteSettingService->resolveMediaDiskForUser($viewer);
 
         if ($type === ConversationMessageAttachment::TYPE_VIDEO) {
+            // Prefer MP4 for broad browser support and seekability.
             $converted = $this->convertVideoAttachmentToMp4($file);
             if ($converted !== null) {
                 $convertedFile = null;
@@ -1207,6 +1300,8 @@ class ChatController extends Controller
     }
 
     /**
+     * Convert non-mp4 videos to mp4 using ffmpeg when available.
+     *
      * @return array{path: string, original_name: string, size: int}|null
      */
     protected function convertVideoAttachmentToMp4(UploadedFile $file): ?array
@@ -1289,6 +1384,8 @@ class ChatController extends Controller
     }
 
     /**
+     * Persist local temporary file to preferred disk with fallback to public disk.
+     *
      * @return array{path: string, disk: string}
      */
     protected function storeLocalFileWithFallback(File $file, string $folder, string $preferredDisk): array
@@ -1316,6 +1413,9 @@ class ChatController extends Controller
         }
     }
 
+    /**
+     * Ensure resulting filename has mp4 extension.
+     */
     protected function replaceFileExtensionWithMp4(string $originalName): string
     {
         $name = trim($originalName);
@@ -1332,6 +1432,9 @@ class ChatController extends Controller
         return ($base !== '' ? $base : 'video') . '.mp4';
     }
 
+    /**
+     * Resolve first available ffmpeg binary for chat attachment conversion.
+     */
     protected function resolveChatFfmpegBinary(): ?string
     {
         static $resolved = false;
@@ -1383,6 +1486,9 @@ class ChatController extends Controller
         return null;
     }
 
+    /**
+     * Check if file name ends with one of provided extensions.
+     */
     protected function nameHasExtension(string $name, array $extensions): bool
     {
         foreach ($extensions as $extension) {
@@ -1394,6 +1500,9 @@ class ChatController extends Controller
         return false;
     }
 
+    /**
+     * Validate uploaded file against extension/mime safeguards.
+     */
     protected function isValidChatAttachmentFile(UploadedFile $file): bool
     {
         $allowedExtensions = [
@@ -1461,6 +1570,9 @@ class ChatController extends Controller
         return $hasBinaryMime && $hasAllowedExtension;
     }
 
+    /**
+     * Allow-list for mime types accepted by chat attachments.
+     */
     protected function isAllowedChatAttachmentMime(string $mimeType): bool
     {
         if ($mimeType === '') {
@@ -1496,11 +1608,17 @@ class ChatController extends Controller
             ], true);
     }
 
+    /**
+     * Detect generic binary mime often used by browsers for unknown files.
+     */
     protected function isBinaryMimeType(string $mimeType): bool
     {
         return in_array($mimeType, ['application/octet-stream', 'binary/octet-stream'], true);
     }
 
+    /**
+     * Ensure participant rows exist for each conversation/user pair.
+     */
     protected function ensureParticipantRecords(Collection $conversations, int $userId, ?int $globalConversationId = null): void
     {
         if ($conversations->isEmpty()) {
@@ -1537,6 +1655,12 @@ class ChatController extends Controller
         }
     }
 
+    /**
+     * Compute unread counters per conversation for current user.
+     *
+     * @param iterable<int|string> $conversationIds
+     * @return array<int,int>
+     */
     protected function resolveUnreadCounts(iterable $conversationIds, int $userId): array
     {
         $ids = collect($conversationIds)
@@ -1572,6 +1696,9 @@ class ChatController extends Controller
         return $counts;
     }
 
+    /**
+     * Mark conversation as read for user.
+     */
     protected function markConversationAsRead(Conversation $conversation, int $userId): void
     {
         ConversationParticipant::query()->updateOrCreate(
@@ -1585,6 +1712,9 @@ class ChatController extends Controller
         );
     }
 
+    /**
+     * Keep conversation ordering stable after message/attachment deletion.
+     */
     protected function syncConversationTimestampAfterDeletion(Conversation $conversation): void
     {
         $lastMessageCreatedAt = ConversationMessage::query()
@@ -1604,6 +1734,9 @@ class ChatController extends Controller
         ])->saveQuietly();
     }
 
+    /**
+     * Guard conversation access by membership/type rules.
+     */
     protected function ensureAccess(Conversation $conversation, int $userId): void
     {
         if (!$conversation->isAccessibleBy($userId)) {
@@ -1611,6 +1744,11 @@ class ChatController extends Controller
         }
     }
 
+    /**
+     * Return participant ids for direct conversation.
+     *
+     * @return array<int,int>
+     */
     protected function getDirectParticipantIds(Conversation $conversation): array
     {
         if ($conversation->relationLoaded('participants')) {
@@ -1620,6 +1758,9 @@ class ChatController extends Controller
         return $conversation->participants()->pluck('users.id')->values()->all();
     }
 
+    /**
+     * Find active block between two users in any direction.
+     */
     protected function findActiveBlockBetween(int $firstUserId, int $secondUserId): ?UserBlock
     {
         return UserBlock::query()
@@ -1637,6 +1778,9 @@ class ChatController extends Controller
             ->first();
     }
 
+    /**
+     * Normalize conversation model to frontend payload contract.
+     */
     protected function conversationPayload(Conversation $conversation, int $viewerId, int $unreadCount = 0): array
     {
         $participants = $conversation->relationLoaded('participants')
@@ -1697,6 +1841,9 @@ class ChatController extends Controller
         ];
     }
 
+    /**
+     * Normalize visible mood statuses list for viewer.
+     */
     protected function conversationMoodStatusesPayload(Collection $statusItems, int $viewerId): array
     {
         if ($statusItems->isEmpty()) {
@@ -1710,6 +1857,9 @@ class ChatController extends Controller
             ->all();
     }
 
+    /**
+     * Normalize single mood status respecting visibility rules.
+     */
     protected function conversationMoodStatusPayload(ConversationMoodStatus $status, int $viewerId): ?array
     {
         $text = trim((string) $status->text);
@@ -1760,6 +1910,9 @@ class ChatController extends Controller
         ];
     }
 
+    /**
+     * Normalize message model to frontend payload contract.
+     */
     protected function messagePayload(ConversationMessage $message, ?int $viewerId = null): array
     {
         $reactionItems = $message->relationLoaded('reactions')
@@ -1795,6 +1948,9 @@ class ChatController extends Controller
         ];
     }
 
+    /**
+     * Aggregate reactions by emoji and include viewer marker.
+     */
     protected function messageReactionsPayload(Collection $reactionItems, ?int $viewerId = null): array
     {
         if ($reactionItems->isEmpty()) {

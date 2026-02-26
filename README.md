@@ -63,6 +63,8 @@ SPA-социальная сеть на `Laravel + Vue` с realtime-чатами,
 - Поиск станций через Radio Browser API.
 - Встроенные подборки станций по категориям с проверкой доступности потоков.
 - Блок "Сейчас играет" со статусом воспроизведения, временем сессии и метаданными станции.
+- Синхронизация воспроизведения между страницей радио и виджетом, включая корректный `LIVE`-таймер сессии.
+- В мобильной версии списки (избранные, найденные, premium/встроенные) сворачиваются для компактного режима при всегда видимом плеере.
 - Избранные станции пользователя с мини-контролом текущего трека (play/pause/seek для не-live потоков).
 - Одноразовая команда распределения избранного админов всем не-админам: `php artisan radio:distribute-admin-favorites` (`--dry-run` для проверки).
 
@@ -271,11 +273,12 @@ docker/
 - при первом запуске зависимости (`composer`/`npm`) могут ставиться несколько минут, это нормально.
 
 ### Полезные Docker команды
-- Миграции вручную: `docker compose exec app php artisan migrate --seed`
-- Сиды: `docker compose exec app php artisan db:seed`
-- Наполнение IPTV каналов: `docker compose exec app php artisan db:seed --class=IptvSeedSeeder`
-- Проверка раздачи радио-избранного админа: `docker compose exec app php artisan radio:distribute-admin-favorites --dry-run`
-- Тесты: `docker compose --profile test run --rm test`
+- Миграции вручную: `docker compose exec --user=www-data app php artisan migrate --seed`
+- Сиды: `docker compose exec --user=www-data app php artisan db:seed`
+- Наполнение IPTV каналов: `docker compose exec --user=www-data app php artisan db:seed --class=IptvSeedSeeder`
+- Проверка раздачи радио-избранного админа: `docker compose exec --user=www-data app php artisan radio:distribute-admin-favorites --dry-run`
+- Тесты (без пересборки): `docker compose --profile test run --rm --no-build test`
+- Тесты (с пересборкой test image): `docker compose --profile test run --rm --build test`
 - Логи: `docker compose logs --tail=100 app`
 - Остановка: `docker compose down`
 
@@ -311,17 +314,19 @@ docker/
 - Чаты и realtime: `php artisan test tests/Feature/ChatFeatureTest.php`
 - Broadcast channels: `php artisan test tests/Feature/BroadcastChannelsFeatureTest.php`
 - Админка: `php artisan test tests/Feature/AdminPanelFeatureTest.php`
+- JS unit-тесты helper-логики: `npm run test:js`
 - Фронт-билд: `npm run build`
 
 В Docker:
-- Все тесты (одноразовый test-контейнер): `docker compose --profile test run --rm test`
-- Все тесты (в запущенном app-контейнере): `docker compose exec app php artisan test`
-- Feature suite: `docker compose exec app php artisan test --testsuite=Feature`
-- Конкретный файл тестов: `docker compose exec app php artisan test tests/Feature/ChatFeatureTest.php`
+- Все тесты (одноразовый test-контейнер): `docker compose --profile test run --rm --no-build test`
+- Все тесты (в запущенном app-контейнере): `docker compose exec --user=www-data app php artisan test`
+- Feature suite: `docker compose exec --user=www-data app php artisan test --testsuite=Feature`
+- Конкретный файл тестов: `docker compose exec --user=www-data app php artisan test tests/Feature/ChatFeatureTest.php`
 - Фронт-билд: `docker compose run --rm frontend-build`
 
 Рекомендуемый pre-commit check:
 - `php artisan test`
+- `npm run test:js`
 - `npm run build`
 
 ## API ориентиры
@@ -342,8 +347,9 @@ docker/
   - `GET /api/chats/settings`, `PATCH /api/chats/settings`
   - `GET /api/chats/archives`, `POST /api/chats/archives`, `GET /api/chats/archives/{archive}/download`, `POST /api/chats/archives/{archive}/restore`
   - `PATCH /api/chats/{conversation}/mood-status`
-- Радио: `GET /api/radio/stations`, `GET /api/radio/favorites`, `POST /api/radio/favorites`, `DELETE /api/radio/favorites/{stationUuid}`
+- Радио: `GET /api/radio/stations`, `GET /api/radio/stream`, `GET /api/radio/favorites`, `POST /api/radio/favorites`, `DELETE /api/radio/favorites/{stationUuid}`
 - IPTV библиотека и импорт: `POST /api/iptv/playlist/fetch`, `GET /api/iptv/saved`, `POST /api/iptv/saved/playlists`, `PATCH /api/iptv/saved/playlists/{playlistId}`, `DELETE /api/iptv/saved/playlists/{playlistId}`, `POST /api/iptv/saved/channels`, `PATCH /api/iptv/saved/channels/{channelId}`, `DELETE /api/iptv/saved/channels/{channelId}`
+- IPTV возможности: `GET /api/iptv/transcode/capabilities`
 - `POST /api/iptv/proxy/start`, `DELETE /api/iptv/proxy/{session}`
 - `POST /api/iptv/transcode/start`, `DELETE /api/iptv/transcode/{session}`
 - `POST /api/iptv/relay/start`, `DELETE /api/iptv/relay/{session}`
@@ -356,7 +362,7 @@ docker/
 - OpenAPI JSON: `GET /docs/api-docs.json`
 - Генерация документации: `php artisan l5-swagger:generate`
 - Базовые аннотации: `app/OpenApi/OpenApiSpec.php`
-- В актуальной спецификации покрыты ключевые user-chat и admin-chat эндпоинты (диалоги, сообщения, реакции, mood status, удаление, массовая очистка и модерация сообщений в админке).
+- В актуальной спецификации покрыты публичные endpoints сайта, радио endpoints (stations/stream/favorites), capability endpoint IPTV и ключевые user/admin chat сценарии.
 
 ## Тестовые аккаунты
 Доступны после `php artisan db:seed`:
@@ -380,6 +386,19 @@ docker/
 - Порт уже занят другим приложением.
 - Запустите Docker с другими host-портами через переменные:
   `WEB_FORWARD_PORT`, `DB_FORWARD_PORT`, `VITE_FORWARD_PORT`, `REVERB_FORWARD_PORT`.
+
+### `No services to build` при `docker compose --profile test run ...`
+- Это warning от Docker Compose, а не ошибка тестов.
+- Используйте:
+  - без пересборки: `docker compose --profile test run --rm --no-build test`
+  - с пересборкой: `docker compose --profile test run --rm --build test`
+
+### `500 /login` + `fopen(...storage/framework/cache/data/..): No such file or directory`
+- Причина: `artisan` запускался в контейнере от `root`, и часть cache-папок создавалась с правами, недоступными для `www-data`.
+- Профилактика: запускайте artisan в Docker так: `docker compose exec --user=www-data app php artisan ...`
+- Если уже сломалось:
+  - `docker compose exec app sh -lc "chown -R www-data:www-data /var/www/html/storage /var/www/html/bootstrap/cache && find /var/www/html/storage /var/www/html/bootstrap/cache -type d -exec chmod 775 {} \\; && find /var/www/html/storage /var/www/html/bootstrap/cache -type f -exec chmod 664 {} \\;"`
+  - `docker compose exec --user=www-data app php artisan optimize:clear`
 
 ### Пустая страница / сломанный фронт
 - Локально: запущен ли `npm run dev`.

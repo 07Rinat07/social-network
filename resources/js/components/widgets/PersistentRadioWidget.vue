@@ -302,6 +302,7 @@ import {
 } from '../../utils/radioSession.mjs'
 
 const RADIO_WIDGET_STORAGE_PREFIX = 'social.widgets.radio'
+// Shared event bus for synchronization between floating widget and full radio page.
 const RADIO_FAVORITES_SYNC_EVENT = 'social:radio:favorites-updated'
 const RADIO_FAVORITES_SYNC_SOURCE = 'widget-radio'
 const RADIO_PLAYBACK_SYNC_EVENT = 'social:radio:playback-sync'
@@ -591,6 +592,7 @@ export default {
                 return
             }
 
+            // Mobile-first compact mode: keep player visible, collapse large lists.
             this.expanded = true
             this.collapsedWidgetSections = {
                 ...this.collapsedWidgetSections,
@@ -925,6 +927,7 @@ export default {
 
                 const station = this.normalizeStationPayload(parsed?.currentStation)
                 this.currentStation = station?.stream_url ? station : null
+                // Ignore persisted timer when station context no longer exists.
                 this.playbackSessionStartedAt = resolvePersistedPlaybackSessionStartedAt(parsed?.playbackSessionStartedAt, {
                     now,
                     hasCurrentStation: Boolean(this.currentStation),
@@ -1044,6 +1047,7 @@ export default {
             try {
                 const parsed = new URL(raw, window.location.origin)
                 const isSecurePage = window.location.protocol === 'https:'
+                // Proxy HTTP-only streams to avoid mixed-content blocking on HTTPS pages.
                 if (isSecurePage && parsed.protocol === 'http:') {
                     return `/api/radio/stream?url=${encodeURIComponent(parsed.href)}`
                 }
@@ -1175,6 +1179,7 @@ export default {
         },
 
         scoreBuiltinCandidate(station, preset) {
+            // Simple weighted heuristic: query/name hits dominate, metadata refines ranking.
             const lookup = this.normalizeLookupText([
                 station.name,
                 station.tags,
@@ -1611,6 +1616,7 @@ export default {
                 this.isPlaying = Boolean(player.playing)
                 this.shouldResumePlayback = this.isPlaying
 
+                // Preserve original start timestamp while current station keeps playing.
                 if (this.isPlaying && this.playbackSessionStartedAt <= 0) {
                     this.playbackSessionStartedAt = Date.now()
                 }

@@ -1,5 +1,9 @@
 export const SITE_SESSION_STARTED_AT_STORAGE_KEY = 'social:site-session-started-at'
 
+/**
+ * Normalize incoming "now" value used by deterministic helpers.
+ * Falls back to real Date.now() when caller passes invalid value.
+ */
 function resolveNow(nowValue = Date.now()) {
     const normalized = Number(nowValue)
     if (!Number.isFinite(normalized) || normalized <= 0) {
@@ -9,6 +13,13 @@ function resolveNow(nowValue = Date.now()) {
     return Math.floor(normalized)
 }
 
+/**
+ * Validate that timestamp is finite, positive and not in the future.
+ *
+ * @param {number|string} value
+ * @param {{ now?: number }} [options]
+ * @returns {number} Valid millisecond timestamp or 0.
+ */
 export function normalizePastTimestamp(value, options = {}) {
     const now = resolveNow(options?.now)
     const parsed = Number(value)
@@ -20,6 +31,13 @@ export function normalizePastTimestamp(value, options = {}) {
     return Math.floor(parsed)
 }
 
+/**
+ * Resolve site session start timestamp from sessionStorage.
+ * Writes current timestamp when key is missing/invalid.
+ *
+ * @param {{ now?: number, key?: string, storage?: Storage | null }} [options]
+ * @returns {number}
+ */
 export function resolveSiteSessionStartedAt(options = {}) {
     const now = resolveNow(options?.now)
     const key = String(options?.key || SITE_SESSION_STARTED_AT_STORAGE_KEY)
@@ -45,6 +63,14 @@ export function resolveSiteSessionStartedAt(options = {}) {
     return now
 }
 
+/**
+ * Keep restored playback session only when station context exists.
+ * Prevents stale cross-station timestamps from being reused.
+ *
+ * @param {number|string} value
+ * @param {{ now?: number, hasCurrentStation?: boolean }} [options]
+ * @returns {number}
+ */
 export function resolvePersistedPlaybackSessionStartedAt(value, options = {}) {
     const hasCurrentStation = Boolean(options?.hasCurrentStation)
     if (!hasCurrentStation) {
@@ -56,6 +82,22 @@ export function resolvePersistedPlaybackSessionStartedAt(value, options = {}) {
     })
 }
 
+/**
+ * Derive station session counters from external playback snapshot.
+ *
+ * Result contract:
+ * - accumulatedMs: already counted elapsed time;
+ * - startedAt: active segment start timestamp when playback is currently running.
+ *
+ * @param {{
+ *   hasCurrentStation?: boolean,
+ *   now?: number,
+ *   isPlaying?: boolean,
+ *   currentTime?: number,
+ *   sessionStartedAt?: number
+ * }} [options]
+ * @returns {{ accumulatedMs: number, startedAt: number }}
+ */
 export function resolveStationSessionStateFromSnapshot(options = {}) {
     const hasCurrentStation = Boolean(options?.hasCurrentStation)
     const now = resolveNow(options?.now)
@@ -97,6 +139,12 @@ export function resolveStationSessionStateFromSnapshot(options = {}) {
     }
 }
 
+/**
+ * Format seconds as mm:ss or hh:mm:ss (when hours are present).
+ *
+ * @param {number|string} value
+ * @returns {string}
+ */
 export function formatPlaybackTime(value) {
     const totalSeconds = Number(value)
     if (!Number.isFinite(totalSeconds) || totalSeconds < 0) {
@@ -115,6 +163,13 @@ export function formatPlaybackTime(value) {
     return `${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`
 }
 
+/**
+ * Helper for consistent mobile-breakpoint checks in radio modules.
+ *
+ * @param {number|string} viewportWidth
+ * @param {number} [breakpoint=760]
+ * @returns {boolean}
+ */
 export function isMobileViewport(viewportWidth, breakpoint = 760) {
     const width = Number(viewportWidth)
     if (!Number.isFinite(width) || width <= 0) {

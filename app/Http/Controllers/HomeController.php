@@ -2,14 +2,13 @@
 
 namespace App\Http\Controllers;
 
-use Illuminate\Http\Request;
-
+/**
+ * Legacy dashboard controller for classic authenticated home page.
+ */
 class HomeController extends Controller
 {
     /**
-     * Create a new controller instance.
-     *
-     * @return void
+     * Register auth middleware for home dashboard route.
      */
     public function __construct()
     {
@@ -17,9 +16,7 @@ class HomeController extends Controller
     }
 
     /**
-     * Show the application dashboard.
-     *
-     * @return \Illuminate\Contracts\Support\Renderable
+     * Render authenticated home view.
      */
     public function index()
     {

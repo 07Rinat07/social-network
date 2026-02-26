@@ -24,8 +24,17 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Validation\Rule;
 
+/**
+ * Administrative API controller.
+ *
+ * Exposes moderation/maintenance operations across users, posts, chats,
+ * feedback messages, blocks and IPTV seed catalog.
+ */
 class AdminController extends Controller
 {
+    /**
+     * Return high-level admin dashboard counters.
+     */
     public function summary(): JsonResponse
     {
         return response()->json([
@@ -49,6 +58,9 @@ class AdminController extends Controller
         ]);
     }
 
+    /**
+     * Paginated users list with activity counters.
+     */
     public function users(Request $request): JsonResponse
     {
         $users = User::query()
@@ -59,6 +71,9 @@ class AdminController extends Controller
         return response()->json($users);
     }
 
+    /**
+     * Update user profile/admin flags from admin panel.
+     */
     public function updateUser(User $user, Request $request): JsonResponse
     {
         $validated = $request->validate([
@@ -81,6 +96,9 @@ class AdminController extends Controller
         ]);
     }
 
+    /**
+     * Permanently delete user and cascade dependent content cleanup.
+     */
     public function destroyUser(User $user, Request $request): JsonResponse
     {
         if ($request->user()->id === $user->id) {
@@ -90,6 +108,7 @@ class AdminController extends Controller
         }
 
         DB::transaction(function () use ($user) {
+            // Remove all user-owned entities and media to prevent orphan files/rows.
             $ownedPostIds = Post::query()
                 ->where('user_id', $user->id)
                 ->pluck('id');
@@ -195,6 +214,9 @@ class AdminController extends Controller
         ]);
     }
 
+    /**
+     * Return posts for moderation (full list or paginated mode).
+     */
     public function posts(Request $request)
     {
         $query = Post::query()
@@ -211,6 +233,9 @@ class AdminController extends Controller
         return PostResource::collection($posts);
     }
 
+    /**
+     * Create post on behalf of selected user.
+     */
     public function storePost(Request $request): JsonResponse
     {
         $validated = $this->validateAdminPostPayload($request, null);
@@ -225,6 +250,9 @@ class AdminController extends Controller
         ], 201);
     }
 
+    /**
+     * Update post content/visibility from admin panel.
+     */
     public function updatePost(Post $post, Request $request): JsonResponse
     {
         $validated = $this->validateAdminPostPayload($request, $post);
@@ -239,6 +267,9 @@ class AdminController extends Controller
         ]);
     }
 
+    /**
+     * Delete post with likes/comments/media cleanup.
+     */
     public function destroyPost(Post $post): JsonResponse
     {
         DB::transaction(function () use ($post) {
@@ -281,6 +312,9 @@ class AdminController extends Controller
         ]);
     }
 
+    /**
+     * Remove likes for a specific post.
+     */
     public function clearPostLikes(Post $post): JsonResponse
     {
         $removedLikes = LikedPost::query()
@@ -296,6 +330,9 @@ class AdminController extends Controller
         ]);
     }
 
+    /**
+     * Remove all likes globally.
+     */
     public function clearAllLikes(): JsonResponse
     {
         $removedLikes = LikedPost::query()->delete();
@@ -308,6 +345,9 @@ class AdminController extends Controller
         ]);
     }
 
+    /**
+     * Paginated comments list for moderation.
+     */
     public function comments(Request $request): JsonResponse
     {
         $comments = Comment::query()
@@ -322,6 +362,9 @@ class AdminController extends Controller
         return response()->json($comments);
     }
 
+    /**
+     * Delete single comment and detach child replies from parent relation.
+     */
     public function destroyComment(Comment $comment): JsonResponse
     {
         Comment::query()
@@ -335,6 +378,9 @@ class AdminController extends Controller
         ]);
     }
 
+    /**
+     * Paginated feedback list for moderation workflow.
+     */
     public function feedback(Request $request): JsonResponse
     {
         $feedback = FeedbackMessage::query()
@@ -345,6 +391,9 @@ class AdminController extends Controller
         return response()->json($feedback);
     }
 
+    /**
+     * Update feedback status and notify listeners.
+     */
     public function updateFeedback(FeedbackMessage $feedback, UpdateFeedbackRequest $request): JsonResponse
     {
         $validated = $request->validated();
@@ -362,6 +411,9 @@ class AdminController extends Controller
         ]);
     }
 
+    /**
+     * Delete feedback entry.
+     */
     public function destroyFeedback(FeedbackMessage $feedback): JsonResponse
     {
         $feedback->delete();
@@ -371,6 +423,9 @@ class AdminController extends Controller
         ]);
     }
 
+    /**
+     * Paginated conversation list for chat moderation.
+     */
     public function conversations(Request $request): JsonResponse
     {
         $conversations = Conversation::query()
@@ -392,6 +447,9 @@ class AdminController extends Controller
         return response()->json($conversations);
     }
 
+    /**
+     * Delete all messages/attachments in selected conversation.
+     */
     public function clearConversationMessages(Conversation $conversation): JsonResponse
     {
         $conversationId = (int) $conversation->id;
@@ -414,6 +472,9 @@ class AdminController extends Controller
         ]);
     }
 
+    /**
+     * Delete entire conversation with attachment cleanup.
+     */
     public function destroyConversation(Conversation $conversation): JsonResponse
     {
         $conversationId = (int) $conversation->id;
@@ -430,6 +491,9 @@ class AdminController extends Controller
         ]);
     }
 
+    /**
+     * Delete all messages globally and reset conversation timestamps.
+     */
     public function clearAllConversationMessages(): JsonResponse
     {
         $removedAttachments = ConversationMessageAttachment::query()->count();
@@ -462,6 +526,9 @@ class AdminController extends Controller
         ]);
     }
 
+    /**
+     * Delete all conversations and their attachments.
+     */
     public function clearAllConversations(): JsonResponse
     {
         $removedAttachments = ConversationMessageAttachment::query()->count();
@@ -486,6 +553,9 @@ class AdminController extends Controller
         ]);
     }
 
+    /**
+     * Paginated chat messages list with optional conversation filter.
+     */
     public function messages(Request $request): JsonResponse
     {
         $conversationId = $request->integer('conversation_id');
@@ -503,6 +573,9 @@ class AdminController extends Controller
         return response()->json($messages);
     }
 
+    /**
+     * Delete single chat message and attached files.
+     */
     public function destroyMessage(ConversationMessage $message): JsonResponse
     {
         $attachments = $message->attachments()->get();
@@ -517,6 +590,9 @@ class AdminController extends Controller
         ]);
     }
 
+    /**
+     * Cleanup helper for all attachment files in specific conversation.
+     */
     protected function cleanupConversationAttachmentFiles(int $conversationId): int
     {
         $deletedCount = 0;
@@ -534,6 +610,9 @@ class AdminController extends Controller
         return $deletedCount;
     }
 
+    /**
+     * Paginated user blocks list.
+     */
     public function blocks(Request $request): JsonResponse
     {
         $blocks = UserBlock::query()
@@ -547,6 +626,9 @@ class AdminController extends Controller
         return response()->json($blocks);
     }
 
+    /**
+     * Update expiration/reason for existing user block.
+     */
     public function updateBlock(UserBlock $userBlock, Request $request): JsonResponse
     {
         $validated = $request->validate([
@@ -574,6 +656,9 @@ class AdminController extends Controller
         ]);
     }
 
+    /**
+     * Delete user block.
+     */
     public function destroyBlock(UserBlock $userBlock): JsonResponse
     {
         $userBlock->delete();
@@ -583,6 +668,9 @@ class AdminController extends Controller
         ]);
     }
 
+    /**
+     * Return IPTV seed catalog for admin maintenance.
+     */
     public function iptvSeeds(Request $request): JsonResponse
     {
         $seeds = IptvSeed::query()
@@ -593,6 +681,9 @@ class AdminController extends Controller
         return response()->json($seeds);
     }
 
+    /**
+     * Create IPTV seed record.
+     */
     public function storeIptvSeed(Request $request): JsonResponse
     {
         $validated = $request->validate([
@@ -610,6 +701,9 @@ class AdminController extends Controller
         ]);
     }
 
+    /**
+     * Update IPTV seed record.
+     */
     public function updateIptvSeed(IptvSeed $iptvSeed, Request $request): JsonResponse
     {
         $validated = $request->validate([
@@ -627,6 +721,9 @@ class AdminController extends Controller
         ]);
     }
 
+    /**
+     * Delete IPTV seed record.
+     */
     public function destroyIptvSeed(IptvSeed $iptvSeed): JsonResponse
     {
         $iptvSeed->delete();
@@ -636,11 +733,17 @@ class AdminController extends Controller
         ]);
     }
 
+    /**
+     * Normalize per-page query value with strict bounds.
+     */
     protected function resolvePerPage(Request $request, int $default = 20, int $max = 100): int
     {
         return max(1, min((int) $request->integer('per_page', $default), $max));
     }
 
+    /**
+     * Validate and normalize admin post payload.
+     */
     protected function validateAdminPostPayload(Request $request, ?Post $post): array
     {
         $request->merge([
@@ -665,6 +768,9 @@ class AdminController extends Controller
         return $request->validate($rules);
     }
 
+    /**
+     * Build post attributes with visibility-dependent flags.
+     */
     protected function buildAdminPostAttributes(array $validated): array
     {
         $isPublic = (bool) ($validated['is_public'] ?? true);
@@ -682,6 +788,9 @@ class AdminController extends Controller
         ];
     }
 
+    /**
+     * Collapse repeated whitespace for one-line fields.
+     */
     protected function normalizeSingleLineText(mixed $value): string
     {
         $normalized = preg_replace('/\s+/u', ' ', trim((string) $value));
@@ -689,6 +798,9 @@ class AdminController extends Controller
         return $normalized === null ? '' : $normalized;
     }
 
+    /**
+     * Normalize multiline text line-endings and trim edges.
+     */
     protected function normalizeMultilineText(mixed $value): string
     {
         $text = str_replace(["\r\n", "\r"], "\n", (string) $value);

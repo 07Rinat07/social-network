@@ -14,6 +14,14 @@ use InvalidArgumentException;
 use RuntimeException;
 use Throwable;
 
+/**
+ * IPTV API controller for playlist import, personal library and playback sessions.
+ *
+ * Playback modes:
+ * - proxy: remote playlist/segments are proxied as-is;
+ * - transcode: ffmpeg builds compatible HLS output;
+ * - relay: lightweight hls relay session.
+ */
 class IptvController extends Controller
 {
     public function __construct(
@@ -24,6 +32,9 @@ class IptvController extends Controller
     {
     }
 
+    /**
+     * Fetch and validate remote M3U/M3U8 playlist content.
+     */
     public function fetchPlaylist(Request $request): JsonResponse
     {
         $payload = $request->validate([
@@ -58,6 +69,9 @@ class IptvController extends Controller
         ]);
     }
 
+    /**
+     * Return active IPTV seed list configured by admins.
+     */
     public function seeds(): JsonResponse
     {
         $seeds = IptvSeed::query()
@@ -71,6 +85,9 @@ class IptvController extends Controller
         ]);
     }
 
+    /**
+     * Return current user's saved playlists/channels.
+     */
     public function savedLibrary(Request $request): JsonResponse
     {
         $userId = (int) $request->user()->id;
@@ -95,6 +112,9 @@ class IptvController extends Controller
         ]);
     }
 
+    /**
+     * Create or update saved playlist for the current user.
+     */
     public function storeSavedPlaylist(Request $request): JsonResponse
     {
         $payload = $request->validate([
@@ -137,6 +157,9 @@ class IptvController extends Controller
         ], 201);
     }
 
+    /**
+     * Delete saved playlist by id.
+     */
     public function destroySavedPlaylist(int $playlistId, Request $request): JsonResponse
     {
         IptvSavedPlaylist::query()
@@ -149,6 +172,9 @@ class IptvController extends Controller
         ]);
     }
 
+    /**
+     * Rename saved playlist.
+     */
     public function updateSavedPlaylist(int $playlistId, Request $request): JsonResponse
     {
         $payload = $request->validate([
@@ -182,6 +208,9 @@ class IptvController extends Controller
         ]);
     }
 
+    /**
+     * Create or update saved channel for the current user.
+     */
     public function storeSavedChannel(Request $request): JsonResponse
     {
         $payload = $request->validate([
@@ -229,6 +258,9 @@ class IptvController extends Controller
         ], 201);
     }
 
+    /**
+     * Delete saved channel by id.
+     */
     public function destroySavedChannel(int $channelId, Request $request): JsonResponse
     {
         IptvSavedChannel::query()
@@ -241,6 +273,9 @@ class IptvController extends Controller
         ]);
     }
 
+    /**
+     * Rename saved channel.
+     */
     public function updateSavedChannel(int $channelId, Request $request): JsonResponse
     {
         $payload = $request->validate([
@@ -274,6 +309,9 @@ class IptvController extends Controller
         ]);
     }
 
+    /**
+     * Return current transcoding capabilities (ffmpeg availability/profile support).
+     */
     public function transcodeCapabilities(): JsonResponse
     {
         $capabilities = $this->iptvTranscodeService->getCapabilities();
@@ -284,6 +322,9 @@ class IptvController extends Controller
         ]);
     }
 
+    /**
+     * Start proxy mode session and return playback URL.
+     */
     public function startProxy(Request $request): JsonResponse
     {
         $payload = $request->validate([
@@ -319,6 +360,9 @@ class IptvController extends Controller
         ]);
     }
 
+    /**
+     * Start transcode session and wait until HLS playlist is ready.
+     */
     public function startTranscode(Request $request): JsonResponse
     {
         $payload = $request->validate([
@@ -332,6 +376,7 @@ class IptvController extends Controller
                 (string) ($payload['profile'] ?? 'balanced')
             );
 
+            // Warm-up: avoid returning session that is not yet playable by the client.
             $playlistReady = $this->iptvTranscodeService->waitForPlaylist($session['session_id'], 12);
             if (!$playlistReady) {
                 $this->iptvTranscodeService->stopSession($session['session_id']);
@@ -365,6 +410,9 @@ class IptvController extends Controller
         ]);
     }
 
+    /**
+     * Start relay session and wait until HLS playlist is ready.
+     */
     public function startRelay(Request $request): JsonResponse
     {
         $payload = $request->validate([
@@ -374,6 +422,7 @@ class IptvController extends Controller
         try {
             $session = $this->iptvTranscodeService->startRelaySession($payload['url']);
 
+            // Warm-up: relay should respond with an already prepared playlist.
             $playlistReady = $this->iptvTranscodeService->waitForPlaylist($session['session_id'], 10);
             if (!$playlistReady) {
                 $this->iptvTranscodeService->stopSession($session['session_id']);
@@ -406,6 +455,9 @@ class IptvController extends Controller
         ]);
     }
 
+    /**
+     * Stream generated transcode HLS playlist file.
+     */
     public function transcodePlaylist(string $session)
     {
         $path = $this->iptvTranscodeService->getPlaylistPath($session);
@@ -423,6 +475,9 @@ class IptvController extends Controller
         ]);
     }
 
+    /**
+     * Stream proxied playlist body.
+     */
     public function proxyPlaylist(string $session)
     {
         try {
@@ -447,6 +502,9 @@ class IptvController extends Controller
         ]);
     }
 
+    /**
+     * Stream generated relay HLS playlist file.
+     */
     public function relayPlaylist(string $session)
     {
         $path = $this->iptvTranscodeService->getPlaylistPath($session);
@@ -464,6 +522,9 @@ class IptvController extends Controller
         ]);
     }
 
+    /**
+     * Stream generated transcode HLS segment file.
+     */
     public function transcodeSegment(string $session, string $segment)
     {
         $path = $this->iptvTranscodeService->getSegmentPath($session, $segment);
@@ -481,6 +542,9 @@ class IptvController extends Controller
         ]);
     }
 
+    /**
+     * Stream generated relay HLS segment file.
+     */
     public function relaySegment(string $session, string $segment)
     {
         $path = $this->iptvTranscodeService->getSegmentPath($session, $segment);
@@ -498,6 +562,9 @@ class IptvController extends Controller
         ]);
     }
 
+    /**
+     * Stream proxied segment content for active proxy session.
+     */
     public function proxySegment(Request $request, string $session)
     {
         $url = trim((string) $request->query('url', ''));
@@ -533,6 +600,9 @@ class IptvController extends Controller
         ]);
     }
 
+    /**
+     * Normalize playlist entity to API payload contract.
+     */
     private function serializeSavedPlaylist(IptvSavedPlaylist $playlist): array
     {
         return [
@@ -544,6 +614,9 @@ class IptvController extends Controller
         ];
     }
 
+    /**
+     * Normalize channel entity to API payload contract.
+     */
     private function serializeSavedChannel(IptvSavedChannel $channel): array
     {
         return [
@@ -556,6 +629,9 @@ class IptvController extends Controller
         ];
     }
 
+    /**
+     * Keep only most recent playlists within configured cap.
+     */
     private function trimSavedPlaylists(int $userId, int $limit): void
     {
         $idsToKeep = IptvSavedPlaylist::query()
@@ -575,6 +651,9 @@ class IptvController extends Controller
             ->delete();
     }
 
+    /**
+     * Keep only most recent channels within configured cap.
+     */
     private function trimSavedChannels(int $userId, int $limit): void
     {
         $idsToKeep = IptvSavedChannel::query()
@@ -594,6 +673,9 @@ class IptvController extends Controller
             ->delete();
     }
 
+    /**
+     * Derive readable playlist name from URL host.
+     */
     private function guessNameFromUrl(string $url): string
     {
         $host = parse_url($url, PHP_URL_HOST);
@@ -604,6 +686,9 @@ class IptvController extends Controller
         return 'IPTV playlist';
     }
 
+    /**
+     * Lightweight URL scheme guard for logo links.
+     */
     private function isHttpOrHttpsUrl(string $url): bool
     {
         $validated = filter_var($url, FILTER_VALIDATE_URL);
@@ -617,6 +702,9 @@ class IptvController extends Controller
         return $normalizedScheme === 'http' || $normalizedScheme === 'https';
     }
 
+    /**
+     * Stop transcode session.
+     */
     public function stopTranscode(string $session): JsonResponse
     {
         $this->iptvTranscodeService->stopSession($session);
@@ -627,6 +715,9 @@ class IptvController extends Controller
         ]);
     }
 
+    /**
+     * Stop proxy session.
+     */
     public function stopProxy(string $session): JsonResponse
     {
         $this->iptvProxyService->stopSession($session);
@@ -637,6 +728,9 @@ class IptvController extends Controller
         ]);
     }
 
+    /**
+     * Stop relay session.
+     */
     public function stopRelay(string $session): JsonResponse
     {
         $this->iptvTranscodeService->stopSession($session);

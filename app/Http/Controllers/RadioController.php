@@ -16,6 +16,14 @@ use Psr\Http\Message\StreamInterface;
 use Symfony\Component\HttpFoundation\StreamedResponse;
 use Throwable;
 
+/**
+ * Radio aggregation and user favorites API.
+ *
+ * Responsibilities:
+ * - fetch and normalize stations from Radio Browser service;
+ * - proxy insecure/public streams through backend when needed;
+ * - persist per-user favorite stations.
+ */
 class RadioController extends Controller
 {
     public function __construct(
@@ -25,6 +33,9 @@ class RadioController extends Controller
     {
     }
 
+    /**
+     * Search radio stations and attach per-user favorite flag.
+     */
     public function stations(Request $request): JsonResponse
     {
         $filters = $request->validate([
@@ -71,6 +82,12 @@ class RadioController extends Controller
         ]);
     }
 
+    /**
+     * Proxy external radio stream to the browser.
+     *
+     * Used to avoid mixed-content/CORS issues when frontend runs on HTTPS and
+     * the source station stream is available only over plain HTTP.
+     */
     public function stream(Request $request): JsonResponse|StreamedResponse
     {
         $payload = $request->validate([
@@ -118,6 +135,7 @@ class RadioController extends Controller
 
         return response()->stream(function () use ($stream): void {
             try {
+                // We stream chunks manually to keep memory usage stable.
                 while (!$stream->eof()) {
                     $chunk = $stream->read(8192);
                     if ($chunk === '') {
@@ -144,6 +162,9 @@ class RadioController extends Controller
         ]);
     }
 
+    /**
+     * Return current user's favorite stations.
+     */
     public function favorites(Request $request): JsonResponse
     {
         $favorites = RadioFavorite::query()
@@ -169,6 +190,9 @@ class RadioController extends Controller
         ]);
     }
 
+    /**
+     * Upsert station into current user's favorites.
+     */
     public function storeFavorite(Request $request): JsonResponse
     {
         $payload = $request->validate([
@@ -213,6 +237,9 @@ class RadioController extends Controller
         ], 201);
     }
 
+    /**
+     * Remove station from current user's favorites.
+     */
     public function destroyFavorite(string $stationUuid, Request $request): JsonResponse
     {
         RadioFavorite::query()
@@ -225,8 +252,12 @@ class RadioController extends Controller
         ]);
     }
 
+    /**
+     * Normalize external station payload to app-level contract.
+     */
     protected function normalizeStationPayload(array $station): array
     {
+        // Prefer `url_resolved` because Radio Browser can provide redirect-safe URL.
         $streamUrl = trim((string) ($station['url_resolved'] ?? ''));
         if ($streamUrl === '') {
             $streamUrl = trim((string) ($station['url'] ?? ''));
@@ -247,6 +278,11 @@ class RadioController extends Controller
         ];
     }
 
+    /**
+     * Resolve optional outbound HTTP proxy from config.
+     *
+     * Accepts string flags like "false"/"off"/"none" for easier env management.
+     */
     private function resolveProxyOption(): string|array|bool
     {
         $proxy = config('services.radio_browser.proxy', false);

@@ -37,6 +37,11 @@ use OpenApi\Annotations as OA;
  * )
  *
  * @OA\Tag(
+ *     name="Site",
+ *     description="Public site content and overview data"
+ * )
+ *
+ * @OA\Tag(
  *     name="Admin Chat",
  *     description="Admin chat moderation endpoints"
  * )
@@ -56,6 +61,42 @@ use OpenApi\Annotations as OA;
  *     name="X-XSRF-TOKEN",
  *     description="CSRF header for state-changing requests"
  * )
+ *
+ * @OA\Schema(
+ *     schema="RadioStation",
+ *     type="object",
+ *     required={"station_uuid","name","stream_url","is_favorite"},
+ *     @OA\Property(property="station_uuid", type="string", example="station-123"),
+ *     @OA\Property(property="name", type="string", example="Rock FM"),
+ *     @OA\Property(property="stream_url", type="string", format="uri", example="https://stream.example.com/live"),
+ *     @OA\Property(property="homepage", type="string", format="uri", nullable=true, example="https://station.example.com"),
+ *     @OA\Property(property="favicon", type="string", format="uri", nullable=true, example="https://station.example.com/icon.png"),
+ *     @OA\Property(property="country", type="string", nullable=true, example="Germany"),
+ *     @OA\Property(property="language", type="string", nullable=true, example="German"),
+ *     @OA\Property(property="tags", type="string", nullable=true, example="rock,pop"),
+ *     @OA\Property(property="codec", type="string", nullable=true, example="MP3"),
+ *     @OA\Property(property="bitrate", type="integer", example=128),
+ *     @OA\Property(property="votes", type="integer", example=420),
+ *     @OA\Property(property="is_favorite", type="boolean", example=false)
+ * )
+ *
+ * @OA\Schema(
+ *     schema="RadioFavorite",
+ *     type="object",
+ *     required={"id","station_uuid","name","stream_url"},
+ *     @OA\Property(property="id", type="integer", example=15),
+ *     @OA\Property(property="station_uuid", type="string", example="station-123"),
+ *     @OA\Property(property="name", type="string", example="Rock FM"),
+ *     @OA\Property(property="stream_url", type="string", format="uri", example="https://stream.example.com/live"),
+ *     @OA\Property(property="homepage", type="string", format="uri", nullable=true),
+ *     @OA\Property(property="favicon", type="string", format="uri", nullable=true),
+ *     @OA\Property(property="country", type="string", nullable=true),
+ *     @OA\Property(property="language", type="string", nullable=true),
+ *     @OA\Property(property="tags", type="string", nullable=true),
+ *     @OA\Property(property="codec", type="string", nullable=true),
+ *     @OA\Property(property="bitrate", type="integer", example=128),
+ *     @OA\Property(property="votes", type="integer", example=420)
+ * )
  */
 class OpenApiSpec
 {
@@ -72,6 +113,23 @@ class OpenApiSpec
      * )
      */
     public function getHomeContent(): void
+    {
+    }
+
+    /**
+     * @OA\Get(
+     *     path="/api/site/world-overview",
+     *     operationId="getWorldOverview",
+     *     tags={"Site"},
+     *     summary="Get time/weather overview widget data",
+     *     @OA\Parameter(name="locale", in="query", required=false, @OA\Schema(type="string", enum={"ru","en"})),
+     *     @OA\Response(
+     *         response=200,
+     *         description="World overview payload"
+     *     )
+     * )
+     */
+    public function getWorldOverview(): void
     {
     }
 
@@ -119,15 +177,163 @@ class OpenApiSpec
      *     @OA\Parameter(name="offset", in="query", required=false, @OA\Schema(type="integer", minimum=0)),
      *     @OA\Response(
      *         response=200,
-     *         description="List of stations"
+     *         description="List of normalized stations",
+     *         @OA\JsonContent(
+     *             @OA\Property(
+     *                 property="data",
+     *                 type="array",
+     *                 @OA\Items(ref="#/components/schemas/RadioStation")
+     *             )
+     *         )
      *     ),
      *     @OA\Response(
      *         response=401,
      *         description="Unauthenticated"
+     *     ),
+     *     @OA\Response(
+     *         response=503,
+     *         description="Radio catalog provider is temporarily unavailable"
      *     )
      * )
      */
     public function getRadioStations(): void
+    {
+    }
+
+    /**
+     * @OA\Get(
+     *     path="/api/radio/stream",
+     *     operationId="getRadioStreamProxy",
+     *     tags={"Radio"},
+     *     summary="Proxy external radio stream (useful for mixed-content/CORS constraints)",
+     *     security={{"sanctumCookie":{}}},
+     *     @OA\Parameter(
+     *         name="url",
+     *         in="query",
+     *         required=true,
+     *         description="Original station stream URL",
+     *         @OA\Schema(type="string", format="uri")
+     *     ),
+     *     @OA\Response(
+     *         response=200,
+     *         description="Audio stream bytes",
+     *         @OA\MediaType(
+     *             mediaType="audio/mpeg",
+     *             @OA\Schema(type="string", format="binary")
+     *         )
+     *     ),
+     *     @OA\Response(response=401, description="Unauthenticated"),
+     *     @OA\Response(response=422, description="Invalid or unsafe URL"),
+     *     @OA\Response(response=503, description="Upstream stream unavailable")
+     * )
+     */
+    public function getRadioStreamProxy(): void
+    {
+    }
+
+    /**
+     * @OA\Get(
+     *     path="/api/radio/favorites",
+     *     operationId="getRadioFavorites",
+     *     tags={"Radio"},
+     *     summary="Get current user's favorite stations",
+     *     security={{"sanctumCookie":{}}},
+     *     @OA\Response(
+     *         response=200,
+     *         description="Favorite stations",
+     *         @OA\JsonContent(
+     *             @OA\Property(
+     *                 property="data",
+     *                 type="array",
+     *                 @OA\Items(ref="#/components/schemas/RadioFavorite")
+     *             )
+     *         )
+     *     ),
+     *     @OA\Response(response=401, description="Unauthenticated")
+     * )
+     */
+    public function getRadioFavorites(): void
+    {
+    }
+
+    /**
+     * @OA\Post(
+     *     path="/api/radio/favorites",
+     *     operationId="storeRadioFavorite",
+     *     tags={"Radio"},
+     *     summary="Add or update station in current user's favorites",
+     *     security={{"sanctumCookie":{}, "xsrfHeader":{}}},
+     *     @OA\RequestBody(
+     *         required=true,
+     *         @OA\JsonContent(
+     *             required={"station_uuid","name","stream_url"},
+     *             @OA\Property(property="station_uuid", type="string", maxLength=64, example="station-123"),
+     *             @OA\Property(property="name", type="string", maxLength=255, example="Rock FM"),
+     *             @OA\Property(property="stream_url", type="string", format="uri", maxLength=2000, example="https://stream.example.com/live"),
+     *             @OA\Property(property="homepage", type="string", format="uri", nullable=true),
+     *             @OA\Property(property="favicon", type="string", format="uri", nullable=true),
+     *             @OA\Property(property="country", type="string", nullable=true),
+     *             @OA\Property(property="language", type="string", nullable=true),
+     *             @OA\Property(property="tags", type="string", nullable=true),
+     *             @OA\Property(property="codec", type="string", nullable=true),
+     *             @OA\Property(property="bitrate", type="integer", nullable=true, minimum=0, maximum=9999),
+     *             @OA\Property(property="votes", type="integer", nullable=true, minimum=0, maximum=99999999)
+     *         )
+     *     ),
+     *     @OA\Response(
+     *         response=201,
+     *         description="Favorite station stored",
+     *         @OA\JsonContent(
+     *             @OA\Property(property="message", type="string"),
+     *             @OA\Property(
+     *                 property="data",
+     *                 type="object",
+     *                 @OA\Property(property="id", type="integer"),
+     *                 @OA\Property(property="station_uuid", type="string")
+     *             )
+     *         )
+     *     ),
+     *     @OA\Response(response=401, description="Unauthenticated"),
+     *     @OA\Response(response=422, description="Validation error")
+     * )
+     */
+    public function storeRadioFavorite(): void
+    {
+    }
+
+    /**
+     * @OA\Delete(
+     *     path="/api/radio/favorites/{stationUuid}",
+     *     operationId="deleteRadioFavorite",
+     *     tags={"Radio"},
+     *     summary="Remove station from current user's favorites",
+     *     security={{"sanctumCookie":{}, "xsrfHeader":{}}},
+     *     @OA\Parameter(
+     *         name="stationUuid",
+     *         in="path",
+     *         required=true,
+     *         @OA\Schema(type="string")
+     *     ),
+     *     @OA\Response(response=200, description="Favorite removed"),
+     *     @OA\Response(response=401, description="Unauthenticated")
+     * )
+     */
+    public function deleteRadioFavorite(): void
+    {
+    }
+
+    /**
+     * @OA\Get(
+     *     path="/api/iptv/transcode/capabilities",
+     *     operationId="getIptvTranscodeCapabilities",
+     *     tags={"IPTV"},
+     *     summary="Check FFmpeg/transcode capabilities for current server",
+     *     security={{"sanctumCookie":{}}},
+     *     @OA\Response(response=200, description="Capabilities payload"),
+     *     @OA\Response(response=401, description="Unauthenticated")
+     * )
+     */
+    public function getIptvTranscodeCapabilities(): void
     {
     }
 
@@ -179,7 +385,7 @@ class OpenApiSpec
      *     operationId="createOrGetDirectChat",
      *     tags={"Chat"},
      *     summary="Create or return existing direct chat with target user",
-     *     security={{"sanctumCookie":{}}},
+     *     security={{"sanctumCookie":{}, "xsrfHeader":{}}},
      *     @OA\Parameter(
      *         name="user",
      *         in="path",
@@ -238,7 +444,7 @@ class OpenApiSpec
      *     operationId="upsertMoodStatus",
      *     tags={"Chat"},
      *     summary="Create/update own mood status in conversation. Empty text removes status.",
-     *     security={{"sanctumCookie":{}}},
+     *     security={{"sanctumCookie":{}, "xsrfHeader":{}}},
      *     @OA\Parameter(
      *         name="conversation",
      *         in="path",
@@ -291,7 +497,7 @@ class OpenApiSpec
      *     operationId="storeChatMessage",
      *     tags={"Chat"},
      *     summary="Send message with optional text/files to conversation",
-     *     security={{"sanctumCookie":{}}},
+     *     security={{"sanctumCookie":{}, "xsrfHeader":{}}},
      *     @OA\Parameter(name="conversation", in="path", required=true, @OA\Schema(type="integer", minimum=1)),
      *     @OA\RequestBody(
      *         required=false,
@@ -315,7 +521,7 @@ class OpenApiSpec
      *     operationId="toggleChatMessageReaction",
      *     tags={"Chat"},
      *     summary="Toggle emoji reaction on message",
-     *     security={{"sanctumCookie":{}}},
+     *     security={{"sanctumCookie":{}, "xsrfHeader":{}}},
      *     @OA\Parameter(name="conversation", in="path", required=true, @OA\Schema(type="integer", minimum=1)),
      *     @OA\Parameter(name="message", in="path", required=true, @OA\Schema(type="integer", minimum=1)),
      *     @OA\RequestBody(
@@ -340,7 +546,7 @@ class OpenApiSpec
      *     operationId="deleteChatMessage",
      *     tags={"Chat"},
      *     summary="Delete message (author or admin)",
-     *     security={{"sanctumCookie":{}}},
+     *     security={{"sanctumCookie":{}, "xsrfHeader":{}}},
      *     @OA\Parameter(name="conversation", in="path", required=true, @OA\Schema(type="integer", minimum=1)),
      *     @OA\Parameter(name="message", in="path", required=true, @OA\Schema(type="integer", minimum=1)),
      *     @OA\Response(response=200, description="Message deleted"),
@@ -358,7 +564,7 @@ class OpenApiSpec
      *     operationId="deleteChatMessageAttachment",
      *     tags={"Chat"},
      *     summary="Delete message attachment (author or admin)",
-     *     security={{"sanctumCookie":{}}},
+     *     security={{"sanctumCookie":{}, "xsrfHeader":{}}},
      *     @OA\Parameter(name="conversation", in="path", required=true, @OA\Schema(type="integer", minimum=1)),
      *     @OA\Parameter(name="message", in="path", required=true, @OA\Schema(type="integer", minimum=1)),
      *     @OA\Parameter(name="attachment", in="path", required=true, @OA\Schema(type="integer", minimum=1)),
@@ -394,7 +600,7 @@ class OpenApiSpec
      *     operationId="adminClearConversationMessages",
      *     tags={"Admin Chat"},
      *     summary="Admin: clear all messages in a specific conversation",
-     *     security={{"sanctumCookie":{}}},
+     *     security={{"sanctumCookie":{}, "xsrfHeader":{}}},
      *     @OA\Parameter(name="conversation", in="path", required=true, @OA\Schema(type="integer", minimum=1)),
      *     @OA\Response(response=200, description="Conversation messages cleared"),
      *     @OA\Response(response=401, description="Unauthenticated"),
@@ -412,7 +618,7 @@ class OpenApiSpec
      *     operationId="adminDeleteConversation",
      *     tags={"Admin Chat"},
      *     summary="Admin: delete a conversation with all related messages/attachments",
-     *     security={{"sanctumCookie":{}}},
+     *     security={{"sanctumCookie":{}, "xsrfHeader":{}}},
      *     @OA\Parameter(name="conversation", in="path", required=true, @OA\Schema(type="integer", minimum=1)),
      *     @OA\Response(response=200, description="Conversation deleted"),
      *     @OA\Response(response=401, description="Unauthenticated"),
@@ -430,7 +636,7 @@ class OpenApiSpec
      *     operationId="adminClearAllConversationMessages",
      *     tags={"Admin Chat"},
      *     summary="Admin: clear messages in all conversations",
-     *     security={{"sanctumCookie":{}}},
+     *     security={{"sanctumCookie":{}, "xsrfHeader":{}}},
      *     @OA\Response(response=200, description="All conversation messages cleared"),
      *     @OA\Response(response=401, description="Unauthenticated"),
      *     @OA\Response(response=403, description="Admin access required")
@@ -446,7 +652,7 @@ class OpenApiSpec
      *     operationId="adminDeleteAllConversations",
      *     tags={"Admin Chat"},
      *     summary="Admin: delete all conversations",
-     *     security={{"sanctumCookie":{}}},
+     *     security={{"sanctumCookie":{}, "xsrfHeader":{}}},
      *     @OA\Response(response=200, description="All conversations deleted"),
      *     @OA\Response(response=401, description="Unauthenticated"),
      *     @OA\Response(response=403, description="Admin access required")
@@ -480,7 +686,7 @@ class OpenApiSpec
      *     operationId="adminDeleteMessage",
      *     tags={"Admin Chat"},
      *     summary="Admin: delete specific chat message and its attachments",
-     *     security={{"sanctumCookie":{}}},
+     *     security={{"sanctumCookie":{}, "xsrfHeader":{}}},
      *     @OA\Parameter(name="message", in="path", required=true, @OA\Schema(type="integer", minimum=1)),
      *     @OA\Response(response=200, description="Message deleted"),
      *     @OA\Response(response=401, description="Unauthenticated"),

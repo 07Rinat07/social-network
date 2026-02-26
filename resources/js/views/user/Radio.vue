@@ -397,6 +397,7 @@ import {
 
 const RADIO_FEATURED_PRESETS = RADIO_PRESET_CATALOG
 
+// Shared events for page <-> persistent widget state synchronization.
 const RADIO_FAVORITES_SYNC_EVENT = 'social:radio:favorites-updated'
 const RADIO_FAVORITES_SYNC_SOURCE = 'radio-page'
 const RADIO_PLAYBACK_SYNC_EVENT = 'social:radio:playback-sync'
@@ -642,6 +643,7 @@ export default {
     },
 
     methods: {
+        // Keep collapse controls active only for compact/mobile layout.
         syncMobileLayoutState() {
             if (typeof window === 'undefined') {
                 this.isMobileLayout = false
@@ -695,6 +697,7 @@ export default {
             this.stationSessionStartedAt = 0
         },
 
+        // Maintain an "active segment" stopwatch while station is playing.
         syncStationSessionTimer() {
             const now = Date.now()
             if (!this.currentStation) {
@@ -715,6 +718,7 @@ export default {
             }
         },
 
+        // Align local session counters with playback snapshot received from widget bridge.
         syncStationSessionFromSnapshot(snapshot = {}) {
             const now = Date.now()
             const isPlaying = Boolean(snapshot?.isPlaying)
@@ -734,6 +738,7 @@ export default {
 
         startUiTicker() {
             this.stopUiTicker()
+            // Single heartbeat updates both UI clock and station session timer.
             this.uiNowTimerId = window.setInterval(() => {
                 this.uiNowTimestamp = Date.now()
                 this.syncStationSessionTimer()
@@ -1480,6 +1485,7 @@ export default {
                 return
             }
 
+            // Widget is source-of-truth when cross-page playback bridge is active.
             this.widgetPlaybackBridgeReady = true
             this.unbindPlayerStateEvents()
 

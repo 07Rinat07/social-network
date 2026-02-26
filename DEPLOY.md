@@ -77,7 +77,7 @@ DB_PASSWORD=strong_password_here
 BROADCAST_DRIVER=pusher
 QUEUE_CONNECTION=sync
 SESSION_DRIVER=file
-CACHE_DRIVER=file
+CACHE_DRIVER=database
 
 IPTV_FFMPEG_BIN=/usr/bin/ffmpeg
 
@@ -112,6 +112,7 @@ php artisan optimize:clear
 php artisan config:cache
 php artisan route:cache
 php artisan view:cache
+php artisan l5-swagger:generate
 ```
 
 Если нужен демо-набор пользователей (например, для стенда), запустите отдельно:
@@ -269,6 +270,13 @@ php artisan route:list | grep broadcasting
 sudo supervisorctl status
 ```
 
+Опциональная smoke-проверка API документации:
+
+```bash
+curl -I http://your-domain.com/api/documentation
+curl -I http://your-domain.com/docs/api-docs.json
+```
+
 Проверьте в браузере:
 - логин/регистрация;
 - чаты realtime (онлайн/typing);
@@ -285,11 +293,14 @@ cd /var/www/social-network
 git pull
 composer install --no-dev --optimize-autoloader
 npm ci && npm run build
+npm run test:js
+php artisan test --testsuite=Feature
 php artisan migrate --force
 php artisan optimize:clear
 php artisan config:cache
 php artisan route:cache
 php artisan view:cache
+php artisan l5-swagger:generate
 sudo supervisorctl restart social-network-reverb
 sudo systemctl reload nginx
 ```
