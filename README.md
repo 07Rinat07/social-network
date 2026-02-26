@@ -324,6 +324,11 @@ docker/
 - Конкретный файл тестов: `docker compose exec --user=www-data app php artisan test tests/Feature/ChatFeatureTest.php`
 - Фронт-билд: `docker compose run --rm frontend-build`
 
+Изоляция тестового окружения:
+- Bootstrap тестов (`tests/CreatesApplication.php`) принудительно выставляет testing-env (`sqlite :memory:`, `CACHE_DRIVER=array`, `SESSION_DRIVER=array`, `BROADCAST_DRIVER=log`) до загрузки приложения.
+- Для каждого процесса формируется `TEST_TOKEN`, а cache/storage paths переносятся в отдельный temp-каталог.
+- Это устраняет конфликты и падения тестов из-за смешивания cache/storage между запуском от `root` и `www-data` в Docker.
+
 Рекомендуемый pre-commit check:
 - `php artisan test`
 - `npm run test:js`
@@ -399,6 +404,13 @@ docker/
 - Если уже сломалось:
   - `docker compose exec app sh -lc "chown -R www-data:www-data /var/www/html/storage /var/www/html/bootstrap/cache && find /var/www/html/storage /var/www/html/bootstrap/cache -type d -exec chmod 775 {} \\; && find /var/www/html/storage /var/www/html/bootstrap/cache -type f -exec chmod 664 {} \\;"`
   - `docker compose exec --user=www-data app php artisan optimize:clear`
+
+### `FilesystemIterator::__construct(...storage/framework/testing/disks/...): Permission denied` в тестах
+- Причина: тестовые storage-пути были созданы от другого пользователя (обычно `root`), после чего запуск от `www-data` не может очистить директории.
+- Профилактика: запускайте тесты в Docker от `www-data` и не смешивайте `docker compose exec app ...` и `docker compose exec --user=www-data app ...`.
+- Если уже сломалось:
+  - `docker compose exec app sh -lc "rm -rf /var/www/html/storage/framework/testing/disks && mkdir -p /var/www/html/storage/framework/testing/disks && chown -R www-data:www-data /var/www/html/storage /var/www/html/bootstrap/cache && chmod -R ug+rwX /var/www/html/storage /var/www/html/bootstrap/cache"`
+  - `docker compose exec --user=www-data app php artisan test`
 
 ### Пустая страница / сломанный фронт
 - Локально: запущен ли `npm run dev`.
