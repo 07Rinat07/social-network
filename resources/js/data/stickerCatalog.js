@@ -1,4 +1,65 @@
 const STICKER_IMAGE_BASE = '/stickers/twemoji'
+const STICKER_EMOJI_BY_ID = {
+    wave: '👋',
+    hug: '🤗',
+    handshake: '🤝',
+    salute: '🫡',
+    call_me: '🤙',
+
+    smile: '😀',
+    grin: '😁',
+    tears_joy: '😂',
+    party_face: '🥳',
+    cool: '😎',
+
+    heart_eyes: '😍',
+    red_heart: '❤️',
+    sparkling_heart: '💖',
+    kissing_heart: '😘',
+    couple: '🧑‍🤝‍🧑',
+
+    thumbs_up: '👍',
+    clapping: '👏',
+    muscles: '💪',
+    fire: '🔥',
+    star: '⭐',
+
+    cry: '😢',
+    sob: '😭',
+    pensive: '😔',
+    angry: '😡',
+    facepalm: '🤦',
+
+    laptop: '💻',
+    books: '📚',
+    lightbulb: '💡',
+    rocket: '🚀',
+    target: '🎯',
+
+    pizza: '🍕',
+    coffee: '☕',
+    birthday_cake: '🎂',
+    popcorn: '🍿',
+    burger: '🍔',
+
+    airplane: '✈️',
+    car: '🚗',
+    beach: '🏖️',
+    mountain: '🏔️',
+    tree: '🌳',
+
+    cat: '🐱',
+    dog: '🐶',
+    panda: '🐼',
+    unicorn: '🦄',
+    tiger: '🐯',
+
+    sun: '☀️',
+    moon: '🌙',
+    rainbow: '🌈',
+    snowflake: '❄️',
+    thunder: '⚡',
+}
 
 export const STICKER_CATEGORIES = [
     { id: 'all', labels: { ru: 'Все', en: 'All' } },
@@ -76,12 +137,14 @@ export const STICKER_CATALOG = [
     { id: 'thunder', category: 'weather', labels: { ru: 'Молния', en: 'Thunder' } },
 ].map((sticker) => ({
     ...sticker,
+    emoji: STICKER_EMOJI_BY_ID[sticker.id] || '🧩',
     src: `${STICKER_IMAGE_BASE}/${sticker.id}.png`,
     token: `[sticker:${sticker.id}]`,
 }))
 
 export const STICKER_BY_ID = new Map(STICKER_CATALOG.map((sticker) => [sticker.id, sticker]))
 const STICKER_TOKEN_RE = /\[sticker:([a-z0-9_]+)\]/gi
+const STICKER_INLINE_MARKER = '\u2063'
 
 export function getStickerById(id) {
     const stickerId = String(id || '').trim().toLowerCase()
@@ -107,6 +170,58 @@ export function localizedCategoryLabel(category, locale = 'ru') {
 export function stickerTokenFromId(id) {
     const sticker = getStickerById(id)
     return sticker ? sticker.token : ''
+}
+
+export function stickerEmojiFromId(id, fallback = '🧩') {
+    const sticker = getStickerById(id)
+    return sticker?.emoji || fallback
+}
+
+export function stickerMarkedEmojiFromId(id, fallback = '🧩') {
+    const sticker = getStickerById(id)
+    if (!sticker) {
+        return ''
+    }
+
+    return `${STICKER_INLINE_MARKER}${sticker.emoji || fallback}`
+}
+
+export function replaceStickerTokensWithEmoji(text, fallback = '🧩') {
+    const source = String(text || '')
+    if (source === '') {
+        return ''
+    }
+
+    STICKER_TOKEN_RE.lastIndex = 0
+    return source.replace(STICKER_TOKEN_RE, (_match, stickerId) => stickerEmojiFromId(stickerId, fallback))
+}
+
+export function replaceStickerTokensWithMarkedEmoji(text, fallback = '🧩') {
+    const source = String(text || '')
+    if (source === '') {
+        return ''
+    }
+
+    STICKER_TOKEN_RE.lastIndex = 0
+    return source.replace(STICKER_TOKEN_RE, (_match, stickerId) => stickerMarkedEmojiFromId(stickerId, fallback))
+}
+
+export function replaceMarkedEmojiWithStickerTokens(text) {
+    let source = String(text || '')
+    if (source === '') {
+        return ''
+    }
+
+    for (const sticker of STICKER_CATALOG) {
+        const emoji = String(sticker?.emoji || '')
+        if (emoji === '') {
+            continue
+        }
+
+        source = source.split(`${STICKER_INLINE_MARKER}${emoji}`).join(sticker.token)
+    }
+
+    return source.split(STICKER_INLINE_MARKER).join('')
 }
 
 export function parseStickerTextSegments(text) {

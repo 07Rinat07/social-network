@@ -1400,7 +1400,13 @@ import MediaPlayer from '../../components/MediaPlayer.vue'
 import StickerPicker from '../../components/stickers/StickerPicker.vue'
 import StickerRichText from '../../components/stickers/StickerRichText.vue'
 import { applyImagePreviewFallback, resetImagePreviewFallback } from '../../utils/mediaPreview'
-import { stickerTextToPreview, stickerTokenFromId } from '../../data/stickerCatalog'
+import {
+    replaceMarkedEmojiWithStickerTokens,
+    replaceStickerTokensWithMarkedEmoji,
+    stickerMarkedEmojiFromId,
+    stickerTextToPreview,
+    stickerTokenFromId,
+} from '../../data/stickerCatalog'
 
 const CHAT_SOUND_STORAGE_KEY = 'chat_notification_settings_v1'
 const CHAT_UI_STORAGE_KEY = 'chat_ui_settings_v1'
@@ -1583,7 +1589,7 @@ export default {
         },
 
         composerStickerPreviewText() {
-            return this.normalizeStickerAliases(this.messageBody)
+            return this.normalizeStickerTransport(this.messageBody)
         },
 
         showComposerStickerPreview() {
@@ -2330,12 +2336,22 @@ export default {
         },
 
         handleComposerInput() {
+            const normalizedBody = this.normalizeStickerAliases(this.messageBody)
+            if (normalizedBody !== this.messageBody) {
+                this.messageBody = normalizedBody
+            }
             this.notifyTypingActivity()
         },
 
         normalizeStickerAliases(text) {
-            return String(text || '')
-                .replace(/\[sticker:file\]/gi, '[sticker:fire]')
+            return replaceStickerTokensWithMarkedEmoji(
+                String(text || '')
+                    .replace(/\[sticker:file\]/gi, '[sticker:fire]')
+            )
+        },
+
+        normalizeStickerTransport(text) {
+            return replaceMarkedEmojiWithStickerTokens(this.normalizeStickerAliases(text))
         },
 
         normalizePresenceUser(user) {
@@ -3932,8 +3948,9 @@ export default {
                 return
             }
 
+            const emoji = stickerMarkedEmojiFromId(sticker?.id)
             const suffix = this.messageBody.trim() === '' ? '' : ' '
-            this.messageBody = `${this.messageBody}${suffix}${token}`
+            this.messageBody = `${this.messageBody}${suffix}${emoji}`
             this.showStickerTray = false
             this.notifyTypingActivity({ immediate: true })
         },
@@ -5173,7 +5190,7 @@ export default {
             this.notifyTypingActivity({ immediate: true, isSending: true })
             try {
                 let response
-                const normalizedBody = this.normalizeStickerAliases(this.messageBody)
+                const normalizedBody = this.normalizeStickerTransport(this.messageBody)
 
                 if (this.selectedFiles.length > 0) {
                     const formData = new FormData()
@@ -5716,15 +5733,6 @@ export default {
 
             const messageId = Number(message.id)
             if (!Number.isFinite(messageId) || this.isMessageDeleting(messageId) || this.isBulkDeletingMessages) {
-                return
-            }
-
-            const selectedIds = this.selectedDeletableMessageIds
-                .map((id) => Number(id))
-                .filter((id) => Number.isFinite(id) && id > 0)
-            const bulkSelectedCount = selectedIds.length
-            if (bulkSelectedCount > 0 && this.isMessageSelected(messageId)) {
-                await this.deleteSelectedMessages()
                 return
             }
 

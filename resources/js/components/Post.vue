@@ -127,7 +127,12 @@
 
         <div v-if="isRepostOpened" class="repost-box">
             <input v-model.trim="title" class="input-field" type="text" placeholder="Заголовок репоста">
-            <textarea v-model.trim="content" class="textarea-field" placeholder="Комментарий к репосту"></textarea>
+            <textarea
+                v-model.trim="content"
+                class="textarea-field"
+                placeholder="Комментарий к репосту"
+                @input="handleRepostInput"
+            ></textarea>
             <button class="btn btn-outline btn-sm" type="button" @click.prevent="toggleRepostStickerTray">
                 {{ showRepostStickerTray ? 'Скрыть стикеры' : 'Стикеры' }}
             </button>
@@ -152,6 +157,7 @@
                     class="input-field"
                     type="text"
                     placeholder="Ваш комментарий..."
+                    @input="handleCommentInput"
                 >
 
                 <div class="emoji-row">
@@ -210,7 +216,12 @@ import MediaPlayer from './MediaPlayer.vue'
 import StickerPicker from './stickers/StickerPicker.vue'
 import StickerRichText from './stickers/StickerRichText.vue'
 import { applyImagePreviewFallback, resetImagePreviewFallback } from '../utils/mediaPreview'
-import { stickerTokenFromId } from '../data/stickerCatalog'
+import {
+    replaceMarkedEmojiWithStickerTokens,
+    replaceStickerTokensWithMarkedEmoji,
+    stickerMarkedEmojiFromId,
+    stickerTokenFromId,
+} from '../data/stickerCatalog'
 
 export default {
     name: 'Post',
@@ -391,6 +402,31 @@ export default {
             this.body = `${this.body}${emoji}`
         },
 
+        handleCommentInput() {
+            const normalized = this.normalizeStickerAliases(this.body)
+            if (normalized !== this.body) {
+                this.body = normalized
+            }
+        },
+
+        handleRepostInput() {
+            const normalized = this.normalizeStickerAliases(this.content)
+            if (normalized !== this.content) {
+                this.content = normalized
+            }
+        },
+
+        normalizeStickerAliases(text) {
+            return replaceStickerTokensWithMarkedEmoji(
+                String(text || '')
+                    .replace(/\[sticker:file\]/gi, '[sticker:fire]')
+            )
+        },
+
+        normalizeStickerTransport(text) {
+            return replaceMarkedEmojiWithStickerTokens(this.normalizeStickerAliases(text))
+        },
+
         toggleCommentStickerTray() {
             this.showCommentStickerTray = !this.showCommentStickerTray
         },
@@ -401,8 +437,9 @@ export default {
                 return
             }
 
+            const emoji = stickerMarkedEmojiFromId(sticker?.id)
             const suffix = this.body.trim() === '' ? '' : ' '
-            this.body = `${this.body}${suffix}${token}`
+            this.body = `${this.body}${suffix}${emoji}`
             this.showCommentStickerTray = false
         },
 
@@ -416,18 +453,20 @@ export default {
                 return
             }
 
+            const emoji = stickerMarkedEmojiFromId(sticker?.id)
             const suffix = this.content.trim() === '' ? '' : ' '
-            this.content = `${this.content}${suffix}${token}`
+            this.content = `${this.content}${suffix}${emoji}`
             this.showRepostStickerTray = false
         },
 
         storeComment(post) {
-            if (!this.body) {
+            const normalizedBody = this.normalizeStickerTransport(this.body)
+            if (!normalizedBody.trim()) {
                 return
             }
 
             const commentId = this.comment ? this.comment.id : null
-            axios.post(`/api/posts/${post.id}/comment`, {body: this.body, parent_id: commentId})
+            axios.post(`/api/posts/${post.id}/comment`, {body: normalizedBody, parent_id: commentId})
                 .then((response) => {
                     this.body = ''
                     this.showCommentStickerTray = false
@@ -499,11 +538,12 @@ export default {
         },
 
         repost(post) {
-            if (this.isPersonal() || !this.title || !this.content) {
+            const normalizedContent = this.normalizeStickerTransport(this.content)
+            if (this.isPersonal() || !this.title || !normalizedContent.trim()) {
                 return
             }
 
-            axios.post(`/api/posts/${post.id}/repost`, {title: this.title, content: this.content})
+            axios.post(`/api/posts/${post.id}/repost`, {title: this.title, content: normalizedContent})
                 .then(() => {
                     this.title = ''
                     this.content = ''

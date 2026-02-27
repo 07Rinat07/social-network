@@ -101,6 +101,7 @@
                     v-model.trim="content"
                     class="textarea-field"
                     :placeholder="$t('personal.postBodyPlaceholder')"
+                    @input="handlePostContentInput"
                 ></textarea>
 
                 <div class="form-grid" style="background: #fff; border: 1px solid var(--line); border-radius: 12px; padding: 0.65rem;">
@@ -213,7 +214,12 @@ import Post from '../../components/Post.vue'
 import Stat from '../../components/Stat.vue'
 import StickerPicker from '../../components/stickers/StickerPicker.vue'
 import { applyImagePreviewFallback, resetImagePreviewFallback } from '../../utils/mediaPreview'
-import { stickerTokenFromId } from '../../data/stickerCatalog'
+import {
+    replaceMarkedEmojiWithStickerTokens,
+    replaceStickerTokensWithMarkedEmoji,
+    stickerMarkedEmojiFromId,
+    stickerTokenFromId,
+} from '../../data/stickerCatalog'
 
 export default {
     name: 'Personal',
@@ -342,6 +348,24 @@ export default {
             this.content = `${this.content}${emoji}`
         },
 
+        handlePostContentInput() {
+            const normalized = this.normalizeStickerAliases(this.content)
+            if (normalized !== this.content) {
+                this.content = normalized
+            }
+        },
+
+        normalizeStickerAliases(text) {
+            return replaceStickerTokensWithMarkedEmoji(
+                String(text || '')
+                    .replace(/\[sticker:file\]/gi, '[sticker:fire]')
+            )
+        },
+
+        normalizeStickerTransport(text) {
+            return replaceMarkedEmojiWithStickerTokens(this.normalizeStickerAliases(text))
+        },
+
         toggleStickerTray() {
             this.showStickerTray = !this.showStickerTray
         },
@@ -352,8 +376,9 @@ export default {
                 return
             }
 
+            const emoji = stickerMarkedEmojiFromId(sticker?.id)
             const suffix = this.content.trim() === '' ? '' : ' '
-            this.content = `${this.content}${suffix}${token}`
+            this.content = `${this.content}${suffix}${emoji}`
             this.showStickerTray = false
         },
 
@@ -476,9 +501,10 @@ export default {
             this.isPublishing = true
 
             try {
+                const normalizedContent = this.normalizeStickerTransport(this.content)
                 const response = await axios.post('/api/posts', {
                     title: this.title,
-                    content: this.content,
+                    content: normalizedContent,
                     media_ids: this.uploadedMedia.map((item) => item.id),
                     is_public: this.postOptions.is_public,
                     show_in_feed: this.postOptions.is_public ? this.postOptions.show_in_feed : false,

@@ -3223,23 +3223,43 @@ img.avatar {
 
 .sticker-rich-text__img {
     display: inline-block;
-    width: 1.45rem;
-    height: 1.45rem;
+    width: 1.6rem;
+    height: 1.6rem;
     vertical-align: middle;
     margin: 0.02rem 0.08rem 0.08rem 0;
     object-fit: contain;
+    filter: drop-shadow(0 0.18rem 0.28rem rgba(26, 95, 181, 0.2));
+    transform-origin: center 78%;
+    animation: sticker-float 2.8s ease-in-out infinite;
 }
 
 .post-content .sticker-rich-text__img,
 .comment-body .sticker-rich-text__img,
 .chat-message-body .sticker-rich-text__img {
-    width: 1.72rem;
-    height: 1.72rem;
+    width: 1.98rem;
+    height: 1.98rem;
 }
 
 .widget-chat-message__body .sticker-rich-text__img {
-    width: 1.34rem;
-    height: 1.34rem;
+    width: 1.62rem;
+    height: 1.62rem;
+}
+
+@keyframes sticker-float {
+    0%,
+    100% {
+        transform: translateY(0) scale(1);
+    }
+
+    50% {
+        transform: translateY(-0.08rem) scale(1.04);
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .sticker-rich-text__img {
+        animation: none;
+    }
 }
 
 .sticker-picker {

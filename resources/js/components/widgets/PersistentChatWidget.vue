@@ -507,7 +507,7 @@
                             class="textarea-field widget-chat-composer__input"
                             :placeholder="$t('chats.enterMessage')"
                             :disabled="composerDisabled"
-                            @input="notifyTypingActivity"
+                            @input="handleComposerInput"
                             @focus="notifyTypingActivity"
                             @blur="notifyTypingStopped"
                             @keydown.enter.exact.prevent="sendMessage"
@@ -861,7 +861,13 @@ import MediaLightbox from '../MediaLightbox.vue'
 import MediaPlayer from '../MediaPlayer.vue'
 import StickerPicker from '../stickers/StickerPicker.vue'
 import StickerRichText from '../stickers/StickerRichText.vue'
-import { stickerTextToPreview, stickerTokenFromId } from '../../data/stickerCatalog'
+import {
+    replaceMarkedEmojiWithStickerTokens,
+    replaceStickerTokensWithMarkedEmoji,
+    stickerMarkedEmojiFromId,
+    stickerTextToPreview,
+    stickerTokenFromId,
+} from '../../data/stickerCatalog'
 
 const CHAT_WIDGET_STORAGE_PREFIX = 'social.widgets.chat'
 const CHAT_SHARED_SYNC_STORAGE_PREFIX = 'social.chat.shared'
@@ -3471,6 +3477,26 @@ export default {
             this.notifyTypingActivity({ immediate: true })
         },
 
+        handleComposerInput() {
+            const normalizedBody = this.normalizeStickerAliases(this.messageBody)
+            if (normalizedBody !== this.messageBody) {
+                this.messageBody = normalizedBody
+            }
+
+            this.notifyTypingActivity()
+        },
+
+        normalizeStickerAliases(text) {
+            return replaceStickerTokensWithMarkedEmoji(
+                String(text || '')
+                    .replace(/\[sticker:file\]/gi, '[sticker:fire]')
+            )
+        },
+
+        normalizeStickerTransport(text) {
+            return replaceMarkedEmojiWithStickerTokens(this.normalizeStickerAliases(text))
+        },
+
         toggleComposerTools() {
             if (!this.activeConversation || this.activeConversation?.is_blocked) {
                 this.showComposerTools = false
@@ -3499,8 +3525,9 @@ export default {
                 return
             }
 
+            const emoji = stickerMarkedEmojiFromId(sticker?.id)
             const suffix = this.messageBody.trim() === '' ? '' : ' '
-            this.messageBody = `${this.messageBody}${suffix}${token}`
+            this.messageBody = `${this.messageBody}${suffix}${emoji}`
             this.showStickerTray = false
             this.notifyTypingActivity({ immediate: true })
         },
@@ -4591,9 +4618,10 @@ export default {
 
             try {
                 let response
+                const normalizedBody = this.normalizeStickerTransport(this.messageBody)
                 if (this.selectedFiles.length > 0) {
                     const formData = new FormData()
-                    formData.append('body', this.messageBody)
+                    formData.append('body', normalizedBody)
 
                     for (const item of this.selectedFiles) {
                         formData.append('files[]', item.file)
@@ -4606,7 +4634,7 @@ export default {
                     })
                 } else {
                     response = await axios.post(`/api/chats/${this.activeConversation.id}/messages`, {
-                        body: this.messageBody,
+                        body: normalizedBody,
                     })
                 }
 
