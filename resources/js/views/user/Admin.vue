@@ -183,9 +183,16 @@
                             <svg viewBox="0 0 760 250" role="img" aria-hidden="true" preserveAspectRatio="none">
                                 <defs>
                                     <linearGradient id="admin-dashboard-subscriptions-gradient" x1="0" y1="0" x2="0" y2="1">
-                                        <stop offset="0%" stop-color="rgba(15, 108, 242, 0.35)" />
-                                        <stop offset="100%" stop-color="rgba(15, 108, 242, 0.03)" />
+                                        <stop offset="0%" stop-color="rgba(76, 240, 255, 0.4)" />
+                                        <stop offset="100%" stop-color="rgba(76, 240, 255, 0.02)" />
                                     </linearGradient>
+                                    <filter id="admin-dashboard-neon-glow">
+                                        <feGaussianBlur stdDeviation="3.2" result="coloredBlur" />
+                                        <feMerge>
+                                            <feMergeNode in="coloredBlur" />
+                                            <feMergeNode in="SourceGraphic" />
+                                        </feMerge>
+                                    </filter>
                                 </defs>
 
                                 <path
@@ -197,10 +204,11 @@
                                     v-if="dashboardSubscriptionsLinePath"
                                     :d="dashboardSubscriptionsLinePath"
                                     fill="none"
-                                    stroke="rgba(15, 108, 242, 0.95)"
+                                    stroke="rgba(76, 240, 255, 0.95)"
                                     stroke-width="4"
                                     stroke-linecap="round"
                                     stroke-linejoin="round"
+                                    filter="url(#admin-dashboard-neon-glow)"
                                 />
                                 <circle
                                     v-for="point in dashboardSubscriptionsPoints"
@@ -208,7 +216,10 @@
                                     :cx="point.x"
                                     :cy="point.y"
                                     r="4"
-                                    fill="#0f6cf2"
+                                    fill="#4cf0ff"
+                                    stroke="#08142d"
+                                    stroke-width="1.2"
+                                    filter="url(#admin-dashboard-neon-glow)"
                                 />
                             </svg>
                         </div>
