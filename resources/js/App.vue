@@ -105,6 +105,19 @@ import PersistentRadioWidget from './components/widgets/PersistentRadioWidget.vu
 import PersistentChatWidget from './components/widgets/PersistentChatWidget.vue'
 import globalTropicalBeachBackground from '../images/home-tropical-beach.jpg'
 
+const ACTIVITY_HEARTBEAT_SECONDS = 30
+const ACTIVITY_INIT_SECONDS = 5
+const ACTIVITY_FEATURE_BY_ROUTE = {
+    home: 'social',
+    'user.index': 'social',
+    'user.show': 'social',
+    'user.feed': 'social',
+    'user.personal': 'social',
+    'chat.index': 'chats',
+    'radio.index': 'radio',
+    'iptv.index': 'iptv',
+}
+
 export default {
     name: 'App',
     components: {
@@ -121,22 +134,56 @@ export default {
             unreadPollingTimerId: null,
             authSyncPromise: null,
             failedAvatarUrls: {},
+            activityHeartbeatTimerId: null,
+            activityCurrentFeature: null,
+            activityCurrentSessionId: '',
+            activitySyncPromise: null,
+            visibilityChangeHandler: null,
         }
     },
 
     mounted() {
         this.applyGlobalBackground()
         this.syncAuthState()
+
+        if (typeof document !== 'undefined') {
+            this.visibilityChangeHandler = () => {
+                this.syncActivityTracking()
+            }
+
+            document.addEventListener('visibilitychange', this.visibilityChangeHandler, {passive: true})
+        }
+
+        this.startActivityHeartbeat()
+        this.syncActivityTracking()
     },
 
     beforeUnmount() {
         this.clearGlobalBackground()
         this.stopUnreadPolling()
+        this.stopActivityHeartbeat()
+        this.syncActivityTracking({forceStop: true})
+
+        if (typeof document !== 'undefined' && this.visibilityChangeHandler) {
+            document.removeEventListener('visibilitychange', this.visibilityChangeHandler)
+        }
     },
 
     watch: {
         $route() {
             this.syncAuthState()
+            this.syncActivityTracking()
+        },
+
+        canUsePersistentWidgets(next) {
+            if (next) {
+                this.startActivityHeartbeat()
+                this.syncActivityTracking()
+                return
+            }
+
+            this.stopActivityHeartbeat()
+            this.syncActivityTracking({forceStop: true})
         }
     },
 
@@ -255,6 +302,142 @@ export default {
             return source.slice(0, 1).toUpperCase()
         },
 
+        resolveActivityFeature(routeName) {
+            const key = String(routeName || '')
+            return ACTIVITY_FEATURE_BY_ROUTE[key] ?? null
+        },
+
+        generateActivitySessionId(feature) {
+            const safeFeature = String(feature || '').replace(/[^a-z0-9_-]/gi, '').slice(0, 20) || 'feature'
+            const timestampPart = Date.now().toString(36)
+            let randomPart = ''
+
+            if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
+                randomPart = crypto.randomUUID().replace(/-/g, '').slice(0, 24)
+            } else {
+                randomPart = `${Math.random().toString(36).slice(2, 14)}${Math.random().toString(36).slice(2, 10)}`
+            }
+
+            return `${safeFeature}:${timestampPart}:${randomPart}`.slice(0, 120)
+        },
+
+        startActivityHeartbeat() {
+            if (typeof window === 'undefined' || this.activityHeartbeatTimerId) {
+                return
+            }
+
+            this.activityHeartbeatTimerId = window.setInterval(() => {
+                this.sendPeriodicActivityHeartbeat()
+            }, ACTIVITY_HEARTBEAT_SECONDS * 1000)
+        },
+
+        stopActivityHeartbeat() {
+            if (!this.activityHeartbeatTimerId || typeof window === 'undefined') {
+                return
+            }
+
+            window.clearInterval(this.activityHeartbeatTimerId)
+            this.activityHeartbeatTimerId = null
+        },
+
+        async sendActivityHeartbeat({feature, sessionId, elapsedSeconds, ended = false}) {
+            if (!this.canUsePersistentWidgets) {
+                return
+            }
+
+            const safeFeature = String(feature || '').trim()
+            const safeSessionId = String(sessionId || '').trim()
+            if (!safeFeature || !safeSessionId) {
+                return
+            }
+
+            const rawSeconds = Number(elapsedSeconds || ACTIVITY_HEARTBEAT_SECONDS)
+            const safeSeconds = Number.isFinite(rawSeconds)
+                ? Math.max(1, Math.min(Math.round(rawSeconds), 300))
+                : ACTIVITY_HEARTBEAT_SECONDS
+
+            try {
+                await axios.post('/api/activity/heartbeat', {
+                    feature: safeFeature,
+                    session_id: safeSessionId,
+                    elapsed_seconds: safeSeconds,
+                    ended: Boolean(ended),
+                })
+            } catch (_error) {
+                // Heartbeats are best-effort and must not block UI.
+            }
+        },
+
+        async sendPeriodicActivityHeartbeat() {
+            if (!this.activityCurrentFeature || !this.activityCurrentSessionId) {
+                return
+            }
+
+            if (typeof document !== 'undefined' && document.hidden) {
+                return
+            }
+
+            await this.sendActivityHeartbeat({
+                feature: this.activityCurrentFeature,
+                sessionId: this.activityCurrentSessionId,
+                elapsedSeconds: ACTIVITY_HEARTBEAT_SECONDS,
+                ended: false,
+            })
+        },
+
+        async syncActivityTracking(options = {}) {
+            if (this.activitySyncPromise) {
+                return this.activitySyncPromise
+            }
+
+            this.activitySyncPromise = (async () => {
+                const forceStop = Boolean(options?.forceStop)
+                const canTrack = this.canUsePersistentWidgets
+                    && !forceStop
+                    && (typeof document === 'undefined' || !document.hidden)
+
+                const nextFeature = canTrack
+                    ? this.resolveActivityFeature(this.$route?.name)
+                    : null
+
+                if (nextFeature === this.activityCurrentFeature) {
+                    return
+                }
+
+                const previousFeature = this.activityCurrentFeature
+                const previousSessionId = this.activityCurrentSessionId
+
+                this.activityCurrentFeature = nextFeature
+                this.activityCurrentSessionId = nextFeature
+                    ? this.generateActivitySessionId(nextFeature)
+                    : ''
+
+                if (previousFeature && previousSessionId) {
+                    await this.sendActivityHeartbeat({
+                        feature: previousFeature,
+                        sessionId: previousSessionId,
+                        elapsedSeconds: ACTIVITY_INIT_SECONDS,
+                        ended: true,
+                    })
+                }
+
+                if (nextFeature && this.activityCurrentSessionId) {
+                    await this.sendActivityHeartbeat({
+                        feature: nextFeature,
+                        sessionId: this.activityCurrentSessionId,
+                        elapsedSeconds: ACTIVITY_INIT_SECONDS,
+                        ended: false,
+                    })
+                }
+            })()
+
+            try {
+                await this.activitySyncPromise
+            } finally {
+                this.activitySyncPromise = null
+            }
+        },
+
         async syncAuthState() {
             if (this.authSyncPromise) {
                 return this.authSyncPromise
@@ -269,15 +452,21 @@ export default {
                     if (this.isEmailVerified) {
                         this.startUnreadPolling()
                         await this.loadChatUnreadSummary()
+                        this.startActivityHeartbeat()
+                        await this.syncActivityTracking()
                     } else {
                         this.chatUnreadTotal = 0
                         this.stopUnreadPolling()
+                        this.stopActivityHeartbeat()
+                        await this.syncActivityTracking({forceStop: true})
                     }
                 } catch (error) {
                     this.user = null
                     this.isAuthenticated = false
                     this.chatUnreadTotal = 0
                     this.stopUnreadPolling()
+                    this.stopActivityHeartbeat()
+                    await this.syncActivityTracking({forceStop: true})
                 }
             })()
 
@@ -349,6 +538,7 @@ export default {
 
         async logout() {
             try {
+                await this.syncActivityTracking({forceStop: true})
                 await axios.post('/logout')
             } finally {
                 this.user = null
@@ -356,6 +546,7 @@ export default {
                 this.chatUnreadTotal = 0
                 this.authSyncPromise = null
                 this.stopUnreadPolling()
+                this.stopActivityHeartbeat()
                 await this.$router.push(this.localizedRoute('home'))
             }
         }

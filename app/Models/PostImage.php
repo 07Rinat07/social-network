@@ -41,13 +41,13 @@ class PostImage extends Model
         $disk = (string) ($this->storage_disk ?: 'public');
 
         if ($this->shouldServeThroughApi($disk)) {
-            return route('media.post-images.show', ['postImage' => $this->id]);
+            return route('media.post-images.show', ['postImage' => $this->id], false);
         }
 
         try {
             return Storage::disk($disk)->url($this->path);
         } catch (Throwable) {
-            return route('media.post-images.show', ['postImage' => $this->id]);
+            return route('media.post-images.show', ['postImage' => $this->id], false);
         }
     }
 

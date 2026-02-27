@@ -42,8 +42,18 @@ use OpenApi\Annotations as OA;
  * )
  *
  * @OA\Tag(
+ *     name="Activity",
+ *     description="User activity heartbeat tracking"
+ * )
+ *
+ * @OA\Tag(
  *     name="Admin Chat",
  *     description="Admin chat moderation endpoints"
+ * )
+ *
+ * @OA\Tag(
+ *     name="Admin Analytics",
+ *     description="Admin dashboard analytics and exports"
  * )
  *
  * @OA\SecurityScheme(
@@ -695,6 +705,94 @@ class OpenApiSpec
      * )
      */
     public function adminDeleteMessage(): void
+    {
+    }
+
+    /**
+     * @OA\Post(
+     *     path="/api/activity/heartbeat",
+     *     operationId="storeActivityHeartbeat",
+     *     tags={"Activity"},
+     *     summary="Store user activity heartbeat for current feature/session",
+     *     security={{"sanctumCookie":{}, "xsrfHeader":{}}},
+     *     @OA\RequestBody(
+     *         required=true,
+     *         @OA\JsonContent(
+     *             required={"feature","session_id"},
+     *             @OA\Property(property="feature", type="string", enum={"social","chats","radio","iptv"}, example="social"),
+     *             @OA\Property(property="session_id", type="string", minLength=8, maxLength=120, example="social:lrzjg3h6:73ca9ba8a6674d1f8cc53a99"),
+     *             @OA\Property(property="elapsed_seconds", type="integer", minimum=1, maximum=300, nullable=true, example=30),
+     *             @OA\Property(property="ended", type="boolean", nullable=true, example=false)
+     *         )
+     *     ),
+     *     @OA\Response(response=200, description="Heartbeat accepted"),
+     *     @OA\Response(response=401, description="Unauthenticated"),
+     *     @OA\Response(response=422, description="Validation error")
+     * )
+     */
+    public function storeActivityHeartbeat(): void
+    {
+    }
+
+    /**
+     * @OA\Get(
+     *     path="/api/admin/summary",
+     *     operationId="adminSummary",
+     *     tags={"Admin Analytics"},
+     *     summary="Admin summary counters",
+     *     security={{"sanctumCookie":{}}},
+     *     @OA\Response(response=200, description="Summary payload"),
+     *     @OA\Response(response=401, description="Unauthenticated"),
+     *     @OA\Response(response=403, description="Admin access required")
+     * )
+     */
+    public function adminSummary(): void
+    {
+    }
+
+    /**
+     * @OA\Get(
+     *     path="/api/admin/dashboard",
+     *     operationId="adminDashboard",
+     *     tags={"Admin Analytics"},
+     *     summary="Admin analytics dashboard data for selected year and optional date range",
+     *     security={{"sanctumCookie":{}}},
+     *     @OA\Parameter(name="year", in="query", required=false, @OA\Schema(type="integer", minimum=2000)),
+     *     @OA\Parameter(name="date_from", in="query", required=false, description="YYYY-MM-DD", @OA\Schema(type="string", format="date")),
+     *     @OA\Parameter(name="date_to", in="query", required=false, description="YYYY-MM-DD", @OA\Schema(type="string", format="date")),
+     *     @OA\Response(response=200, description="Dashboard analytics payload"),
+     *     @OA\Response(response=401, description="Unauthenticated"),
+     *     @OA\Response(response=403, description="Admin access required"),
+     *     @OA\Response(response=422, description="Validation error")
+     * )
+     */
+    public function adminDashboard(): void
+    {
+    }
+
+    /**
+     * @OA\Get(
+     *     path="/api/admin/dashboard/export",
+     *     operationId="adminDashboardExport",
+     *     tags={"Admin Analytics"},
+     *     summary="Export admin dashboard analytics (XLS or JSON) for selected range",
+     *     security={{"sanctumCookie":{}}},
+     *     @OA\Parameter(name="year", in="query", required=false, @OA\Schema(type="integer", minimum=2000)),
+     *     @OA\Parameter(name="date_from", in="query", required=false, description="YYYY-MM-DD", @OA\Schema(type="string", format="date")),
+     *     @OA\Parameter(name="date_to", in="query", required=false, description="YYYY-MM-DD", @OA\Schema(type="string", format="date")),
+     *     @OA\Parameter(name="format", in="query", required=false, @OA\Schema(type="string", enum={"xls","json"})),
+     *     @OA\Response(
+     *         response=200,
+     *         description="Export stream",
+     *         @OA\MediaType(mediaType="application/vnd.ms-excel", @OA\Schema(type="string", format="binary")),
+     *         @OA\MediaType(mediaType="application/json", @OA\Schema(type="string"))
+     *     ),
+     *     @OA\Response(response=401, description="Unauthenticated"),
+     *     @OA\Response(response=403, description="Admin access required"),
+     *     @OA\Response(response=422, description="Validation error")
+     * )
+     */
+    public function adminDashboardExport(): void
     {
     }
 }

@@ -46,6 +46,8 @@
                             class="media-preview"
                             :src="media.url"
                             :alt="post.title"
+                            loading="lazy"
+                            decoding="async"
                             @error="handlePreviewError($event, post.title || 'media')"
                             @load="handlePreviewLoad"
                         >
@@ -92,6 +94,8 @@
                             class="media-preview"
                             :src="media.url"
                             :alt="post.reposted_post.title"
+                            loading="lazy"
+                            decoding="async"
                             @error="handlePreviewError($event, post.reposted_post.title || 'media')"
                             @load="handlePreviewLoad"
                         >

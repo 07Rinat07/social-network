@@ -29,7 +29,8 @@ SPA-социальная сеть на `Laravel + Vue` с realtime-чатами,
 - социальные публикации с медиа, комментариями, репостами и лайками;
 - realtime-чаты с presence-статусами и typing-индикаторами;
 - радио и IPTV-плеер (direct/proxy/transcode/relay режимы);
-- админ-панель для модерации и настройки контента;
+- админ-панель для модерации, настройки и аналитического дашборда;
+- серверный heartbeat-трекинг пользовательской активности по модулям;
 - мультиязычный интерфейс `RU/EN` с SEO URL (`/ru/...`, `/en/...`).
 
 ## Ключевая функциональность
@@ -73,6 +74,18 @@ SPA-социальная сеть на `Laravel + Vue` с realtime-чатами,
 - Виджет времени и погоды для городов (Нью-Йорк, Москва, Минск, Астана, Анкара, Уральск).
 - Источник погоды: `Open-Meteo` через серверный запрос.
 - В админке редактирование контента главной отдельно для `RU` и `EN`.
+
+### Админ-аналитика и heartbeat
+- Админ-дашборд с KPI, графиками подписок/активности и выбором периода `date_from/date_to` (в рамках выбранного года).
+- Сравнение предпочтений пользователей по `social/chats/radio/iptv`.
+- Выгрузка фактической аналитики за выбранный диапазон в `Excel (.xls)` и `JSON` (скачивание на локальный компьютер/смартфон через браузер).
+- Серверный endpoint heartbeat: `POST /api/activity/heartbeat` (auth + verified).
+- Агрегация активности в таблицы:
+  - `user_activity_sessions` (сессии пользователя по feature),
+  - `user_activity_daily_stats` (дневная агрегированная статистика).
+- Для дашборда автоматически выбирается модель аналитики:
+  - `actions` (fallback по действиям),
+  - `time_minutes` (если доступны heartbeat-данные за период).
 
 ### Мультиязычность и SEO
 - Локализованные роуты: `/ru/...` и `/en/...`.
@@ -149,6 +162,7 @@ SPA-социальная сеть на `Laravel + Vue` с realtime-чатами,
 | IPTV | Загрузка плейлистов, proxy/transcode/relay сессии | `app/Http/Controllers/IptvController.php`, `app/Services/Iptv*` |
 | Radio | Поиск, подборки, воспроизведение, избранное и их распределение | `app/Http/Controllers/RadioController.php`, `app/Console/Commands/DistributeAdminRadioFavorites.php` |
 | Админка | Модерация пользователей/контента/обращений, настройки сайта | `/api/admin/*`, `app/Http/Controllers/AdminController.php` |
+| Аналитика активности | Heartbeat трекинг сессий и агрегаты по feature | `app/Http/Controllers/ActivityHeartbeatController.php`, `app/Services/AdminDashboardService.php` |
 | Контент главной | RU/EN контент, world overview (время/погода) | `app/Http/Controllers/SiteSettingController.php`, `app/Services/WorldOverviewService.php` |
 | i18n + SEO | RU/EN маршруты, runtime перевод, SEO мета | `resources/js/router/index.js`, `resources/js/i18n` |
 
@@ -224,8 +238,14 @@ docker/
   - блок private/reserved IP и `localhost`.
 
 ### Ограничение нагрузки
-- Глобальный API rate limit: `60` запросов/минута на пользователя/IP.
+- API throttling настроен по маршрутам:
+  - авторизованные API-запросы: `throttle:600,1`;
+  - публичные `site/home-content` и `site/world-overview`: `throttle:240,1`;
+  - feedback anti-spam: `throttle:20,1`;
+  - media (`post-images`, `avatars`): `throttle:600,1`;
+  - IPTV segment/playlist delivery (public relay/proxy/transcode): `throttle:1200,1`.
 - Отправка email verification notification: `throttle:6,1`.
+- Heartbeat endpoint: `throttle:120,1` на `POST /api/activity/heartbeat`.
 - IPTV сессии ограничены по количеству и TTL (proxy/transcode).
 
 ## Технологический стек
@@ -248,7 +268,7 @@ docker/
 3. Настройте подключение к БД в `.env`.
 4. Выполните инициализацию:
    - `php artisan key:generate`
-   - `php artisan migrate --seed` (или `php artisan db:seed --class=IptvSeedSeeder` для IPTV каналов)
+   - `php artisan migrate --seed` (включая демо-контент: пользователи, посты, комментарии, лайки, изображения)
    - `php artisan storage:link`
 5. Запустите процессы:
    - `php artisan serve`
@@ -268,6 +288,7 @@ docker/
 
 В Docker:
 - миграции запускаются автоматически (`RUN_MIGRATIONS=1`);
+- при пустой БД (например после `docker compose down -v`) сиды запускаются автоматически (`RUN_SEEDERS_ON_EMPTY_DB=1`);
 - `ffmpeg` уже установлен в образе `app`;
 - отдельный websocket сервис поднимает Reverb на `6001`.
 - при первом запуске зависимости (`composer`/`npm`) могут ставиться несколько минут, это нормально.
@@ -275,6 +296,7 @@ docker/
 ### Полезные Docker команды
 - Миграции вручную: `docker compose exec --user=www-data app php artisan migrate --seed`
 - Сиды: `docker compose exec --user=www-data app php artisan db:seed`
+- Демо-наполнение соцконтентом: `docker compose exec --user=www-data app php artisan db:seed --class=DemoSocialContentSeeder`
 - Наполнение IPTV каналов: `docker compose exec --user=www-data app php artisan db:seed --class=IptvSeedSeeder`
 - Проверка раздачи радио-избранного админа: `docker compose exec --user=www-data app php artisan radio:distribute-admin-favorites --dry-run`
 - Тесты (без пересборки): `docker compose --profile test run --rm --no-build test`
@@ -303,17 +325,23 @@ docker/
 - Realtime: `REVERB_*`, `VITE_REVERB_*`
 - IPTV: `IPTV_FFMPEG_BIN`
 - Radio API: `RADIO_BROWSER_BASE_URL`
-- Docker Compose (host only): `WEB_FORWARD_PORT`, `DB_FORWARD_PORT`, `VITE_FORWARD_PORT`, `REVERB_FORWARD_PORT`, `APP_HEALTHCHECK_START_PERIOD`, `RUN_MIGRATIONS`
+- Docker Compose (host only): `WEB_FORWARD_PORT`, `DB_FORWARD_PORT`, `VITE_FORWARD_PORT`, `REVERB_FORWARD_PORT`, `APP_HEALTHCHECK_START_PERIOD`, `RUN_MIGRATIONS`, `RUN_SEEDERS_ON_EMPTY_DB`, `DEMO_SEED_USE_REMOTE_IMAGES`
 
 ## Тестирование
 Локально:
 - Все тесты: `php artisan test`
 - Feature suite: `php artisan test --testsuite=Feature`
+- Rate limit и anti-spam: `php artisan test tests/Feature/ApiRateLimitFeatureTest.php`
+- Login lockout/retry-after: `php artisan test tests/Feature/LoginThrottleFeatureTest.php`
+- Медиа (доступ, fallback, cache-bust query): `php artisan test tests/Feature/MediaPostFeatureTest.php`
+- Heartbeat трекинг: `php artisan test tests/Feature/ActivityHeartbeatFeatureTest.php`
+- Дашборд/экспорт админ-аналитики: `php artisan test tests/Feature/AdminAndChatFeatureTest.php`
+- Сид демо-контента: `php artisan test tests/Feature/DemoSocialContentSeederFeatureTest.php`
 - IPTV: `php artisan test tests/Feature/IptvFeatureTest.php`
 - IPTV Админка (Сидеры): `php artisan test tests/Feature/AdminIptvSeedFeatureTest.php`
 - Чаты и realtime: `php artisan test tests/Feature/ChatFeatureTest.php`
 - Broadcast channels: `php artisan test tests/Feature/BroadcastChannelsFeatureTest.php`
-- Админка: `php artisan test tests/Feature/AdminPanelFeatureTest.php`
+- Админка: `php artisan test tests/Feature/AdminPanelFeatureTest.php`, `php artisan test tests/Feature/AdminAndChatFeatureTest.php`
 - JS unit-тесты helper-логики: `npm run test:js`
 - Фронт-билд: `npm run build`
 
@@ -333,6 +361,10 @@ docker/
 - `php artisan test`
 - `npm run test:js`
 - `npm run build`
+
+Последний полный прогон (27 февраля 2026):
+- `php artisan test`: `185 passed` (`1480 assertions`).
+- `npm run test:js`: `12 passed`.
 
 ## API ориентиры
 
@@ -358,16 +390,22 @@ docker/
 - `POST /api/iptv/proxy/start`, `DELETE /api/iptv/proxy/{session}`
 - `POST /api/iptv/transcode/start`, `DELETE /api/iptv/transcode/{session}`
 - `POST /api/iptv/relay/start`, `DELETE /api/iptv/relay/{session}`
+- Activity tracking: `POST /api/activity/heartbeat`
 
 ### Админские (`/api/admin/*`)
 - Пользователи, посты, комментарии, обращения, диалоги, блокировки, настройки сайта.
+- Дашборд аналитики:
+  - `GET /api/admin/summary`
+  - `GET /api/admin/dashboard?year=YYYY&date_from=YYYY-MM-DD&date_to=YYYY-MM-DD`
+  - `GET /api/admin/dashboard/export?format=xls|json&year=YYYY&date_from=YYYY-MM-DD&date_to=YYYY-MM-DD`
+- Экспорт запускается из админки и возвращает поток файла (`Content-Disposition`) для прямого скачивания.
 
 ## Swagger / OpenAPI
 - Swagger UI: `GET /api/documentation`
 - OpenAPI JSON: `GET /docs/api-docs.json`
 - Генерация документации: `php artisan l5-swagger:generate`
 - Базовые аннотации: `app/OpenApi/OpenApiSpec.php`
-- В актуальной спецификации покрыты публичные endpoints сайта, радио endpoints (stations/stream/favorites), capability endpoint IPTV и ключевые user/admin chat сценарии.
+- В актуальной спецификации дополнительно покрыты `POST /api/activity/heartbeat`, `GET /api/admin/summary`, `GET /api/admin/dashboard`, `GET /api/admin/dashboard/export`.
 
 ## Тестовые аккаунты
 Доступны после `php artisan db:seed`:
@@ -377,6 +415,10 @@ docker/
 - `user3@example.com` / `password`
 - `user4@example.com` / `password`
 - `user5@example.com` / `password`
+- `demo01@example.com` ... `demo18@example.com` / `password`
+
+`DemoSocialContentSeeder` дополнительно создаёт демо-посты, комментарии, лайки, подписки и placeholder-изображения.
+По умолчанию изображения генерируются локально (без зависимости от интернета). Если нужны внешние фото из `loremflickr.com`, включите `DEMO_SEED_USE_REMOTE_IMAGES=1`.
 
 ## Частые проблемы
 
@@ -391,6 +433,20 @@ docker/
 - Порт уже занят другим приложением.
 - Запустите Docker с другими host-портами через переменные:
   `WEB_FORWARD_PORT`, `DB_FORWARD_PORT`, `VITE_FORWARD_PORT`, `REVERB_FORWARD_PORT`.
+
+### После `docker compose down -v` пропали демо-данные
+- Это ожидаемо: флаг `-v` удаляет том MySQL (`db_data`), база пересоздаётся с нуля.
+- В текущей конфигурации контейнер `app` сам запускает `db:seed`, если таблица `users` пустая (`RUN_SEEDERS_ON_EMPTY_DB=1`).
+- Если вы отключили авто-сидирование, запустите вручную:
+  - `docker compose exec --user=www-data app php artisan db:seed --force`
+
+### В ленте видно fallback-картинку вместо фото
+- Частая причина: прерванный запрос изображения (например `499` при смене маршрута), а не отсутствие файла или интернета.
+- Маршруты media (`post-images`, `avatars`) используют отдельный лимит `throttle:600,1`.
+- Во фронтенде добавлен автоповтор загрузки изображения перед fallback (cache-bust query `?_img_retry=...`).
+- Если вы обновили код, но эффект не появился, очистите кэш:
+  - `docker compose exec --user=www-data app php artisan optimize:clear`
+  - `Ctrl+F5` в браузере
 
 ### `No services to build` при `docker compose --profile test run ...`
 - Это warning от Docker Compose, а не ошибка тестов.
@@ -411,6 +467,14 @@ docker/
 - Если уже сломалось:
   - `docker compose exec app sh -lc "rm -rf /var/www/html/storage/framework/testing/disks && mkdir -p /var/www/html/storage/framework/testing/disks && chown -R www-data:www-data /var/www/html/storage /var/www/html/bootstrap/cache && chmod -R ug+rwX /var/www/html/storage /var/www/html/bootstrap/cache"`
   - `docker compose exec --user=www-data app php artisan test`
+
+### `A temporary file could not be opened to write the process output` (Windows/OSPanel)
+- Причина: PHP/Symfony Process не может писать lock-файлы во временную директорию по умолчанию (`C:/OSPanel/temp/...`).
+- Решение: запускать тесты с локальным writable temp-каталогом проекта:
+  - PowerShell:
+    - `$tempPath = Join-Path (Get-Location) 'storage\\framework\\testing-runtime\\tmp'`
+    - `New-Item -ItemType Directory -Force -Path $tempPath | Out-Null`
+    - `php -d sys_temp_dir="$tempPath" artisan test`
 
 ### Пустая страница / сломанный фронт
 - Локально: запущен ли `npm run dev`.

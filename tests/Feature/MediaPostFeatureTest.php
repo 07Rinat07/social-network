@@ -8,6 +8,7 @@ use App\Models\PostImage;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Storage;
 use Laravel\Sanctum\Sanctum;
 use Tests\TestCase;
@@ -213,7 +214,7 @@ class MediaPostFeatureTest extends TestCase
         $url = (string) $response->json('data.url');
 
         $this->assertSame(
-            route('media.post-images.show', ['postImage' => $mediaId]),
+            route('media.post-images.show', ['postImage' => $mediaId], false),
             $url
         );
 
@@ -380,7 +381,7 @@ class MediaPostFeatureTest extends TestCase
             ->assertJsonPath('data.0.media.1.type', PostImage::TYPE_IMAGE)
             ->assertJsonPath(
                 'data.0.image_url',
-                route('media.post-images.show', ['postImage' => $coverImage->id])
+                route('media.post-images.show', ['postImage' => $coverImage->id], false)
             );
     }
 
@@ -418,9 +419,180 @@ class MediaPostFeatureTest extends TestCase
         $response
             ->assertOk()
             ->assertJsonPath('data.0.id', $image->id)
-            ->assertJsonPath('data.0.url', route('media.post-images.show', ['postImage' => $image->id]));
+            ->assertJsonPath('data.0.url', route('media.post-images.show', ['postImage' => $image->id], false));
 
         $this->get(route('media.post-images.show', ['postImage' => $image->id]))
             ->assertOk();
+    }
+
+    public function test_guest_can_view_public_post_image(): void
+    {
+        Storage::fake('public');
+
+        $author = User::factory()->create();
+
+        $post = Post::query()->create([
+            'title' => 'Public media',
+            'content' => 'Public post image should be available for guests.',
+            'user_id' => $author->id,
+            'is_public' => true,
+            'show_in_feed' => true,
+        ]);
+
+        $path = 'media/images/public-image.jpg';
+        Storage::disk('public')->put($path, 'public-image-content');
+
+        $image = PostImage::query()->create([
+            'path' => $path,
+            'storage_disk' => 'public',
+            'type' => PostImage::TYPE_IMAGE,
+            'mime_type' => 'image/jpeg',
+            'size' => 180,
+            'original_name' => 'public-image.jpg',
+            'user_id' => $author->id,
+            'post_id' => $post->id,
+        ]);
+
+        $this->get(route('media.post-images.show', ['postImage' => $image->id]))
+            ->assertOk();
+    }
+
+    public function test_guest_can_view_public_post_image_with_retry_query_parameter(): void
+    {
+        Storage::fake('public');
+
+        $author = User::factory()->create();
+
+        $post = Post::query()->create([
+            'title' => 'Public media retry query',
+            'content' => 'Public post image should stay accessible with cache-busting query.',
+            'user_id' => $author->id,
+            'is_public' => true,
+            'show_in_feed' => true,
+        ]);
+
+        $path = 'media/images/public-image-retry.jpg';
+        Storage::disk('public')->put($path, 'public-image-retry-content');
+
+        $image = PostImage::query()->create([
+            'path' => $path,
+            'storage_disk' => 'public',
+            'type' => PostImage::TYPE_IMAGE,
+            'mime_type' => 'image/jpeg',
+            'size' => 200,
+            'original_name' => 'public-image-retry.jpg',
+            'user_id' => $author->id,
+            'post_id' => $post->id,
+        ]);
+
+        $url = route('media.post-images.show', ['postImage' => $image->id]) . '?_img_retry=1';
+
+        $this->get($url)
+            ->assertOk()
+            ->assertHeader('Content-Type', 'image/jpeg');
+    }
+
+    public function test_guest_cannot_view_private_post_image(): void
+    {
+        Storage::fake('public');
+
+        $author = User::factory()->create();
+
+        $post = Post::query()->create([
+            'title' => 'Private media',
+            'content' => 'Private post image must be restricted for guests.',
+            'user_id' => $author->id,
+            'is_public' => false,
+            'show_in_feed' => false,
+        ]);
+
+        $path = 'media/images/private-image.jpg';
+        Storage::disk('public')->put($path, 'private-image-content');
+
+        $image = PostImage::query()->create([
+            'path' => $path,
+            'storage_disk' => 'public',
+            'type' => PostImage::TYPE_IMAGE,
+            'mime_type' => 'image/jpeg',
+            'size' => 180,
+            'original_name' => 'private-image.jpg',
+            'user_id' => $author->id,
+            'post_id' => $post->id,
+        ]);
+
+        $this->get(route('media.post-images.show', ['postImage' => $image->id]))
+            ->assertStatus(403);
+    }
+
+    public function test_public_post_image_with_external_or_missing_path_falls_back_to_local_placeholder(): void
+    {
+        Storage::fake('public');
+        Http::fake([
+            'https://example.invalid/*' => Http::response('', 500),
+        ]);
+
+        $author = User::factory()->create();
+
+        $post = Post::query()->create([
+            'title' => 'Broken external image',
+            'content' => 'External media should be rehydrated to local fallback.',
+            'user_id' => $author->id,
+            'is_public' => true,
+            'show_in_feed' => true,
+        ]);
+
+        $image = PostImage::query()->create([
+            'path' => 'https://example.invalid/broken.jpg',
+            'storage_disk' => 'public',
+            'type' => PostImage::TYPE_IMAGE,
+            'mime_type' => 'image/jpeg',
+            'size' => 0,
+            'original_name' => 'broken.jpg',
+            'user_id' => $author->id,
+            'post_id' => $post->id,
+        ]);
+
+        $this->get(route('media.post-images.show', ['postImage' => $image->id]))
+            ->assertOk();
+
+        $image->refresh();
+        $this->assertSame('public', $image->storage_disk);
+        $this->assertSame('image/svg+xml', $image->mime_type);
+        $this->assertStringStartsWith('seed/posts/missing-post-image-', (string) $image->path);
+        Storage::disk('public')->assertExists((string) $image->path);
+    }
+
+    public function test_public_post_image_endpoint_is_not_throttled_by_default_api_limiter(): void
+    {
+        Storage::fake('public');
+
+        $author = User::factory()->create();
+        $post = Post::query()->create([
+            'title' => 'Throttle-safe media',
+            'content' => 'Image endpoint must stay available under burst traffic.',
+            'user_id' => $author->id,
+            'is_public' => true,
+            'show_in_feed' => true,
+        ]);
+
+        $path = 'media/images/throttle-safe.jpg';
+        Storage::disk('public')->put($path, 'throttle-safe-content');
+
+        $image = PostImage::query()->create([
+            'path' => $path,
+            'storage_disk' => 'public',
+            'type' => PostImage::TYPE_IMAGE,
+            'mime_type' => 'image/jpeg',
+            'size' => 160,
+            'original_name' => 'throttle-safe.jpg',
+            'user_id' => $author->id,
+            'post_id' => $post->id,
+        ]);
+
+        $url = route('media.post-images.show', ['postImage' => $image->id]);
+
+        foreach (range(1, 80) as $index) {
+            $this->get($url)->assertOk();
+        }
     }
 }

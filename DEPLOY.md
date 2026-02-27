@@ -115,11 +115,16 @@ php artisan view:cache
 php artisan l5-swagger:generate
 ```
 
-Если нужен демо-набор пользователей (например, для стенда), запустите отдельно:
+Если нужен демо-набор пользователей и контента (например, для стенда), запустите отдельно:
 
 ```bash
 php artisan db:seed --class=UserSeeder --force
+php artisan db:seed --class=DemoSocialContentSeeder --force
 ```
+
+`DemoSocialContentSeeder` заполняет проект тестовыми постами/комментариями/лайками/подписками и placeholder-изображениями.
+По умолчанию используются локально сгенерированные placeholder-изображения (без внешней сети).
+Если нужны внешние фото из `loremflickr.com`, задайте `DEMO_SEED_USE_REMOTE_IMAGES=1` в `.env`.
 
 Если нужно раздать текущее радио-избранное админов всем не-админам (одноразовый сценарий):
 
@@ -267,6 +272,9 @@ which ffmpeg
 ffmpeg -version
 php artisan about
 php artisan route:list | grep broadcasting
+php artisan route:list | grep activity/heartbeat
+php artisan route:list | grep admin/dashboard
+php artisan route:list | grep admin/dashboard/export
 sudo supervisorctl status
 ```
 
@@ -275,6 +283,7 @@ sudo supervisorctl status
 ```bash
 curl -I http://your-domain.com/api/documentation
 curl -I http://your-domain.com/docs/api-docs.json
+curl -I "http://your-domain.com/api/admin/dashboard/export?format=json&date_from=2026-01-01&date_to=2026-01-31"
 ```
 
 Проверьте в браузере:
@@ -286,6 +295,10 @@ curl -I http://your-domain.com/docs/api-docs.json
 - сервер должен иметь исходящий HTTPS-доступ к `api.open-meteo.com:443`;
 - при блокировке исходящего трафика сайт продолжит работу, но в виджете будет статус "Нет данных о погоде".
 
+Дополнительно для seed-изображений демо-контента:
+- внешняя сеть для `loremflickr.com` не обязательна (по умолчанию сидер работает офлайн);
+- если включён `DEMO_SEED_USE_REMOTE_IMAGES=1`, откройте исходящий HTTPS-доступ к `loremflickr.com:443`.
+
 ## 9. Обновление проекта
 
 ```bash
@@ -295,6 +308,12 @@ composer install --no-dev --optimize-autoloader
 npm ci && npm run build
 npm run test:js
 php artisan test --testsuite=Feature
+php artisan test tests/Feature/ApiRateLimitFeatureTest.php
+php artisan test tests/Feature/LoginThrottleFeatureTest.php
+php artisan test tests/Feature/MediaPostFeatureTest.php
+php artisan test tests/Feature/ActivityHeartbeatFeatureTest.php
+php artisan test tests/Feature/AdminAndChatFeatureTest.php
+php artisan test tests/Feature/DemoSocialContentSeederFeatureTest.php
 php artisan migrate --force
 php artisan optimize:clear
 php artisan config:cache

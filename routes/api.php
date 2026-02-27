@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\AdminController;
+use App\Http\Controllers\ActivityHeartbeatController;
 use App\Http\Controllers\Auth\EmailVerificationNotificationController;
 use App\Http\Controllers\ChatController;
 use App\Http\Controllers\FeedbackController;
@@ -15,29 +16,47 @@ use App\Http\Controllers\UserController;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
 
-Route::middleware('auth:sanctum')->get('/user', function (Request $request) {
+Route::middleware(['auth:sanctum', 'throttle:600,1'])->get('/user', function (Request $request) {
     return $request->user();
 });
-Route::middleware('auth:sanctum')->get('/media/avatars/{user}', [MediaController::class, 'showAvatar'])->name('media.avatars.show');
+Route::middleware(['auth:sanctum', 'throttle:600,1'])->get('/media/avatars/{user}', [MediaController::class, 'showAvatar'])->name('media.avatars.show');
 
-Route::post('/feedback', [FeedbackController::class, 'store']);
-Route::get('/site/home-content', [SiteSettingController::class, 'homeContent']);
-Route::get('/site/world-overview', [SiteSettingController::class, 'worldOverview']);
-Route::get('/iptv/transcode/{session}/playlist.m3u8', [IptvController::class, 'transcodePlaylist'])->name('api.iptv.transcode.playlist');
+Route::post('/feedback', [FeedbackController::class, 'store'])
+    ->middleware('throttle:20,1');
+Route::get('/site/home-content', [SiteSettingController::class, 'homeContent'])
+    ->middleware('throttle:240,1');
+Route::get('/site/world-overview', [SiteSettingController::class, 'worldOverview'])
+    ->middleware('throttle:240,1');
+Route::get('/media/post-images/{postImage}', [MediaController::class, 'showPostImage'])
+    ->middleware('throttle:600,1')
+    ->name('media.post-images.show');
+Route::get('/iptv/transcode/{session}/playlist.m3u8', [IptvController::class, 'transcodePlaylist'])
+    ->middleware('throttle:1200,1')
+    ->name('api.iptv.transcode.playlist');
 Route::get('/iptv/transcode/{session}/{segment}', [IptvController::class, 'transcodeSegment'])
+    ->middleware('throttle:1200,1')
     ->where('segment', 'segment_[0-9]{5}\.ts')
     ->name('api.iptv.transcode.segment');
-Route::get('/iptv/relay/{session}/playlist.m3u8', [IptvController::class, 'relayPlaylist'])->name('api.iptv.relay.playlist');
+Route::get('/iptv/relay/{session}/playlist.m3u8', [IptvController::class, 'relayPlaylist'])
+    ->middleware('throttle:1200,1')
+    ->name('api.iptv.relay.playlist');
 Route::get('/iptv/relay/{session}/{segment}', [IptvController::class, 'relaySegment'])
+    ->middleware('throttle:1200,1')
     ->where('segment', 'segment_[0-9]{5}\.ts')
     ->name('api.iptv.relay.segment');
-Route::get('/iptv/proxy/{session}/playlist.m3u8', [IptvController::class, 'proxyPlaylist'])->name('api.iptv.proxy.playlist');
-Route::get('/iptv/proxy/{session}/segment', [IptvController::class, 'proxySegment'])->name('api.iptv.proxy.segment');
+Route::get('/iptv/proxy/{session}/playlist.m3u8', [IptvController::class, 'proxyPlaylist'])
+    ->middleware('throttle:1200,1')
+    ->name('api.iptv.proxy.playlist');
+Route::get('/iptv/proxy/{session}/segment', [IptvController::class, 'proxySegment'])
+    ->middleware('throttle:1200,1')
+    ->name('api.iptv.proxy.segment');
 
 Route::middleware(['auth:sanctum', 'throttle:6,1'])->post('/auth/email/verification-notification', EmailVerificationNotificationController::class);
 
-Route::middleware(['auth:sanctum', 'verified'])->group(function () {
+Route::middleware(['auth:sanctum', 'verified', 'throttle:600,1'])->group(function () {
     Route::get('/feedback/my', [FeedbackController::class, 'my']);
+    Route::post('/activity/heartbeat', [ActivityHeartbeatController::class, 'store'])
+        ->middleware('throttle:120,1');
 
     Route::get('/users', [UserController::class, 'index']);
     Route::get('/users/{user}/posts', [UserController::class, 'post']);
@@ -64,7 +83,6 @@ Route::middleware(['auth:sanctum', 'verified'])->group(function () {
 
     Route::post('/post_media', [PostImageController::class, 'store']);
     Route::post('/post_images', [PostImageController::class, 'store']);
-    Route::get('/media/post-images/{postImage}', [MediaController::class, 'showPostImage'])->name('media.post-images.show');
     Route::get('/media/chat-attachments/{attachment}', [MediaController::class, 'showChatAttachment'])->name('media.chat-attachments.show');
     Route::get('/media/chat-attachments/{attachment}/download', [MediaController::class, 'downloadChatAttachment'])->name('media.chat-attachments.download');
 
@@ -118,6 +136,8 @@ Route::middleware(['auth:sanctum', 'verified'])->group(function () {
 
     Route::prefix('admin')->middleware('admin')->group(function () {
         Route::get('/summary', [AdminController::class, 'summary']);
+        Route::get('/dashboard', [AdminController::class, 'dashboard']);
+        Route::get('/dashboard/export', [AdminController::class, 'exportDashboard']);
 
         Route::get('/users', [AdminController::class, 'users']);
         Route::patch('/users/{user}', [AdminController::class, 'updateUser']);

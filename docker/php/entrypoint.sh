@@ -25,6 +25,48 @@ run_with_retry() {
     done
 }
 
+should_seed_on_empty_users_table() {
+    php <<'PHP'
+<?php
+
+$connection = getenv('DB_CONNECTION') ?: 'mysql';
+if ($connection !== 'mysql') {
+    echo '0';
+    exit(0);
+}
+
+$host = getenv('DB_HOST') ?: 'db';
+$port = getenv('DB_PORT') ?: '3306';
+$database = getenv('DB_DATABASE') ?: '';
+$username = getenv('DB_USERNAME') ?: '';
+$password = getenv('DB_PASSWORD') ?: '';
+
+if ($database === '') {
+    echo '0';
+    exit(0);
+}
+
+try {
+    $dsn = sprintf('mysql:host=%s;port=%s;dbname=%s', $host, $port, $database);
+    $pdo = new PDO($dsn, $username, $password, [
+        PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
+    ]);
+
+    $existsQuery = "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema = DATABASE() AND table_name = 'users'";
+    $usersTableExists = (int) $pdo->query($existsQuery)->fetchColumn();
+    if ($usersTableExists <= 0) {
+        echo '0';
+        exit(0);
+    }
+
+    $usersCount = (int) $pdo->query('SELECT COUNT(*) FROM users')->fetchColumn();
+    echo $usersCount === 0 ? '1' : '0';
+} catch (Throwable) {
+    echo '0';
+}
+PHP
+}
+
 if [ ! -f .env ]; then
     if [ -f .env.docker.example ]; then
         cp .env.docker.example .env
@@ -47,6 +89,13 @@ fi
 
 if [ "${RUN_MIGRATIONS:-0}" = "1" ]; then
     run_with_retry 20 3 php artisan migrate --force --no-interaction
+fi
+
+if [ "${RUN_SEEDERS_ON_EMPTY_DB:-1}" = "1" ]; then
+    should_seed="$(should_seed_on_empty_users_table)"
+    if [ "$should_seed" = "1" ]; then
+        run_with_retry 10 3 php artisan db:seed --force --no-interaction
+    fi
 fi
 
 # Docker profile expects ffmpeg preinstalled in the image.

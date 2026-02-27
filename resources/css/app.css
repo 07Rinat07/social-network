@@ -4703,6 +4703,585 @@ img.avatar {
     margin-bottom: 0.9rem;
 }
 
+.admin-dashboard {
+    gap: 0.95rem;
+}
+
+.admin-dashboard-head {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 0.7rem;
+    flex-wrap: wrap;
+}
+
+.admin-dashboard-controls {
+    display: flex;
+    align-items: flex-end;
+    justify-content: flex-end;
+    gap: 0.55rem;
+    flex-wrap: wrap;
+}
+
+.admin-dashboard-control-field {
+    display: grid;
+    gap: 0.24rem;
+    min-width: 8.2rem;
+}
+
+.admin-dashboard-control-field-year {
+    min-width: 7.2rem;
+}
+
+.admin-dashboard-control-field-date {
+    min-width: 10rem;
+}
+
+.admin-dashboard-control-field .muted {
+    margin: 0;
+    font-size: 0.72rem;
+    line-height: 1.2;
+}
+
+.admin-dashboard-control-input {
+    min-width: 0;
+}
+
+.admin-dashboard-control-btn {
+    align-self: flex-end;
+}
+
+.admin-dashboard-kpi-grid {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 0.7rem;
+}
+
+.admin-dashboard-kpi-card {
+    border-radius: 14px;
+    border: 1px solid rgba(153, 187, 228, 0.72);
+    background:
+        linear-gradient(145deg, rgba(255, 255, 255, 0.86), rgba(223, 238, 255, 0.84));
+    box-shadow:
+        inset 0 1px 0 rgba(255, 255, 255, 0.68),
+        0 10px 18px rgba(7, 36, 79, 0.08);
+    padding: 0.78rem 0.86rem;
+    display: grid;
+    gap: 0.26rem;
+}
+
+.admin-dashboard-kpi-label {
+    font-size: 0.72rem;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: rgba(45, 80, 123, 0.92);
+    font-weight: 700;
+}
+
+.admin-dashboard-kpi-value {
+    font-size: 1.34rem;
+    color: #093f83;
+    line-height: 1.1;
+}
+
+.admin-dashboard-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 0.75rem;
+}
+
+.admin-dashboard-card {
+    border: 1px solid rgba(152, 186, 227, 0.72);
+    border-radius: 14px;
+    display: block;
+    background:
+        linear-gradient(152deg, rgba(255, 255, 255, 0.76), rgba(220, 237, 255, 0.8));
+    box-shadow:
+        inset 0 1px 0 rgba(255, 255, 255, 0.64),
+        0 10px 18px rgba(10, 39, 79, 0.08);
+}
+
+.admin-dashboard-card-head {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 0.7rem;
+    flex-wrap: wrap;
+    margin-bottom: 0.65rem;
+}
+
+.admin-dashboard-line-chart {
+    min-height: 214px;
+    border: 1px solid rgba(161, 192, 229, 0.74);
+    border-radius: 12px;
+    background:
+        linear-gradient(145deg, rgba(250, 254, 255, 0.86), rgba(229, 242, 255, 0.8));
+    padding: 0.45rem;
+}
+
+.admin-dashboard-line-chart svg {
+    width: 100%;
+    height: 240px;
+    display: block;
+}
+
+.admin-dashboard-months-row {
+    margin-top: 0.65rem;
+    display: grid;
+    grid-template-columns: repeat(6, minmax(0, 1fr));
+    gap: 0.4rem;
+}
+
+.admin-dashboard-month-chip {
+    border-radius: 10px;
+    border: 1px solid rgba(166, 196, 230, 0.7);
+    background: rgba(243, 250, 255, 0.82);
+    padding: 0.35rem 0.42rem;
+    display: grid;
+    gap: 0.15rem;
+}
+
+.admin-dashboard-month-chip span {
+    font-size: 0.66rem;
+    color: rgba(50, 82, 124, 0.84);
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+}
+
+.admin-dashboard-month-chip strong {
+    font-size: 0.78rem;
+    color: #0c407e;
+}
+
+.admin-dashboard-preference {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr);
+    gap: 0.85rem;
+    align-items: center;
+}
+
+.admin-dashboard-donut {
+    --donut-gradient: conic-gradient(#d8e6f9 0deg 360deg);
+    width: 170px;
+    aspect-ratio: 1;
+    border-radius: 999px;
+    background: var(--donut-gradient);
+    display: grid;
+    place-items: center;
+    border: 1px solid rgba(133, 181, 240, 0.72);
+    box-shadow:
+        0 18px 30px rgba(8, 41, 86, 0.18),
+        inset 0 1px 0 rgba(255, 255, 255, 0.7);
+}
+
+.admin-dashboard-donut-core {
+    width: 64%;
+    aspect-ratio: 1;
+    border-radius: 999px;
+    background:
+        linear-gradient(150deg, rgba(253, 255, 255, 0.96), rgba(226, 240, 255, 0.9));
+    border: 1px solid rgba(164, 196, 230, 0.74);
+    display: grid;
+    place-items: center;
+    text-align: center;
+    gap: 0.16rem;
+    box-shadow:
+        inset 0 1px 0 rgba(255, 255, 255, 0.8),
+        0 7px 14px rgba(10, 37, 75, 0.12);
+}
+
+.admin-dashboard-donut-core strong {
+    font-size: 0.98rem;
+    color: #0a458d;
+}
+
+.admin-dashboard-donut-core span {
+    font-size: 0.63rem;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: rgba(50, 84, 126, 0.9);
+}
+
+.admin-dashboard-preference-legend {
+    display: grid;
+    gap: 0.34rem;
+}
+
+.admin-dashboard-legend-item {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr) auto auto;
+    align-items: center;
+    gap: 0.45rem;
+    border: 1px solid rgba(168, 196, 230, 0.68);
+    border-radius: 11px;
+    background: rgba(245, 251, 255, 0.82);
+    padding: 0.36rem 0.52rem;
+}
+
+.admin-dashboard-legend-item span {
+    font-size: 0.78rem;
+    color: #0f3f7e;
+}
+
+.admin-dashboard-legend-item strong {
+    font-size: 0.78rem;
+    color: #0b3e7f;
+}
+
+.admin-dashboard-legend-item small {
+    font-size: 0.74rem;
+    color: rgba(55, 86, 127, 0.88);
+}
+
+.admin-dashboard-legend-marker {
+    width: 0.62rem;
+    height: 0.62rem;
+    border-radius: 999px;
+    display: inline-block;
+    border: 1px solid rgba(255, 255, 255, 0.74);
+    box-shadow: 0 0 0 1px rgba(84, 123, 175, 0.34);
+}
+
+.admin-activity-rows {
+    margin-top: 0.55rem;
+    display: grid;
+    gap: 0.44rem;
+}
+
+.admin-activity-row {
+    display: grid;
+    grid-template-columns: minmax(44px, auto) minmax(0, 1fr) auto;
+    align-items: center;
+    gap: 0.52rem;
+}
+
+.admin-activity-month {
+    font-size: 0.72rem;
+    color: rgba(49, 83, 126, 0.84);
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+}
+
+.admin-activity-track {
+    height: 14px;
+    border-radius: 999px;
+    border: 1px solid rgba(155, 189, 226, 0.68);
+    background: rgba(234, 245, 255, 0.78);
+    overflow: hidden;
+}
+
+.admin-activity-stack {
+    height: 100%;
+    display: flex;
+    border-radius: inherit;
+    overflow: hidden;
+}
+
+.admin-activity-segment {
+    height: 100%;
+    min-width: 0;
+}
+
+.admin-activity-segment.is-social {
+    background: #0f6cf2;
+}
+
+.admin-activity-segment.is-chats {
+    background: #f97316;
+}
+
+.admin-activity-segment.is-radio {
+    background: #0d9488;
+}
+
+.admin-activity-segment.is-iptv {
+    background: #be123c;
+}
+
+.admin-activity-total {
+    font-size: 0.78rem;
+    color: #0a3f80;
+    min-width: 3.2rem;
+    text-align: right;
+}
+
+.admin-activity-legend {
+    margin-top: 0.58rem;
+    display: flex;
+    gap: 0.64rem;
+    flex-wrap: wrap;
+}
+
+.admin-activity-legend span {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    font-size: 0.75rem;
+    color: rgba(45, 79, 121, 0.9);
+}
+
+.admin-activity-dot {
+    width: 0.58rem;
+    height: 0.58rem;
+    border-radius: 999px;
+    display: inline-block;
+    border: 1px solid rgba(255, 255, 255, 0.72);
+    box-shadow: 0 0 0 1px rgba(87, 125, 177, 0.32);
+}
+
+.admin-activity-dot.is-social {
+    background: #0f6cf2;
+}
+
+.admin-activity-dot.is-chats {
+    background: #f97316;
+}
+
+.admin-activity-dot.is-radio {
+    background: #0d9488;
+}
+
+.admin-activity-dot.is-iptv {
+    background: #be123c;
+}
+
+.admin-dashboard-engagement-grid {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 0.62rem;
+}
+
+.admin-dashboard-mini-card {
+    border-radius: 12px;
+    border: 1px solid rgba(157, 191, 228, 0.72);
+    background:
+        linear-gradient(146deg, rgba(255, 255, 255, 0.82), rgba(225, 239, 255, 0.8));
+    box-shadow:
+        inset 0 1px 0 rgba(255, 255, 255, 0.68),
+        0 9px 16px rgba(8, 36, 75, 0.08);
+    padding: 0.62rem 0.72rem;
+    display: grid;
+    gap: 0.24rem;
+}
+
+.admin-dashboard-mini-card span {
+    font-size: 0.72rem;
+    color: rgba(45, 80, 124, 0.92);
+}
+
+.admin-dashboard-mini-card strong {
+    font-size: 1.06rem;
+    color: #083f82;
+}
+
+.admin-summary-grid {
+    margin-bottom: 1rem;
+}
+
+.admin-dashboard-subtitle {
+    margin: 0.35rem 0 0;
+}
+
+.admin-dashboard-period-note {
+    margin: 0 0 1rem 0.25rem;
+}
+
+.admin-dashboard-method-note {
+    margin: 0.7rem 0 0;
+}
+
+.admin-simple-item-block {
+    display: block;
+}
+
+.admin-section-title {
+    display: block;
+    margin-bottom: 0.5rem;
+}
+
+.admin-section-title-sm {
+    display: block;
+    margin-bottom: 0.45rem;
+}
+
+.admin-textarea-tall {
+    min-height: 120px;
+}
+
+.admin-textarea-medium {
+    min-height: 90px;
+}
+
+.admin-check-toggle {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.45rem;
+}
+
+.admin-actions-wrap {
+    display: flex;
+    gap: 0.45rem;
+    flex-wrap: wrap;
+}
+
+.admin-actions-wrap-tight {
+    display: flex;
+    gap: 0.4rem;
+    flex-wrap: wrap;
+}
+
+.admin-row-between {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 0.8rem;
+    flex-wrap: wrap;
+}
+
+.admin-row-between-start {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    gap: 0.8rem;
+    flex-wrap: wrap;
+}
+
+.admin-form-grid-offset {
+    margin-top: 0.6rem;
+}
+
+.admin-muted-reset {
+    margin: 0;
+}
+
+.admin-copy-top {
+    margin: 0.35rem 0 0;
+}
+
+.admin-muted-top {
+    margin: 0.2rem 0 0;
+}
+
+.admin-copy-top-lg {
+    margin: 0.45rem 0 0;
+}
+
+.admin-muted-top-sm {
+    margin: 0.25rem 0 0;
+}
+
+.admin-paragraph-bottom {
+    margin: 0 0 1rem;
+}
+
+.admin-paragraph-compact-bottom {
+    margin: 0 0 0.65rem;
+}
+
+.admin-home-locale-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.6rem;
+    margin: 0 0 0.75rem;
+    flex-wrap: wrap;
+}
+
+.admin-muted-label {
+    font-size: 0.82rem;
+}
+
+.admin-feature-items {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+}
+
+.admin-feature-item-row {
+    display: flex;
+    gap: 0.45rem;
+    align-items: center;
+}
+
+.admin-feedback-actions {
+    display: flex;
+    gap: 0.45rem;
+    flex-wrap: wrap;
+}
+
+.admin-feedback-status-field {
+    min-width: 8.5rem;
+}
+
+.admin-iptv-seeds-create {
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+    margin-bottom: 2rem;
+    border-bottom: 1px solid var(--line);
+    padding-bottom: 1.5rem;
+}
+
+.admin-iptv-seeds-fields {
+    display: flex;
+    gap: 0.75rem;
+    flex-wrap: wrap;
+}
+
+.admin-iptv-seed-input {
+    flex: 1 1 14rem;
+    min-width: 0;
+}
+
+.admin-iptv-seed-input.is-url {
+    flex: 2 1 20rem;
+}
+
+.admin-iptv-seed-meta-row {
+    display: flex;
+    gap: 1rem;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+}
+
+.admin-iptv-seed-meta-controls {
+    display: flex;
+    gap: 1rem;
+    align-items: center;
+    flex-wrap: wrap;
+}
+
+.admin-iptv-seed-sort-field {
+    width: 6.2rem;
+    max-width: 100%;
+}
+
+.admin-iptv-seed-active-toggle {
+    display: inline-flex;
+    gap: 0.4rem;
+    align-items: center;
+    cursor: pointer;
+}
+
+.admin-iptv-seed-item {
+    border-left: 3px solid var(--accent);
+    padding: 1rem;
+}
+
+.admin-iptv-seed-item-body {
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+    width: 100%;
+}
+
+.admin-iptv-seed-actions {
+    display: flex;
+    gap: 0.5rem;
+    flex-wrap: wrap;
+}
+
 .admin-user-row--dirty {
     background: linear-gradient(120deg, rgba(255, 244, 220, 0.45), rgba(248, 252, 255, 0.18));
 }
@@ -4900,6 +5479,18 @@ img.avatar {
     }
 
     .stats-grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
+    .admin-dashboard-kpi-grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
+    .admin-dashboard-months-row {
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+    }
+
+    .admin-dashboard-engagement-grid {
         grid-template-columns: repeat(2, minmax(0, 1fr));
     }
 }
@@ -5233,6 +5824,125 @@ img.avatar {
 
     .stats-grid {
         grid-template-columns: 1fr;
+    }
+
+    .admin-dashboard-head {
+        align-items: flex-start;
+    }
+
+    .admin-dashboard-controls {
+        width: 100%;
+        display: grid;
+        grid-template-columns: 1fr;
+        justify-content: stretch;
+        gap: 0.55rem;
+    }
+
+    .admin-dashboard-control-field {
+        min-width: 0;
+    }
+
+    .admin-dashboard-control-input,
+    .admin-dashboard-control-btn {
+        width: 100%;
+    }
+
+    .admin-dashboard-kpi-grid,
+    .admin-dashboard-grid,
+    .admin-dashboard-engagement-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .admin-dashboard-months-row {
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+    }
+
+    .admin-dashboard-preference {
+        grid-template-columns: 1fr;
+        justify-items: center;
+    }
+
+    .admin-dashboard-legend-item {
+        grid-template-columns: auto minmax(0, 1fr) auto;
+        row-gap: 0.2rem;
+    }
+
+    .admin-dashboard-legend-item small {
+        grid-column: 2 / span 2;
+    }
+
+    .admin-feedback-actions,
+    .admin-feedback-status-field {
+        width: 100%;
+    }
+
+    .admin-feedback-actions .btn {
+        width: 100%;
+    }
+
+    .admin-iptv-seeds-fields {
+        display: grid;
+        grid-template-columns: 1fr;
+        gap: 0.6rem;
+    }
+
+    .admin-iptv-seed-input,
+    .admin-iptv-seed-input.is-url {
+        flex: 1 1 auto;
+    }
+
+    .admin-iptv-seed-meta-row {
+        align-items: stretch;
+    }
+
+    .admin-iptv-seed-meta-controls,
+    .admin-iptv-seed-actions,
+    .admin-iptv-seed-create-btn {
+        width: 100%;
+    }
+
+    .admin-iptv-seed-sort-field {
+        width: 100%;
+    }
+
+    .admin-iptv-seed-actions .btn {
+        width: 100%;
+    }
+
+    .admin-row-between,
+    .admin-row-between-start {
+        align-items: flex-start;
+    }
+
+    .admin-actions-wrap,
+    .admin-actions-wrap-tight {
+        width: 100%;
+    }
+
+    .admin-actions-wrap .btn,
+    .admin-actions-wrap-tight .btn {
+        width: 100%;
+    }
+
+    .admin-check-toggle {
+        width: 100%;
+    }
+
+    .admin-home-locale-row {
+        align-items: stretch;
+    }
+
+    .admin-home-locale-row .admin-actions-wrap {
+        width: 100%;
+    }
+
+    .admin-feature-item-row {
+        flex-direction: column;
+        align-items: stretch;
+    }
+
+    .admin-feature-item-row .btn {
+        width: 100%;
     }
 
     .user-search-row {

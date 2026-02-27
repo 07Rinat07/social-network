@@ -4,7 +4,7 @@
             <h1 class="section-title">{{ $t('admin.title') }}</h1>
             <p class="section-subtitle">{{ $t('admin.subtitle') }}</p>
 
-            <div class="stats-grid" style="margin-bottom: 1rem;">
+            <div class="stats-grid admin-summary-grid">
                 <div class="stat-card">
                     <span class="stat-label">{{ $t('admin.statsUsers') }}</span>
                     <div class="stat-value">{{ summary.users ?? 0 }}</div>
@@ -44,6 +44,7 @@
             </div>
 
             <div class="admin-tabs">
+                <button class="btn" :class="activeTab === 'dashboard' ? 'btn-primary' : 'btn-outline'" @click="selectTab('dashboard')">{{ $t('admin.tabDashboard') }}</button>
                 <button class="btn" :class="activeTab === 'users' ? 'btn-primary' : 'btn-outline'" @click="selectTab('users')">{{ $t('admin.tabUsers') }}</button>
                 <button class="btn" :class="activeTab === 'posts' ? 'btn-primary' : 'btn-outline'" @click="selectTab('posts')">{{ $t('admin.tabPosts') }}</button>
                 <button class="btn" :class="activeTab === 'comments' ? 'btn-primary' : 'btn-outline'" @click="selectTab('comments')">{{ $t('admin.tabComments') }}</button>
@@ -53,6 +54,277 @@
                 <button class="btn" :class="activeTab === 'blocks' ? 'btn-primary' : 'btn-outline'" @click="selectTab('blocks')">{{ $t('admin.tabBlocks') }}</button>
                 <button class="btn" :class="activeTab === 'iptvSeeds' ? 'btn-primary' : 'btn-outline'" @click="selectTab('iptvSeeds')">{{ $t('admin.tabIptvSeeds') }}</button>
                 <button class="btn" :class="activeTab === 'settings' ? 'btn-primary' : 'btn-outline'" @click="selectTab('settings')">{{ $t('admin.tabSettings') }}</button>
+            </div>
+
+            <div v-if="activeTab === 'dashboard'" class="simple-list fade-in admin-dashboard">
+                <div class="simple-item admin-dashboard-head">
+                    <div>
+                        <strong>{{ $t('admin.dashboardTitle') }}</strong>
+                        <p class="muted admin-dashboard-subtitle">{{ $t('admin.dashboardSubtitle') }}</p>
+                    </div>
+                    <div class="admin-dashboard-controls">
+                        <div class="admin-dashboard-control-field admin-dashboard-control-field-year">
+                            <label class="muted" for="admin-dashboard-year">{{ $t('admin.dashboardYear') }}</label>
+                            <select
+                                id="admin-dashboard-year"
+                                class="select-field admin-dashboard-control-input"
+                                v-model.number="dashboardYear"
+                                @change="onDashboardYearChanged"
+                            >
+                                <option
+                                    v-for="year in (dashboard.available_years ?? [currentYear])"
+                                    :key="`admin-dashboard-year-${year}`"
+                                    :value="year"
+                                >
+                                    {{ year }}
+                                </option>
+                            </select>
+                        </div>
+
+                        <button
+                            class="btn btn-outline btn-sm admin-dashboard-control-btn"
+                            @click="loadDashboard"
+                            :disabled="dashboardLoading"
+                        >
+                            {{ dashboardLoading ? $t('common.loading') : $t('admin.dashboardRefresh') }}
+                        </button>
+
+                        <div class="admin-dashboard-control-field admin-dashboard-control-field-date">
+                            <label class="muted" for="admin-dashboard-export-from">{{ $t('admin.dashboardExportFrom') }}</label>
+                            <input
+                                id="admin-dashboard-export-from"
+                                class="input-field admin-dashboard-control-input"
+                                type="date"
+                                v-model="dashboardExportDateFrom"
+                            >
+                        </div>
+
+                        <div class="admin-dashboard-control-field admin-dashboard-control-field-date">
+                            <label class="muted" for="admin-dashboard-export-to">{{ $t('admin.dashboardExportTo') }}</label>
+                            <input
+                                id="admin-dashboard-export-to"
+                                class="input-field admin-dashboard-control-input"
+                                type="date"
+                                v-model="dashboardExportDateTo"
+                            >
+                        </div>
+
+                        <button
+                            class="btn btn-outline btn-sm admin-dashboard-control-btn"
+                            @click="exportDashboard('xls')"
+                            :disabled="dashboardLoading || dashboardExporting"
+                        >
+                            {{ isDashboardExporting('xls') ? $t('admin.dashboardExporting') : $t('admin.dashboardExportExcel') }}
+                        </button>
+                        <button
+                            class="btn btn-outline btn-sm admin-dashboard-control-btn"
+                            @click="exportDashboard('json')"
+                            :disabled="dashboardLoading || dashboardExporting"
+                        >
+                            {{ isDashboardExporting('json') ? $t('admin.dashboardExporting') : $t('admin.dashboardExportJson') }}
+                        </button>
+                    </div>
+                </div>
+                <p class="muted admin-dashboard-period-note">
+                    {{
+                        $t('admin.dashboardPeriodActive', {
+                            from: dashboard.period?.from ?? dashboardExportDateFrom,
+                            to: dashboard.period?.to ?? dashboardExportDateTo,
+                        })
+                    }}
+                </p>
+
+                <div class="admin-dashboard-kpi-grid">
+                    <article class="admin-dashboard-kpi-card">
+                        <span class="admin-dashboard-kpi-label">{{ $t('admin.dashboardKpiUsers') }}</span>
+                        <strong class="admin-dashboard-kpi-value">{{ formatDashboardNumber(dashboard.kpis?.users_total) }}</strong>
+                        <small class="muted">
+                            {{ $t('admin.dashboardKpiUsersDelta', { count: formatDashboardNumber(dashboard.kpis?.users_new_year) }) }}
+                        </small>
+                    </article>
+                    <article class="admin-dashboard-kpi-card">
+                        <span class="admin-dashboard-kpi-label">{{ $t('admin.dashboardKpiSubscriptions') }}</span>
+                        <strong class="admin-dashboard-kpi-value">{{ formatDashboardNumber(dashboard.kpis?.subscriptions_year) }}</strong>
+                        <small class="muted">
+                            {{ $t('admin.dashboardKpiSubscriptionsAvg', { count: dashboard.kpis?.subscriptions_avg_month ?? 0 }) }}
+                        </small>
+                    </article>
+                    <article class="admin-dashboard-kpi-card">
+                        <span class="admin-dashboard-kpi-label">{{ dashboardKpiPrimaryLabel }}</span>
+                        <strong class="admin-dashboard-kpi-value">{{ formatDashboardNumber(dashboard.preference?.total_actions) }}</strong>
+                        <small class="muted">
+                            {{ $t('admin.dashboardKpiLeader', { feature: dashboardFeatureLabel(dashboard.preference?.leader_key) }) }}
+                        </small>
+                    </article>
+                    <article class="admin-dashboard-kpi-card">
+                        <span class="admin-dashboard-kpi-label">{{ $t('admin.dashboardKpiActiveUsers') }}</span>
+                        <strong class="admin-dashboard-kpi-value">{{ formatDashboardNumber(dashboard.engagement?.active_users_30d) }}</strong>
+                        <small class="muted">
+                            {{ $t('admin.dashboardKpiChatters', { count: formatDashboardNumber(dashboard.engagement?.chatters_30d) }) }}
+                        </small>
+                    </article>
+                </div>
+
+                <div class="admin-dashboard-grid">
+                    <div class="simple-item admin-dashboard-card">
+                        <div class="admin-dashboard-card-head">
+                            <strong>{{ $t('admin.dashboardSubscriptionsTrend') }}</strong>
+                            <span class="muted">
+                                {{
+                                    $t('admin.dashboardPeakMonth', {
+                                        month: formatDashboardMonth(dashboard.kpis?.subscriptions_peak_month?.month),
+                                        count: formatDashboardNumber(dashboard.kpis?.subscriptions_peak_month?.value),
+                                    })
+                                }}
+                            </span>
+                        </div>
+
+                        <div class="admin-dashboard-line-chart">
+                            <svg viewBox="0 0 760 250" role="img" aria-hidden="true" preserveAspectRatio="none">
+                                <defs>
+                                    <linearGradient id="admin-dashboard-subscriptions-gradient" x1="0" y1="0" x2="0" y2="1">
+                                        <stop offset="0%" stop-color="rgba(15, 108, 242, 0.35)" />
+                                        <stop offset="100%" stop-color="rgba(15, 108, 242, 0.03)" />
+                                    </linearGradient>
+                                </defs>
+
+                                <path
+                                    v-if="dashboardSubscriptionsAreaPath"
+                                    :d="dashboardSubscriptionsAreaPath"
+                                    fill="url(#admin-dashboard-subscriptions-gradient)"
+                                />
+                                <path
+                                    v-if="dashboardSubscriptionsLinePath"
+                                    :d="dashboardSubscriptionsLinePath"
+                                    fill="none"
+                                    stroke="rgba(15, 108, 242, 0.95)"
+                                    stroke-width="4"
+                                    stroke-linecap="round"
+                                    stroke-linejoin="round"
+                                />
+                                <circle
+                                    v-for="point in dashboardSubscriptionsPoints"
+                                    :key="`admin-subscriptions-point-${point.month}`"
+                                    :cx="point.x"
+                                    :cy="point.y"
+                                    r="4"
+                                    fill="#0f6cf2"
+                                />
+                            </svg>
+                        </div>
+
+                        <div class="admin-dashboard-months-row">
+                            <div
+                                class="admin-dashboard-month-chip"
+                                v-for="item in (dashboard.subscriptions_by_month ?? [])"
+                                :key="`admin-dashboard-subscriptions-${item.month}`"
+                            >
+                                <span>{{ formatDashboardMonth(item.month) }}</span>
+                                <strong>{{ formatDashboardNumber(item.value) }}</strong>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="simple-item admin-dashboard-card">
+                        <div class="admin-dashboard-card-head">
+                            <strong>{{ $t('admin.dashboardFeaturePreferences') }}</strong>
+                            <span class="muted">{{ dashboardMethodLabelText }}</span>
+                        </div>
+
+                        <div class="admin-dashboard-preference">
+                            <div class="admin-dashboard-donut" :style="{ '--donut-gradient': dashboardPreferenceGradient }">
+                                <div class="admin-dashboard-donut-core">
+                                    <strong>{{ formatDashboardNumber(dashboard.preference?.total_actions) }}</strong>
+                                    <span>{{ dashboardPreferenceUnitLabel }}</span>
+                                </div>
+                            </div>
+
+                            <div class="admin-dashboard-preference-legend">
+                                <div
+                                    class="admin-dashboard-legend-item"
+                                    v-for="item in (dashboard.preference?.items ?? [])"
+                                    :key="`admin-dashboard-preference-${item.key}`"
+                                >
+                                    <span class="admin-dashboard-legend-marker" :style="{ background: dashboardFeatureColor(item.key) }"></span>
+                                    <span>{{ dashboardFeatureLabel(item.key) }}</span>
+                                    <strong>{{ formatDashboardNumber(item.value) }}</strong>
+                                    <small>{{ Number(item.share ?? 0).toFixed(1) }}%</small>
+                                </div>
+                            </div>
+                        </div>
+
+                        <p class="muted admin-dashboard-method-note">
+                            {{ dashboardMethodNoteText }}
+                        </p>
+                    </div>
+                </div>
+
+                <div class="simple-item admin-dashboard-card">
+                    <div class="admin-dashboard-card-head">
+                        <strong>{{ $t('admin.dashboardMonthlyActivity') }}</strong>
+                        <span class="muted">
+                            {{
+                                $t('admin.dashboardActivityPeak', {
+                                    month: formatDashboardMonth(dashboard.highlights?.activity_peak_month),
+                                    count: formatDashboardNumber(dashboard.highlights?.activity_peak_value),
+                                })
+                            }}
+                        </span>
+                    </div>
+
+                    <div class="admin-activity-rows">
+                        <div
+                            class="admin-activity-row"
+                            v-for="item in (dashboard.activity_by_month ?? [])"
+                            :key="`admin-dashboard-activity-${item.month}`"
+                        >
+                            <span class="admin-activity-month">{{ formatDashboardMonth(item.month) }}</span>
+                            <div class="admin-activity-track">
+                                <div class="admin-activity-stack" :style="{ width: dashboardActivityRowWidth(item.total) }">
+                                    <span class="admin-activity-segment is-social" :style="{ width: dashboardActivitySegmentWidth(item.social, item.total) }"></span>
+                                    <span class="admin-activity-segment is-chats" :style="{ width: dashboardActivitySegmentWidth(item.chats, item.total) }"></span>
+                                    <span class="admin-activity-segment is-radio" :style="{ width: dashboardActivitySegmentWidth(item.radio, item.total) }"></span>
+                                    <span class="admin-activity-segment is-iptv" :style="{ width: dashboardActivitySegmentWidth(item.iptv, item.total) }"></span>
+                                </div>
+                            </div>
+                            <strong class="admin-activity-total">{{ formatDashboardNumber(item.total) }}</strong>
+                        </div>
+                    </div>
+
+                    <div class="admin-activity-legend">
+                        <span><i class="admin-activity-dot is-social"></i>{{ dashboardFeatureLabel('social') }}</span>
+                        <span><i class="admin-activity-dot is-chats"></i>{{ dashboardFeatureLabel('chats') }}</span>
+                        <span><i class="admin-activity-dot is-radio"></i>{{ dashboardFeatureLabel('radio') }}</span>
+                        <span><i class="admin-activity-dot is-iptv"></i>{{ dashboardFeatureLabel('iptv') }}</span>
+                    </div>
+                </div>
+
+                <div class="admin-dashboard-engagement-grid">
+                    <article class="admin-dashboard-mini-card">
+                        <span>{{ $t('admin.dashboardEngagementUsers30d') }}</span>
+                        <strong>{{ formatDashboardNumber(dashboard.engagement?.active_users_30d) }}</strong>
+                    </article>
+                    <article class="admin-dashboard-mini-card">
+                        <span>{{ $t('admin.dashboardEngagementCreators30d') }}</span>
+                        <strong>{{ formatDashboardNumber(dashboard.engagement?.creators_30d) }}</strong>
+                    </article>
+                    <article class="admin-dashboard-mini-card">
+                        <span>{{ $t('admin.dashboardEngagementChatters30d') }}</span>
+                        <strong>{{ formatDashboardNumber(dashboard.engagement?.chatters_30d) }}</strong>
+                    </article>
+                    <article class="admin-dashboard-mini-card">
+                        <span>{{ $t('admin.dashboardEngagementSocial30d') }}</span>
+                        <strong>{{ formatDashboardNumber(dashboard.engagement?.social_active_users_30d) }}</strong>
+                    </article>
+                    <article class="admin-dashboard-mini-card">
+                        <span>{{ $t('admin.dashboardEngagementRadio30d') }}</span>
+                        <strong>{{ formatDashboardNumber(dashboard.engagement?.radio_active_users_30d) }}</strong>
+                    </article>
+                    <article class="admin-dashboard-mini-card">
+                        <span>{{ $t('admin.dashboardEngagementIptv30d') }}</span>
+                        <strong>{{ formatDashboardNumber(dashboard.engagement?.iptv_active_users_30d) }}</strong>
+                    </article>
+                </div>
             </div>
 
             <div v-if="activeTab === 'users'" class="table-wrap fade-in">
@@ -128,8 +400,8 @@
             </div>
 
             <div v-if="activeTab === 'posts'" class="simple-list fade-in">
-                <div class="simple-item" style="display: block;">
-                    <strong style="display: block; margin-bottom: 0.5rem;">{{ $t('admin.createPostAsAnyUser') }}</strong>
+                <div class="simple-item admin-simple-item-block">
+                    <strong class="admin-section-title">{{ $t('admin.createPostAsAnyUser') }}</strong>
                     <div class="form-grid">
                         <input
                             class="input-field"
@@ -146,8 +418,7 @@
                             :placeholder="$t('admin.postTitle')"
                         >
                         <textarea
-                            class="textarea-field"
-                            style="min-height: 120px;"
+                            class="textarea-field admin-textarea-tall"
                             maxlength="5000"
                             v-model.trim="postCreateForm.content"
                             :placeholder="$t('admin.postText')"
@@ -160,37 +431,37 @@
                             :placeholder="$t('admin.repostIdOptional')"
                         >
 
-                        <label class="muted" style="display: flex; align-items: center; gap: 0.45rem;">
+                        <label class="muted admin-check-toggle">
                             <input type="checkbox" v-model="postCreateForm.is_public">
                             {{ $t('admin.publicPost') }}
                         </label>
-                        <label class="muted" style="display: flex; align-items: center; gap: 0.45rem;">
+                        <label class="muted admin-check-toggle">
                             <input type="checkbox" v-model="postCreateForm.show_in_feed" :disabled="!postCreateForm.is_public">
                             {{ $t('admin.showInFeed') }}
                         </label>
-                        <label class="muted" style="display: flex; align-items: center; gap: 0.45rem;">
+                        <label class="muted admin-check-toggle">
                             <input type="checkbox" v-model="postCreateForm.show_in_carousel" :disabled="!postCreateForm.is_public">
                             {{ $t('admin.showInCarousel') }}
                         </label>
 
-                        <div style="display: flex; gap: 0.45rem; flex-wrap: wrap;">
+                        <div class="admin-actions-wrap">
                             <button class="btn btn-primary btn-sm" @click="createPost">{{ $t('admin.createPost') }}</button>
                             <button class="btn btn-danger btn-sm" @click="clearAllLikes">{{ $t('admin.clearAllLikes') }}</button>
                         </div>
                     </div>
                 </div>
 
-                <div class="simple-item" v-for="post in posts" :key="`admin-post-${post.id}`" style="display: block;">
-                    <div style="display: flex; justify-content: space-between; gap: 0.8rem; flex-wrap: wrap; align-items: center;">
+                <div class="simple-item admin-simple-item-block" v-for="post in posts" :key="`admin-post-${post.id}`">
+                    <div class="admin-row-between">
                         <strong>#{{ post.id }} · {{ $t('admin.likesCount', { count: post.likes_count ?? 0 }) }}</strong>
-                        <div style="display: flex; gap: 0.4rem; flex-wrap: wrap;">
+                        <div class="admin-actions-wrap-tight">
                             <button class="btn btn-outline btn-sm" @click="clearPostLikes(post)">{{ $t('admin.clearLikes') }}</button>
                             <button class="btn btn-danger btn-sm" @click="removePost(post)">{{ $t('common.delete') }}</button>
                         </div>
                     </div>
 
-                    <div class="form-grid" style="margin-top: 0.6rem;">
-                        <p class="muted" style="margin: 0;">{{ $t('admin.currentAuthor', { name: post.user?.name ?? '—', id: post.user?.id ?? post.user_id }) }}</p>
+                    <div class="form-grid admin-form-grid-offset">
+                        <p class="muted admin-muted-reset">{{ $t('admin.currentAuthor', { name: post.user?.name ?? '—', id: post.user?.id ?? post.user_id }) }}</p>
                         <input
                             class="input-field"
                             type="number"
@@ -206,8 +477,7 @@
                             :placeholder="$t('admin.postTitle')"
                         >
                         <textarea
-                            class="textarea-field"
-                            style="min-height: 120px;"
+                            class="textarea-field admin-textarea-tall"
                             maxlength="5000"
                             v-model.trim="post.content"
                             :placeholder="$t('admin.postText')"
@@ -220,15 +490,15 @@
                             :placeholder="$t('admin.repostIdOptional')"
                         >
 
-                        <label class="muted" style="display: flex; align-items: center; gap: 0.45rem;">
+                        <label class="muted admin-check-toggle">
                             <input type="checkbox" v-model="post.is_public">
                             {{ $t('admin.publicPost') }}
                         </label>
-                        <label class="muted" style="display: flex; align-items: center; gap: 0.45rem;">
+                        <label class="muted admin-check-toggle">
                             <input type="checkbox" v-model="post.show_in_feed" :disabled="!post.is_public">
                             {{ $t('admin.showInFeed') }}
                         </label>
-                        <label class="muted" style="display: flex; align-items: center; gap: 0.45rem;">
+                        <label class="muted admin-check-toggle">
                             <input type="checkbox" v-model="post.show_in_carousel" :disabled="!post.is_public">
                             {{ $t('admin.showInCarousel') }}
                         </label>
@@ -239,24 +509,24 @@
             </div>
 
             <div v-if="activeTab === 'comments'" class="simple-list fade-in">
-                <div class="simple-item" v-for="comment in comments" :key="`admin-comment-${comment.id}`" style="display: block;">
-                    <div style="display: flex; justify-content: space-between; gap: 0.8rem; flex-wrap: wrap;">
+                <div class="simple-item admin-simple-item-block" v-for="comment in comments" :key="`admin-comment-${comment.id}`">
+                    <div class="admin-row-between-start">
                         <strong>#{{ comment.id }} · {{ comment.user?.name ?? '—' }}</strong>
                         <button class="btn btn-danger btn-sm" @click="removeComment(comment)">{{ $t('common.delete') }}</button>
                     </div>
-                    <p style="margin: 0.35rem 0 0;">{{ comment.body }}</p>
+                    <p class="admin-copy-top">{{ comment.body }}</p>
                 </div>
             </div>
 
             <div v-if="activeTab === 'feedback'" class="simple-list fade-in">
-                <div class="simple-item" v-for="item in feedback" :key="`admin-feedback-${item.id}`" style="display: block;">
-                    <div style="display: flex; justify-content: space-between; gap: 0.8rem; flex-wrap: wrap; align-items: center;">
+                <div class="simple-item admin-simple-item-block" v-for="item in feedback" :key="`admin-feedback-${item.id}`">
+                    <div class="admin-row-between">
                         <div>
                             <strong>{{ item.name }}</strong>
-                            <p class="muted" style="margin: 0.2rem 0 0;">{{ item.email }}</p>
+                            <p class="muted admin-muted-top">{{ item.email }}</p>
                         </div>
-                        <div style="display: flex; gap: 0.45rem;">
-                            <select class="select-field" v-model="item.status" style="min-width: min(170px, 100%);">
+                        <div class="admin-feedback-actions">
+                            <select class="select-field admin-feedback-status-field" v-model="item.status">
                                 <option value="new">new</option>
                                 <option value="in_progress">in_progress</option>
                                 <option value="resolved">resolved</option>
@@ -265,28 +535,28 @@
                             <button class="btn btn-danger btn-sm" @click="removeFeedback(item)">{{ $t('common.delete') }}</button>
                         </div>
                     </div>
-                    <p style="margin: 0.45rem 0 0;">{{ item.message }}</p>
+                    <p class="admin-copy-top-lg">{{ item.message }}</p>
                 </div>
             </div>
 
             <div v-if="activeTab === 'conversations'" class="simple-list fade-in">
-                <div class="simple-item" style="display: block;">
-                    <strong style="display: block; margin-bottom: 0.45rem;">{{ $t('admin.bulkChatActions') }}</strong>
-                    <div style="display: flex; gap: 0.45rem; flex-wrap: wrap;">
+                <div class="simple-item admin-simple-item-block">
+                    <strong class="admin-section-title-sm">{{ $t('admin.bulkChatActions') }}</strong>
+                    <div class="admin-actions-wrap">
                         <button class="btn btn-outline btn-sm" @click="clearAllConversations">{{ $t('admin.clearAllChats') }}</button>
                         <button class="btn btn-danger btn-sm" @click="removeAllConversations">{{ $t('admin.deleteAllChats') }}</button>
                     </div>
                 </div>
 
-                <div class="simple-item" v-for="conversation in conversations" :key="`admin-conversation-${conversation.id}`" style="display: block;">
-                    <div style="display: flex; justify-content: space-between; gap: 0.8rem; flex-wrap: wrap; align-items: center;">
+                <div class="simple-item admin-simple-item-block" v-for="conversation in conversations" :key="`admin-conversation-${conversation.id}`">
+                    <div class="admin-row-between">
                         <strong>#{{ conversation.id }} · {{ conversation.display_title || conversation.title }}</strong>
-                        <div style="display: flex; gap: 0.45rem; flex-wrap: wrap;">
+                        <div class="admin-actions-wrap">
                             <button class="btn btn-outline btn-sm" @click="clearConversationMessages(conversation)">{{ $t('admin.clearChat') }}</button>
                             <button class="btn btn-danger btn-sm" @click="removeConversation(conversation)">{{ $t('admin.deleteChat') }}</button>
                         </div>
                     </div>
-                    <p class="muted" style="margin: 0.25rem 0 0;">
+                    <p class="muted admin-muted-top-sm">
                         {{ $t('admin.chatMeta', {
                             type: conversation.type,
                             participants: conversation.participants?.length ?? 0,
@@ -297,34 +567,34 @@
             </div>
 
             <div v-if="activeTab === 'messages'" class="simple-list fade-in">
-                <div class="simple-item" v-for="message in messages" :key="`admin-message-${message.id}`" style="display: block;">
-                    <div style="display: flex; justify-content: space-between; gap: 0.8rem; flex-wrap: wrap;">
+                <div class="simple-item admin-simple-item-block" v-for="message in messages" :key="`admin-message-${message.id}`">
+                    <div class="admin-row-between-start">
                         <strong>#{{ message.id }} · {{ message.user?.name ?? '—' }}</strong>
                         <button class="btn btn-danger btn-sm" @click="removeMessage(message)">{{ $t('common.delete') }}</button>
                     </div>
-                    <p class="muted" style="margin: 0.2rem 0 0;">
+                    <p class="muted admin-muted-top">
                         {{ $t('admin.chatNumber', { id: message.conversation_id }) }}
                     </p>
-                    <p style="margin: 0.35rem 0 0;">{{ message.body || $t('admin.onlyAttachments') }}</p>
-                    <p class="muted" style="margin: 0.25rem 0 0;" v-if="(message.attachments?.length ?? 0) > 0">
+                    <p class="admin-copy-top">{{ message.body || $t('admin.onlyAttachments') }}</p>
+                    <p class="muted admin-muted-top-sm" v-if="(message.attachments?.length ?? 0) > 0">
                         {{ $t('admin.attachmentsCount', { count: message.attachments.length }) }}
                     </p>
                 </div>
             </div>
 
             <div v-if="activeTab === 'blocks'" class="simple-list fade-in">
-                <div class="simple-item" v-for="block in blocks" :key="`admin-block-${block.id}`" style="display: block;">
-                    <div style="display: flex; justify-content: space-between; gap: 0.8rem; flex-wrap: wrap;">
+                <div class="simple-item admin-simple-item-block" v-for="block in blocks" :key="`admin-block-${block.id}`">
+                    <div class="admin-row-between-start">
                         <div>
                             <strong>#{{ block.id }} · {{ block.blocker?.name ?? '—' }} → {{ block.blocked_user?.name ?? '—' }}</strong>
-                            <p class="muted" style="margin: 0.2rem 0 0;">
+                            <p class="muted admin-muted-top">
                                 {{ $t('admin.blockStatus') }}: {{ block.expires_at ? $t('admin.blockUntil', { date: formatDate(block.expires_at) }) : $t('admin.blockPermanent') }}
                             </p>
                         </div>
                         <button class="btn btn-danger btn-sm" @click="removeBlock(block)">{{ $t('common.delete') }}</button>
                     </div>
 
-                    <div class="form-grid" style="margin-top: 0.6rem;">
+                    <div class="form-grid admin-form-grid-offset">
                         <input
                             class="input-field"
                             type="datetime-local"
@@ -338,7 +608,7 @@
                             v-model="block.reason"
                         >
 
-                        <div style="display: flex; gap: 0.45rem; flex-wrap: wrap;">
+                        <div class="admin-actions-wrap">
                             <button class="btn btn-success btn-sm" @click="saveBlock(block)">{{ $t('admin.save') }}</button>
                             <button class="btn btn-outline btn-sm" @click="setPermanentBlock(block)">{{ $t('admin.makePermanent') }}</button>
                             <button class="btn btn-outline btn-sm" @click="extendBlockFor24Hours(block)">{{ $t('admin.add24h') }}</button>
@@ -348,44 +618,44 @@
             </div>
 
             <div v-if="activeTab === 'iptvSeeds'" class="simple-list fade-in">
-                <div class="simple-item" style="display: block;">
-                    <strong style="display: block; margin-bottom: 0.5rem;">{{ $t('admin.iptvSeedsTitle') }}</strong>
-                    <p class="muted" style="margin: 0 0 1rem;">{{ $t('admin.iptvSeedsSubtitle') }}</p>
+                <div class="simple-item admin-simple-item-block">
+                    <strong class="admin-section-title">{{ $t('admin.iptvSeedsTitle') }}</strong>
+                    <p class="muted admin-paragraph-bottom">{{ $t('admin.iptvSeedsSubtitle') }}</p>
 
-                    <div style="display: flex; flex-direction: column; gap: 0.75rem; margin-bottom: 2rem; border-bottom: 1px solid var(--line); padding-bottom: 1.5rem;">
-                        <div style="display: flex; gap: 0.75rem; flex-wrap: wrap;">
-                            <input class="input-field" type="text" v-model.trim="newIptvSeed.name" :placeholder="$t('admin.name')" style="flex: 1; min-width: 200px;">
-                            <input class="input-field" type="url" v-model.trim="newIptvSeed.url" placeholder="URL (m3u/m3u8)" style="flex: 2; min-width: 300px;">
+                    <div class="admin-iptv-seeds-create">
+                        <div class="admin-iptv-seeds-fields">
+                            <input class="input-field admin-iptv-seed-input is-name" type="text" v-model.trim="newIptvSeed.name" :placeholder="$t('admin.name')">
+                            <input class="input-field admin-iptv-seed-input is-url" type="url" v-model.trim="newIptvSeed.url" placeholder="URL (m3u/m3u8)">
                         </div>
-                        <div style="display: flex; gap: 1rem; align-items: center; justify-content: space-between; flex-wrap: wrap;">
-                            <div style="display: flex; gap: 1rem; align-items: center;">
-                                <input class="input-field" type="number" v-model.number="newIptvSeed.sort_order" :placeholder="$t('admin.sortOrder')" style="width: 100px;">
-                                <label style="display: flex; gap: 0.4rem; align-items: center; cursor: pointer;">
+                        <div class="admin-iptv-seed-meta-row">
+                            <div class="admin-iptv-seed-meta-controls">
+                                <input class="input-field admin-iptv-seed-sort-field" type="number" v-model.number="newIptvSeed.sort_order" :placeholder="$t('admin.sortOrder')">
+                                <label class="admin-iptv-seed-active-toggle">
                                     <input type="checkbox" v-model="newIptvSeed.is_active">
                                     <small>{{ $t('admin.isActive') }}</small>
                                 </label>
                             </div>
-                            <button class="btn btn-primary" @click="createIptvSeed" :disabled="!newIptvSeed.name || !newIptvSeed.url">
+                            <button class="btn btn-primary admin-iptv-seed-create-btn" @click="createIptvSeed" :disabled="!newIptvSeed.name || !newIptvSeed.url">
                                 {{ $t('admin.create') }}
                             </button>
                         </div>
                     </div>
 
-                    <div v-for="seed in iptvSeeds" :key="`admin-seed-${seed.id}`" class="simple-item" style="border-left: 3px solid var(--accent); padding: 1rem;">
-                        <div style="display: flex; flex-direction: column; gap: 0.75rem; width: 100%;">
-                            <div style="display: flex; gap: 0.75rem; flex-wrap: wrap;">
-                                <input class="input-field" type="text" v-model.trim="seed.name" :placeholder="$t('admin.name')" style="flex: 1; min-width: 200px;">
-                                <input class="input-field" type="url" v-model.trim="seed.url" placeholder="URL" style="flex: 2; min-width: 300px;">
+                    <div v-for="seed in iptvSeeds" :key="`admin-seed-${seed.id}`" class="simple-item admin-iptv-seed-item">
+                        <div class="admin-iptv-seed-item-body">
+                            <div class="admin-iptv-seeds-fields">
+                                <input class="input-field admin-iptv-seed-input is-name" type="text" v-model.trim="seed.name" :placeholder="$t('admin.name')">
+                                <input class="input-field admin-iptv-seed-input is-url" type="url" v-model.trim="seed.url" placeholder="URL">
                             </div>
-                            <div style="display: flex; gap: 1rem; align-items: center; justify-content: space-between; flex-wrap: wrap;">
-                                <div style="display: flex; gap: 1rem; align-items: center;">
-                                    <input class="input-field" type="number" v-model.number="seed.sort_order" :placeholder="$t('admin.sortOrder')" style="width: 100px;">
-                                    <label style="display: flex; gap: 0.4rem; align-items: center; cursor: pointer;">
+                            <div class="admin-iptv-seed-meta-row">
+                                <div class="admin-iptv-seed-meta-controls">
+                                    <input class="input-field admin-iptv-seed-sort-field" type="number" v-model.number="seed.sort_order" :placeholder="$t('admin.sortOrder')">
+                                    <label class="admin-iptv-seed-active-toggle">
                                         <input type="checkbox" v-model="seed.is_active">
                                         <small>{{ $t('admin.isActive') }}</small>
                                     </label>
                                 </div>
-                                <div style="display: flex; gap: 0.5rem;">
+                                <div class="admin-iptv-seed-actions">
                                     <button class="btn btn-success btn-sm" @click="updateIptvSeed(seed)">{{ $t('admin.save') }}</button>
                                     <button class="btn btn-danger btn-sm" @click="removeIptvSeed(seed)">{{ $t('common.delete') }}</button>
                                 </div>
@@ -396,17 +666,17 @@
             </div>
 
             <div v-if="activeTab === 'settings'" class="simple-list fade-in">
-                <div class="simple-item" style="display: block;">
-                    <strong style="display: block; margin-bottom: 0.5rem;">{{ $t('admin.homeContentTitle') }}</strong>
-                    <p class="muted" style="margin: 0 0 0.65rem;">
+                <div class="simple-item admin-simple-item-block">
+                    <strong class="admin-section-title">{{ $t('admin.homeContentTitle') }}</strong>
+                    <p class="muted admin-paragraph-compact-bottom">
                         {{ $t('admin.homeContentSubtitle') }}
                     </p>
-                    <div style="display: flex; align-items: center; justify-content: space-between; gap: 0.6rem; margin: 0 0 0.75rem; flex-wrap: wrap;">
-                        <span class="muted" style="font-size: 0.82rem;">
+                    <div class="admin-home-locale-row">
+                        <span class="muted admin-muted-label">
                             {{ $t('admin.editLanguage') }}:
                             <strong>{{ homeContentActiveLocale === 'en' ? $t('admin.languageNameEn') : $t('admin.languageNameRu') }}</strong>
                         </span>
-                        <div style="display: flex; gap: 0.45rem;">
+                        <div class="admin-actions-wrap">
                             <button
                                 class="btn btn-sm"
                                 :class="homeContentActiveLocale === 'ru' ? 'btn-primary' : 'btn-outline'"
@@ -427,21 +697,21 @@
                     </div>
 
                     <div class="form-grid">
-                        <label class="muted" style="font-size: 0.82rem;">{{ $t('admin.badge') }}</label>
+                        <label class="muted admin-muted-label">{{ $t('admin.badge') }}</label>
                         <input class="input-field" type="text" maxlength="80" v-model.trim="activeHomeContentLocalePayload.badge">
 
-                        <label class="muted" style="font-size: 0.82rem;">{{ $t('admin.heroTitle') }}</label>
-                        <textarea class="textarea-field" style="min-height: 90px;" maxlength="300" v-model.trim="activeHomeContentLocalePayload.hero_title"></textarea>
+                        <label class="muted admin-muted-label">{{ $t('admin.heroTitle') }}</label>
+                        <textarea class="textarea-field admin-textarea-medium" maxlength="300" v-model.trim="activeHomeContentLocalePayload.hero_title"></textarea>
 
-                        <label class="muted" style="font-size: 0.82rem;">{{ $t('admin.heroNote') }}</label>
-                        <textarea class="textarea-field" style="min-height: 120px;" maxlength="3000" v-model.trim="activeHomeContentLocalePayload.hero_note"></textarea>
+                        <label class="muted admin-muted-label">{{ $t('admin.heroNote') }}</label>
+                        <textarea class="textarea-field admin-textarea-tall" maxlength="3000" v-model.trim="activeHomeContentLocalePayload.hero_note"></textarea>
 
-                        <label class="muted" style="font-size: 0.82rem;">{{ $t('admin.featureItems') }}</label>
-                        <div style="display: flex; flex-direction: column; gap: 0.5rem;">
+                        <label class="muted admin-muted-label">{{ $t('admin.featureItems') }}</label>
+                        <div class="admin-feature-items">
                             <div
                                 v-for="(item, index) in activeHomeContentLocalePayload.feature_items"
                                 :key="`home-feature-item-${index}`"
-                                style="display: flex; gap: 0.45rem; align-items: center;"
+                                class="admin-feature-item-row"
                             >
                                 <input
                                     class="input-field"
@@ -469,22 +739,22 @@
                             </button>
                         </div>
 
-                        <label class="muted" style="font-size: 0.82rem;">{{ $t('admin.feedbackTitle') }}</label>
+                        <label class="muted admin-muted-label">{{ $t('admin.feedbackTitle') }}</label>
                         <input class="input-field" type="text" maxlength="180" v-model.trim="activeHomeContentLocalePayload.feedback_title">
 
-                        <label class="muted" style="font-size: 0.82rem;">{{ $t('admin.feedbackSubtitle') }}</label>
-                        <textarea class="textarea-field" style="min-height: 90px;" maxlength="500" v-model.trim="activeHomeContentLocalePayload.feedback_subtitle"></textarea>
+                        <label class="muted admin-muted-label">{{ $t('admin.feedbackSubtitle') }}</label>
+                        <textarea class="textarea-field admin-textarea-medium" maxlength="500" v-model.trim="activeHomeContentLocalePayload.feedback_subtitle"></textarea>
 
-                        <div style="display: flex; gap: 0.45rem; flex-wrap: wrap;">
+                        <div class="admin-actions-wrap">
                             <button class="btn btn-success btn-sm" @click="saveHomeContent">{{ $t('admin.saveHomeContent') }}</button>
                             <button class="btn btn-outline btn-sm" @click="resetHomeContent">{{ $t('admin.resetToDefault') }}</button>
                         </div>
                     </div>
                 </div>
 
-                <div class="simple-item" style="display: block;">
-                    <strong style="display: block; margin-bottom: 0.5rem;">{{ $t('admin.storageTitle') }}</strong>
-                    <p class="muted" style="margin: 0 0 0.65rem;">
+                <div class="simple-item admin-simple-item-block">
+                    <strong class="admin-section-title">{{ $t('admin.storageTitle') }}</strong>
+                    <p class="muted admin-paragraph-compact-bottom">
                         {{ $t('admin.storageSubtitle') }}
                     </p>
 
@@ -495,18 +765,18 @@
                             <option value="user_choice">{{ $t('admin.storageUserChoice') }}</option>
                         </select>
 
-                        <label class="muted" style="font-size: 0.82rem;">{{ $t('admin.serverDisk') }}</label>
+                        <label class="muted admin-muted-label">{{ $t('admin.serverDisk') }}</label>
                         <input class="input-field" v-model.trim="storageSettings.server_media_disk" type="text" placeholder="public">
 
-                        <label class="muted" style="font-size: 0.82rem;">{{ $t('admin.cloudDisk') }}</label>
+                        <label class="muted admin-muted-label">{{ $t('admin.cloudDisk') }}</label>
                         <input class="input-field" v-model.trim="storageSettings.cloud_media_disk" type="text" placeholder="s3">
 
                         <button class="btn btn-success btn-sm" @click="saveStorageSettings">{{ $t('admin.saveStorage') }}</button>
                     </div>
                 </div>
 
-                <div class="simple-item" style="display: block;">
-                    <strong style="display: block; margin-bottom: 0.5rem;">{{ $t('admin.createSiteSetting') }}</strong>
+                <div class="simple-item admin-simple-item-block">
+                    <strong class="admin-section-title">{{ $t('admin.createSiteSetting') }}</strong>
                     <div class="form-grid">
                         <input class="input-field" v-model.trim="newSetting.key" type="text" placeholder="key_name">
                         <select class="select-field" v-model="newSetting.type">
@@ -516,19 +786,19 @@
                             <option value="boolean">boolean</option>
                             <option value="json">json</option>
                         </select>
-                        <textarea class="textarea-field" style="min-height: 90px;" v-model="newSetting.valueText" :placeholder="$t('admin.value')"></textarea>
+                        <textarea class="textarea-field admin-textarea-medium" v-model="newSetting.valueText" :placeholder="$t('admin.value')"></textarea>
                         <input class="input-field" v-model.trim="newSetting.description" type="text" :placeholder="$t('admin.descriptionOptional')">
                         <button class="btn btn-primary btn-sm" @click="createSetting">{{ $t('admin.create') }}</button>
                     </div>
                 </div>
 
-                <div class="simple-item" v-for="setting in settings" :key="`admin-setting-${setting.id}`" style="display: block;">
-                    <div style="display: flex; justify-content: space-between; gap: 0.8rem; flex-wrap: wrap; align-items: center;">
+                <div class="simple-item admin-simple-item-block" v-for="setting in settings" :key="`admin-setting-${setting.id}`">
+                    <div class="admin-row-between">
                         <strong>#{{ setting.id }} · {{ setting.key }}</strong>
                         <button class="btn btn-danger btn-sm" @click="removeSetting(setting)">{{ $t('common.delete') }}</button>
                     </div>
 
-                    <div class="form-grid" style="margin-top: 0.6rem;">
+                    <div class="form-grid admin-form-grid-offset">
                         <input class="input-field" type="text" v-model.trim="setting.key">
                         <select class="select-field" v-model="setting.type">
                             <option value="string">string</option>
@@ -537,7 +807,7 @@
                             <option value="boolean">boolean</option>
                             <option value="json">json</option>
                         </select>
-                        <textarea class="textarea-field" style="min-height: 90px;" v-model="setting.valueText"></textarea>
+                        <textarea class="textarea-field admin-textarea-medium" v-model="setting.valueText"></textarea>
                         <input class="input-field" type="text" v-model.trim="setting.description" :placeholder="$t('admin.description')">
                         <button class="btn btn-success btn-sm" @click="saveSetting(setting)">{{ $t('admin.save') }}</button>
                     </div>
@@ -554,6 +824,18 @@ import ruMessages from '../../i18n/messages/ru'
 const CHAT_WIDGET_SYNC_EVENT = 'social:chat:sync'
 const CHAT_WIDGET_SYNC_SOURCE_PAGE = 'chat-page'
 const CHAT_WIDGET_SYNC_TYPE_STATE_REFRESH = 'state-refresh'
+const DASHBOARD_CHART_WIDTH = 760
+const DASHBOARD_CHART_HEIGHT = 250
+const DASHBOARD_CHART_PADDING_X = 26
+const DASHBOARD_CHART_PADDING_TOP = 16
+const DASHBOARD_CHART_PADDING_BOTTOM = 28
+const DASHBOARD_MIN_ACTIVITY_BAR_PERCENT = 3
+const DASHBOARD_FEATURE_COLORS = {
+    social: '#0f6cf2',
+    chats: '#f97316',
+    radio: '#0d9488',
+    iptv: '#be123c',
+}
 
 function resolveMessage(messages, key, fallback = '') {
     if (!messages || typeof messages !== 'object' || typeof key !== 'string' || key.trim() === '') {
@@ -596,12 +878,99 @@ function buildDefaultHomeContentLocalesPayload() {
     }
 }
 
+function buildEmptyDashboardPayload(year = new Date().getFullYear()) {
+    const safeYear = Number.isFinite(Number(year)) ? Number(year) : new Date().getFullYear()
+    const subscriptionsByMonth = Array.from({ length: 12 }, (_, index) => ({
+        month: index + 1,
+        value: 0,
+    }))
+    const registrationsByMonth = Array.from({ length: 12 }, (_, index) => ({
+        month: index + 1,
+        value: 0,
+    }))
+    const activityByMonth = Array.from({ length: 12 }, (_, index) => ({
+        month: index + 1,
+        social: 0,
+        chats: 0,
+        radio: 0,
+        iptv: 0,
+        total: 0,
+    }))
+
+    return {
+        selected_year: safeYear,
+        available_years: [safeYear],
+        period: {
+            mode: 'year',
+            from: `${safeYear}-01-01`,
+            to: `${safeYear}-12-31`,
+            requested_from: null,
+            requested_to: null,
+            is_clamped: false,
+        },
+        kpis: {
+            users_total: 0,
+            users_new_year: 0,
+            users_new_period: 0,
+            subscriptions_total: 0,
+            subscriptions_year: 0,
+            subscriptions_period: 0,
+            subscriptions_previous_year: 0,
+            subscriptions_change_percent: null,
+            subscriptions_avg_month: 0,
+            period_months: 12,
+            subscriptions_peak_month: {
+                month: 1,
+                value: 0,
+            },
+        },
+        subscriptions_by_month: subscriptionsByMonth,
+        registrations_by_month: registrationsByMonth,
+        activity_by_month: activityByMonth,
+        preference: {
+            method: 'actions',
+            total_actions: 0,
+            leader_key: null,
+            items: [
+                { key: 'social', value: 0, share: 0 },
+                { key: 'chats', value: 0, share: 0 },
+                { key: 'radio', value: 0, share: 0 },
+                { key: 'iptv', value: 0, share: 0 },
+            ],
+        },
+        engagement: {
+            active_users_30d: 0,
+            creators_30d: 0,
+            chatters_30d: 0,
+            new_users_30d: 0,
+            social_active_users_30d: 0,
+            chat_active_users_30d: 0,
+            radio_active_users_30d: 0,
+            iptv_active_users_30d: 0,
+        },
+        highlights: {
+            subscriptions_peak_month: 1,
+            activity_peak_month: 1,
+            activity_peak_value: 0,
+        },
+    }
+}
+
 export default {
     name: 'Admin',
 
     data() {
+        const currentYear = new Date().getFullYear()
+
         return {
-            activeTab: 'users',
+            activeTab: 'dashboard',
+            currentYear,
+            dashboardYear: currentYear,
+            dashboardLoading: false,
+            dashboardExportDateFrom: `${currentYear}-01-01`,
+            dashboardExportDateTo: `${currentYear}-12-31`,
+            dashboardExportingFormat: '',
+            dashboard: buildEmptyDashboardPayload(currentYear),
             summary: {},
             users: [],
             posts: [],
@@ -644,6 +1013,146 @@ export default {
     },
 
     computed: {
+        dashboardUsesTrackedTime() {
+            return this.dashboard?.preference?.method === 'time_minutes'
+        },
+
+        dashboardKpiPrimaryLabel() {
+            return this.dashboardUsesTrackedTime
+                ? this.$t('admin.dashboardKpiMinutes')
+                : this.$t('admin.dashboardKpiActions')
+        },
+
+        dashboardMethodLabelText() {
+            return this.dashboardUsesTrackedTime
+                ? this.$t('admin.dashboardMethodLabelTime')
+                : this.$t('admin.dashboardMethodLabelActions')
+        },
+
+        dashboardMethodNoteText() {
+            return this.dashboardUsesTrackedTime
+                ? this.$t('admin.dashboardMethodNoteTime')
+                : this.$t('admin.dashboardMethodNoteActions')
+        },
+
+        dashboardPreferenceUnitLabel() {
+            return this.dashboardUsesTrackedTime
+                ? this.$t('admin.dashboardMinutes')
+                : this.$t('admin.dashboardActions')
+        },
+
+        dashboardLocale() {
+            return this.$route?.params?.locale === 'en' ? 'en-US' : 'ru-RU'
+        },
+
+        dashboardSubscriptionsPoints() {
+            const series = Array.isArray(this.dashboard?.subscriptions_by_month)
+                ? this.dashboard.subscriptions_by_month
+                : []
+
+            if (series.length === 0) {
+                return []
+            }
+
+            const maxValue = Math.max(
+                ...series.map((item) => Math.max(0, Number(item?.value ?? 0))),
+                1
+            )
+
+            const innerWidth = DASHBOARD_CHART_WIDTH - (DASHBOARD_CHART_PADDING_X * 2)
+            const innerHeight = DASHBOARD_CHART_HEIGHT - DASHBOARD_CHART_PADDING_TOP - DASHBOARD_CHART_PADDING_BOTTOM
+            const baselineY = DASHBOARD_CHART_HEIGHT - DASHBOARD_CHART_PADDING_BOTTOM
+            const divisor = Math.max(series.length - 1, 1)
+
+            return series.map((item, index) => {
+                const value = Math.max(0, Number(item?.value ?? 0))
+                const x = DASHBOARD_CHART_PADDING_X + ((innerWidth * index) / divisor)
+                const y = baselineY - ((value / maxValue) * innerHeight)
+
+                return {
+                    month: Number(item?.month ?? (index + 1)),
+                    value,
+                    x: Number(x.toFixed(2)),
+                    y: Number(y.toFixed(2)),
+                    baselineY: Number(baselineY.toFixed(2)),
+                }
+            })
+        },
+
+        dashboardSubscriptionsLinePath() {
+            const points = this.dashboardSubscriptionsPoints
+            if (points.length === 0) {
+                return ''
+            }
+
+            return points
+                .map((point, index) => `${index === 0 ? 'M' : 'L'} ${point.x} ${point.y}`)
+                .join(' ')
+        },
+
+        dashboardSubscriptionsAreaPath() {
+            const points = this.dashboardSubscriptionsPoints
+            if (points.length === 0) {
+                return ''
+            }
+
+            const first = points[0]
+            const last = points[points.length - 1]
+            const line = points
+                .map((point, index) => `${index === 0 ? 'M' : 'L'} ${point.x} ${point.y}`)
+                .join(' ')
+
+            return `M ${first.x} ${first.baselineY} L ${first.x} ${first.y} ${line.replace(/^M [\d.]+ [\d.]+\s*/, '')} L ${last.x} ${last.baselineY} Z`
+        },
+
+        dashboardPreferenceGradient() {
+            const items = Array.isArray(this.dashboard?.preference?.items)
+                ? this.dashboard.preference.items
+                : []
+
+            if (items.length === 0) {
+                return 'conic-gradient(#d8e6f9 0deg 360deg)'
+            }
+
+            let cursor = 0
+            const segments = []
+
+            items.forEach((item) => {
+                const share = Math.max(0, Number(item?.share ?? 0))
+                if (share <= 0) {
+                    return
+                }
+
+                const start = cursor
+                const next = Math.min(360, cursor + ((share / 100) * 360))
+                const color = this.dashboardFeatureColor(item?.key)
+                segments.push(`${color} ${start.toFixed(2)}deg ${next.toFixed(2)}deg`)
+                cursor = next
+            })
+
+            if (segments.length === 0) {
+                return 'conic-gradient(#d8e6f9 0deg 360deg)'
+            }
+
+            if (cursor < 360) {
+                segments.push(`#d8e6f9 ${cursor.toFixed(2)}deg 360deg`)
+            }
+
+            return `conic-gradient(${segments.join(', ')})`
+        },
+
+        dashboardActivityMaxTotal() {
+            const values = Array.isArray(this.dashboard?.activity_by_month)
+                ? this.dashboard.activity_by_month.map((item) => Math.max(0, Number(item?.total ?? 0)))
+                : []
+
+            return Math.max(...values, 1)
+        },
+
+        dashboardExporting() {
+            return this.dashboardExportingFormat !== ''
+        },
+
         activeHomeContentLocalePayload() {
             if (!this.homeContentForm?.locales || typeof this.homeContentForm.locales !== 'object') {
                 return this.defaultHomeContentPayload(this.homeContentActiveLocale)
@@ -664,6 +1173,10 @@ export default {
         async selectTab(tab) {
             this.activeTab = tab
 
+            if (tab === 'dashboard') {
+                await this.loadDashboard()
+                return
+            }
             if (tab === 'users') {
                 await this.loadUsers()
                 return
@@ -698,6 +1211,317 @@ export default {
             }
             if (tab === 'settings') {
                 await Promise.all([this.loadSettings(), this.loadStorageSettings(), this.loadHomeContentSettings()])
+            }
+        },
+
+        normalizeDashboardMonthlySeries(series) {
+            const map = new Map()
+
+            if (Array.isArray(series)) {
+                series.forEach((item) => {
+                    const month = Number(item?.month ?? 0)
+                    if (!Number.isFinite(month) || month < 1 || month > 12) {
+                        return
+                    }
+
+                    const value = Math.max(0, Number(item?.value ?? 0))
+                    map.set(month, Number.isFinite(value) ? value : 0)
+                })
+            }
+
+            return Array.from({ length: 12 }, (_, index) => {
+                const month = index + 1
+                return {
+                    month,
+                    value: Number(map.get(month) ?? 0),
+                }
+            })
+        },
+
+        normalizeDashboardActivitySeries(series) {
+            const map = new Map()
+
+            if (Array.isArray(series)) {
+                series.forEach((item) => {
+                    const month = Number(item?.month ?? 0)
+                    if (!Number.isFinite(month) || month < 1 || month > 12) {
+                        return
+                    }
+
+                    const social = Math.max(0, Number(item?.social ?? 0))
+                    const chats = Math.max(0, Number(item?.chats ?? 0))
+                    const radio = Math.max(0, Number(item?.radio ?? 0))
+                    const iptv = Math.max(0, Number(item?.iptv ?? 0))
+
+                    map.set(month, {
+                        month,
+                        social: Number.isFinite(social) ? social : 0,
+                        chats: Number.isFinite(chats) ? chats : 0,
+                        radio: Number.isFinite(radio) ? radio : 0,
+                        iptv: Number.isFinite(iptv) ? iptv : 0,
+                    })
+                })
+            }
+
+            return Array.from({ length: 12 }, (_, index) => {
+                const month = index + 1
+                const item = map.get(month) ?? {
+                    month,
+                    social: 0,
+                    chats: 0,
+                    radio: 0,
+                    iptv: 0,
+                }
+
+                const total = Math.max(0, Number(item.social) + Number(item.chats) + Number(item.radio) + Number(item.iptv))
+
+                return {
+                    month,
+                    social: Math.max(0, Number(item.social) || 0),
+                    chats: Math.max(0, Number(item.chats) || 0),
+                    radio: Math.max(0, Number(item.radio) || 0),
+                    iptv: Math.max(0, Number(item.iptv) || 0),
+                    total,
+                }
+            })
+        },
+
+        normalizeDashboardPayload(payload) {
+            const fallback = buildEmptyDashboardPayload(this.dashboardYear || this.currentYear)
+            const selectedYearRaw = Number(payload?.selected_year ?? fallback.selected_year)
+            const selectedYear = Number.isFinite(selectedYearRaw) && selectedYearRaw >= 2000
+                ? selectedYearRaw
+                : fallback.selected_year
+
+            const availableYears = Array.isArray(payload?.available_years)
+                ? payload.available_years
+                    .map((year) => Number(year))
+                    .filter((year) => Number.isFinite(year) && year >= 2000)
+                : []
+
+            const preferenceItems = Array.isArray(payload?.preference?.items)
+                ? payload.preference.items
+                    .map((item) => ({
+                        key: String(item?.key ?? ''),
+                        value: Math.max(0, Number(item?.value ?? 0)),
+                        share: Math.max(0, Number(item?.share ?? 0)),
+                    }))
+                    .filter((item) => item.key !== '')
+                : fallback.preference.items
+
+            const normalizedPeriod = {
+                ...fallback.period,
+                ...(payload?.period ?? {}),
+            }
+
+            return {
+                ...fallback,
+                ...payload,
+                selected_year: selectedYear,
+                available_years: availableYears.length > 0
+                    ? availableYears
+                    : [selectedYear],
+                period: normalizedPeriod,
+                kpis: {
+                    ...fallback.kpis,
+                    ...(payload?.kpis ?? {}),
+                    subscriptions_peak_month: {
+                        ...fallback.kpis.subscriptions_peak_month,
+                        ...(payload?.kpis?.subscriptions_peak_month ?? {}),
+                    },
+                },
+                subscriptions_by_month: this.normalizeDashboardMonthlySeries(payload?.subscriptions_by_month),
+                registrations_by_month: this.normalizeDashboardMonthlySeries(payload?.registrations_by_month),
+                activity_by_month: this.normalizeDashboardActivitySeries(payload?.activity_by_month),
+                preference: {
+                    ...fallback.preference,
+                    ...(payload?.preference ?? {}),
+                    items: preferenceItems,
+                },
+                engagement: {
+                    ...fallback.engagement,
+                    ...(payload?.engagement ?? {}),
+                },
+                highlights: {
+                    ...fallback.highlights,
+                    ...(payload?.highlights ?? {}),
+                },
+            }
+        },
+
+        async onDashboardYearChanged() {
+            this.setDashboardDateRangeToYear(this.dashboardYear)
+            await this.loadDashboard()
+        },
+
+        setDashboardDateRangeToYear(year) {
+            const numericYear = Number(year)
+            const safeYear = Number.isFinite(numericYear) && numericYear >= 2000
+                ? Math.trunc(numericYear)
+                : this.currentYear
+
+            this.dashboardExportDateFrom = `${safeYear}-01-01`
+            this.dashboardExportDateTo = `${safeYear}-12-31`
+        },
+
+        resolveDashboardRangeForRequest() {
+            const range = this.ensureDashboardExportRange()
+            if (range.valid) {
+                return range
+            }
+
+            const numericYear = Number(this.dashboardYear)
+            const safeYear = Number.isFinite(numericYear) && numericYear >= 2000
+                ? Math.trunc(numericYear)
+                : this.currentYear
+
+            return {
+                valid: true,
+                from: `${safeYear}-01-01`,
+                to: `${safeYear}-12-31`,
+            }
+        },
+
+        async loadDashboard() {
+            const range = this.resolveDashboardRangeForRequest()
+            this.dashboardExportDateFrom = range.from
+            this.dashboardExportDateTo = range.to
+
+            const rangeYear = Number.parseInt(range.to.slice(0, 4), 10)
+            const yearParam = Number.isFinite(rangeYear) ? rangeYear : this.dashboardYear
+
+            this.dashboardLoading = true
+
+            try {
+                const response = await axios.get('/api/admin/dashboard', {
+                    params: {
+                        year: yearParam,
+                        date_from: range.from,
+                        date_to: range.to,
+                    },
+                })
+
+                this.dashboard = this.normalizeDashboardPayload(response.data?.data ?? {})
+                this.dashboardYear = Number(this.dashboard.selected_year ?? this.dashboardYear)
+
+                const normalizedFrom = this.normalizeDateInput(this.dashboard?.period?.from)
+                const normalizedTo = this.normalizeDateInput(this.dashboard?.period?.to)
+                if (normalizedFrom && normalizedTo) {
+                    this.dashboardExportDateFrom = normalizedFrom
+                    this.dashboardExportDateTo = normalizedTo
+                }
+            } catch (error) {
+                alert(error.response?.data?.message ?? this.$t('admin.dashboardLoadFailed'))
+            } finally {
+                this.dashboardLoading = false
+            }
+        },
+
+        isDashboardExporting(format) {
+            return this.dashboardExportingFormat === String(format || '')
+        },
+
+        normalizeDateInput(value) {
+            const raw = String(value || '').trim()
+            return /^\d{4}-\d{2}-\d{2}$/.test(raw) ? raw : ''
+        },
+
+        ensureDashboardExportRange() {
+            const from = this.normalizeDateInput(this.dashboardExportDateFrom)
+            const to = this.normalizeDateInput(this.dashboardExportDateTo)
+
+            if (!from || !to) {
+                return { valid: false, from: '', to: '' }
+            }
+
+            const fromTimestamp = Date.parse(`${from}T00:00:00Z`)
+            const toTimestamp = Date.parse(`${to}T00:00:00Z`)
+            if (!Number.isFinite(fromTimestamp) || !Number.isFinite(toTimestamp) || fromTimestamp > toTimestamp) {
+                return { valid: false, from: '', to: '' }
+            }
+
+            return { valid: true, from, to }
+        },
+
+        extractDashboardDownloadFileName(contentDisposition, fallbackName) {
+            const header = String(contentDisposition || '')
+            const fallback = String(fallbackName || 'admin-dashboard-export')
+
+            const utfMatch = header.match(/filename\*=UTF-8''([^;]+)/i)
+            if (utfMatch && utfMatch[1]) {
+                try {
+                    return decodeURIComponent(utfMatch[1].trim())
+                } catch (_error) {
+                    return utfMatch[1].trim()
+                }
+            }
+
+            const quotedMatch = header.match(/filename=\"([^\"]+)\"/i)
+            if (quotedMatch && quotedMatch[1]) {
+                return quotedMatch[1].trim()
+            }
+
+            const plainMatch = header.match(/filename=([^;]+)/i)
+            if (plainMatch && plainMatch[1]) {
+                return plainMatch[1].replace(/^\"|\"$/g, '').trim()
+            }
+
+            return fallback
+        },
+
+        triggerDashboardDownloadBlob(blob, fileName) {
+            const safeBlob = blob instanceof Blob
+                ? blob
+                : new Blob([blob], { type: 'application/octet-stream' })
+
+            const link = document.createElement('a')
+            const blobUrl = window.URL.createObjectURL(safeBlob)
+            link.href = blobUrl
+            link.download = fileName
+            document.body.appendChild(link)
+            link.click()
+            document.body.removeChild(link)
+            window.URL.revokeObjectURL(blobUrl)
+        },
+
+        async exportDashboard(format = 'xls') {
+            const safeFormat = format === 'json' ? 'json' : 'xls'
+
+            if (this.dashboardExporting) {
+                return
+            }
+
+            const range = this.ensureDashboardExportRange()
+            if (!range.valid) {
+                alert(this.$t('admin.dashboardExportRangeInvalid'))
+                return
+            }
+
+            const rangeYear = Number.parseInt(range.to.slice(0, 4), 10)
+            const yearParam = Number.isFinite(rangeYear) ? rangeYear : this.dashboardYear
+
+            this.dashboardExportingFormat = safeFormat
+
+            try {
+                const response = await axios.get('/api/admin/dashboard/export', {
+                    params: {
+                        year: yearParam,
+                        date_from: range.from,
+                        date_to: range.to,
+                        format: safeFormat,
+                    },
+                    responseType: 'blob',
+                })
+
+                const fallbackName = `admin-dashboard-${range.from}-${range.to}.${safeFormat}`
+                const contentDisposition = response.headers?.['content-disposition'] ?? ''
+                const fileName = this.extractDashboardDownloadFileName(contentDisposition, fallbackName)
+
+                this.triggerDashboardDownloadBlob(response.data, fileName)
+            } catch (error) {
+                alert(error.response?.data?.message ?? this.$t('admin.dashboardExportFailed'))
+            } finally {
+                this.dashboardExportingFormat = ''
             }
         },
 
@@ -1419,6 +2243,78 @@ export default {
             }
 
             return raw
+        },
+
+        formatDashboardNumber(value) {
+            const numeric = Number(value ?? 0)
+            const safeValue = Number.isFinite(numeric) ? numeric : 0
+
+            if (Math.abs(safeValue) % 1 === 0) {
+                return new Intl.NumberFormat(this.dashboardLocale, {
+                    maximumFractionDigits: 0,
+                }).format(safeValue)
+            }
+
+            return new Intl.NumberFormat(this.dashboardLocale, {
+                minimumFractionDigits: 0,
+                maximumFractionDigits: 1,
+            }).format(safeValue)
+        },
+
+        formatDashboardMonth(monthNumber) {
+            const month = Number(monthNumber ?? 1)
+            if (!Number.isFinite(month) || month < 1 || month > 12) {
+                return '—'
+            }
+
+            const label = new Intl.DateTimeFormat(this.dashboardLocale, {
+                month: 'short',
+            }).format(new Date(Date.UTC(2020, month - 1, 1)))
+
+            return label.charAt(0).toUpperCase() + label.slice(1)
+        },
+
+        dashboardFeatureLabel(featureKey) {
+            const key = String(featureKey ?? '').toLowerCase()
+
+            if (key === 'social') {
+                return this.$t('admin.dashboardFeatureSocial')
+            }
+            if (key === 'chats') {
+                return this.$t('admin.dashboardFeatureChats')
+            }
+            if (key === 'radio') {
+                return this.$t('admin.dashboardFeatureRadio')
+            }
+            if (key === 'iptv') {
+                return this.$t('admin.dashboardFeatureIptv')
+            }
+
+            return this.$t('admin.dashboardFeatureUnknown')
+        },
+
+        dashboardFeatureColor(featureKey) {
+            const key = String(featureKey ?? '').toLowerCase()
+            return DASHBOARD_FEATURE_COLORS[key] ?? '#8ea4c8'
+        },
+
+        dashboardActivityRowWidth(total) {
+            const maxTotal = Math.max(Number(this.dashboardActivityMaxTotal ?? 1), 1)
+            const value = Math.max(0, Number(total ?? 0))
+            const ratio = Math.max((value / maxTotal) * 100, value > 0 ? DASHBOARD_MIN_ACTIVITY_BAR_PERCENT : 0)
+
+            return `${Math.min(ratio, 100).toFixed(2)}%`
+        },
+
+        dashboardActivitySegmentWidth(value, total) {
+            const numericTotal = Math.max(0, Number(total ?? 0))
+            if (numericTotal <= 0) {
+                return '0%'
+            }
+
+            const numericValue = Math.max(0, Number(value ?? 0))
+            const ratio = (numericValue / numericTotal) * 100
+            return `${Math.min(Math.max(ratio, 0), 100).toFixed(2)}%`
         },
 
         formatDate(value) {

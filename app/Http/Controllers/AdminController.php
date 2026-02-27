@@ -18,11 +18,14 @@ use App\Models\SubscriberFollowing;
 use App\Models\IptvSeed;
 use App\Models\User;
 use App\Models\UserBlock;
+use App\Services\AdminDashboardService;
+use App\Services\AdminDashboardExportService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Validation\Rule;
+use Symfony\Component\HttpFoundation\StreamedResponse;
 
 /**
  * Administrative API controller.
@@ -32,6 +35,13 @@ use Illuminate\Validation\Rule;
  */
 class AdminController extends Controller
 {
+    public function __construct(
+        private readonly AdminDashboardService $adminDashboardService,
+        private readonly AdminDashboardExportService $adminDashboardExportService,
+    )
+    {
+    }
+
     /**
      * Return high-level admin dashboard counters.
      */
@@ -56,6 +66,77 @@ class AdminController extends Controller
                 'active_blocks' => UserBlock::query()->active()->count(),
             ],
         ]);
+    }
+
+    /**
+     * Return advanced yearly dashboard analytics for admin infographics.
+     */
+    public function dashboard(Request $request): JsonResponse
+    {
+        $validated = $request->validate([
+            'year' => ['nullable', 'integer', 'min:2000', 'max:' . (int) now()->year],
+            'date_from' => ['nullable', 'date_format:Y-m-d', 'required_with:date_to'],
+            'date_to' => ['nullable', 'date_format:Y-m-d', 'required_with:date_from', 'after_or_equal:date_from'],
+        ]);
+
+        return response()->json([
+            'data' => $this->adminDashboardService->build(
+                $validated['year'] ?? null,
+                $validated['date_from'] ?? null,
+                $validated['date_to'] ?? null
+            ),
+        ]);
+    }
+
+    /**
+     * Export dashboard analytics for selected year/date range.
+     *
+     * Supports Excel-compatible .xls and JSON formats.
+     */
+    public function exportDashboard(Request $request): StreamedResponse
+    {
+        $validated = $request->validate([
+            'year' => ['nullable', 'integer', 'min:2000', 'max:' . (int) now()->year],
+            'date_from' => ['nullable', 'date_format:Y-m-d', 'required_with:date_to'],
+            'date_to' => ['nullable', 'date_format:Y-m-d', 'required_with:date_from', 'after_or_equal:date_from'],
+            'format' => ['nullable', 'string', Rule::in(['xls', 'json'])],
+        ]);
+
+        $format = (string) ($validated['format'] ?? 'xls');
+        $payload = $this->adminDashboardExportService->buildPayload(
+            $validated['year'] ?? null,
+            $validated['date_from'] ?? null,
+            $validated['date_to'] ?? null
+        );
+
+        $timestamp = now()->format('Ymd_His');
+        $period = (array) ($payload['period'] ?? []);
+        $from = preg_replace('/[^0-9]/', '', (string) ($period['from'] ?? ''));
+        $to = preg_replace('/[^0-9]/', '', (string) ($period['to'] ?? ''));
+        $rangeLabel = ($from && $to) ? "{$from}_{$to}" : ('year_' . ((string) ($payload['selected_year'] ?? now()->year)));
+
+        if ($format === 'json') {
+            $content = $this->adminDashboardExportService->toJson($payload);
+            $contentType = 'application/json; charset=UTF-8';
+            $fileName = "admin_dashboard_{$rangeLabel}_{$timestamp}.json";
+        } else {
+            $content = $this->adminDashboardExportService->toXls($payload);
+            $contentType = 'application/vnd.ms-excel; charset=UTF-8';
+            $fileName = "admin_dashboard_{$rangeLabel}_{$timestamp}.xls";
+        }
+
+        return response()->streamDownload(
+            static function () use ($content): void {
+                echo $content;
+            },
+            $fileName,
+            [
+                'Content-Type' => $contentType,
+                'Cache-Control' => 'no-store, no-cache, must-revalidate',
+                'Pragma' => 'no-cache',
+                'X-Content-Type-Options' => 'nosniff',
+            ]
+        );
     }
 
     /**

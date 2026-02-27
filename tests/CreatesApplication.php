@@ -7,6 +7,45 @@ use Illuminate\Contracts\Console\Kernel;
 trait CreatesApplication
 {
     /**
+     * Join path segments with current platform separator.
+     */
+    private function joinPath(string ...$segments): string
+    {
+        $normalized = [];
+
+        foreach ($segments as $index => $segment) {
+            $value = trim($segment);
+            if ($value === '') {
+                continue;
+            }
+
+            $trimmed = $index === 0
+                ? rtrim($value, "\\/\t\n\r\0\x0B")
+                : trim($value, "\\/\t\n\r\0\x0B");
+
+            if ($trimmed !== '') {
+                $normalized[] = $trimmed;
+            }
+        }
+
+        return implode(DIRECTORY_SEPARATOR, $normalized);
+    }
+
+    /**
+     * Ensure directory exists or throw meaningful exception.
+     */
+    private function ensureDirectory(string $path): void
+    {
+        if (is_dir($path)) {
+            return;
+        }
+
+        if (! @mkdir($path, 0777, true) && ! is_dir($path)) {
+            throw new \RuntimeException("Unable to create testing directory: {$path}");
+        }
+    }
+
+    /**
      * Apply deterministic environment values before the app is bootstrapped.
      */
     private function configureTestingEnvironment(): void
@@ -49,23 +88,36 @@ trait CreatesApplication
      */
     private function configureTestingCachePaths(string $basePath): void
     {
-        $cacheDir = $basePath.'/bootstrap-cache';
+        $cacheDir = $this->joinPath($basePath, 'bootstrap-cache');
+        $this->ensureDirectory($cacheDir);
+        $projectRoot = dirname(__DIR__);
 
-        if (! is_dir($cacheDir)) {
-            mkdir($cacheDir, 0777, true);
+        $normalizedProjectRoot = str_replace(['/', '\\'], DIRECTORY_SEPARATOR, rtrim($projectRoot, "\\/"));
+        $normalizedCacheDir = str_replace(['/', '\\'], DIRECTORY_SEPARATOR, rtrim($cacheDir, "\\/"));
+        $cacheDirForEnv = $cacheDir;
+
+        $projectPrefix = $normalizedProjectRoot.DIRECTORY_SEPARATOR;
+        if (str_starts_with(strtolower($normalizedCacheDir), strtolower($projectPrefix))) {
+            $relative = ltrim(substr($normalizedCacheDir, strlen($projectPrefix)), "\\/");
+            $cacheDirForEnv = $relative !== '' ? $relative : $normalizedCacheDir;
         }
 
+        $cacheToken = function_exists('random_bytes')
+            ? bin2hex(random_bytes(6))
+            : uniqid('t', true);
+
         $paths = [
-            'APP_CONFIG_CACHE' => $cacheDir.'/config.php',
-            'APP_PACKAGES_CACHE' => $cacheDir.'/packages.php',
-            'APP_SERVICES_CACHE' => $cacheDir.'/services.php',
-            'APP_ROUTES_CACHE' => $cacheDir.'/routes.php',
-            'APP_EVENTS_CACHE' => $cacheDir.'/events.php',
+            'APP_CONFIG_CACHE' => $this->joinPath($cacheDirForEnv, "config-{$cacheToken}.php"),
+            'APP_PACKAGES_CACHE' => $this->joinPath('bootstrap', 'cache', 'packages.php'),
+            'APP_SERVICES_CACHE' => $this->joinPath('bootstrap', 'cache', 'services.php'),
+            'APP_ROUTES_CACHE' => $this->joinPath($cacheDirForEnv, "routes-{$cacheToken}.php"),
+            'APP_EVENTS_CACHE' => $this->joinPath($cacheDirForEnv, "events-{$cacheToken}.php"),
         ];
 
         foreach ($paths as $key => $value) {
             $_ENV[$key] = $value;
             $_SERVER[$key] = $value;
+            putenv($key.'='.$value);
         }
     }
 
@@ -74,29 +126,44 @@ trait CreatesApplication
      */
     private function configureTestingStoragePaths(string $basePath): string
     {
-        $storagePath = $basePath.'/storage';
+        $storagePath = $this->joinPath($basePath, 'storage');
 
         $directories = [
-            $storagePath.'/app',
-            $storagePath.'/framework/cache/data',
-            $storagePath.'/framework/sessions',
-            $storagePath.'/framework/testing/disks',
-            $storagePath.'/framework/views',
-            $storagePath.'/logs',
+            $this->joinPath($storagePath, 'app'),
+            $this->joinPath($storagePath, 'framework', 'cache', 'data'),
+            $this->joinPath($storagePath, 'framework', 'sessions'),
+            $this->joinPath($storagePath, 'framework', 'testing', 'disks'),
+            $this->joinPath($storagePath, 'framework', 'views'),
+            $this->joinPath($storagePath, 'logs'),
         ];
 
         foreach ($directories as $directory) {
-            if (! is_dir($directory)) {
-                mkdir($directory, 0777, true);
-            }
+            $this->ensureDirectory($directory);
         }
 
-        $viewCompiledPath = $storagePath.'/framework/views';
+        $viewCompiledPath = $this->joinPath($storagePath, 'framework', 'views');
         $_ENV['VIEW_COMPILED_PATH'] = $viewCompiledPath;
         $_SERVER['VIEW_COMPILED_PATH'] = $viewCompiledPath;
         putenv('VIEW_COMPILED_PATH='.$viewCompiledPath);
 
         return $storagePath;
+    }
+
+    /**
+     * Resolve writable base directory for test runtime artifacts.
+     */
+    private function resolveTestingBasePath(string $token): string
+    {
+        $projectRoot = dirname(__DIR__);
+
+        $candidate = $this->joinPath($projectRoot, 'storage', 'framework', 'testing-runtime', $token);
+
+        $this->ensureDirectory($candidate);
+        if (is_writable($candidate)) {
+            return $candidate;
+        }
+
+        throw new \RuntimeException('No writable directory available for Laravel test runtime artifacts.');
     }
 
     /**
@@ -112,11 +179,7 @@ trait CreatesApplication
         $_SERVER['TEST_TOKEN'] = (string) $token;
         $_ENV['TEST_TOKEN'] = (string) $token;
 
-        $testBasePath = sys_get_temp_dir().DIRECTORY_SEPARATOR.'social-network-testing'.DIRECTORY_SEPARATOR.$token;
-
-        if (! is_dir($testBasePath)) {
-            mkdir($testBasePath, 0777, true);
-        }
+        $testBasePath = $this->resolveTestingBasePath((string) $token);
 
         $this->configureTestingCachePaths($testBasePath);
         $storagePath = $this->configureTestingStoragePaths($testBasePath);
