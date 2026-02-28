@@ -81,6 +81,12 @@ CACHE_DRIVER=database
 
 IPTV_FFMPEG_BIN=/usr/bin/ffmpeg
 
+SITE_ERROR_LOG_PATH=/var/www/social-network/storage/logs/site-errors.log
+SITE_ERROR_LOG_ARCHIVE_PATH=/var/www/social-network/storage/logs/site-errors-archive
+SITE_ERROR_LOG_ROTATE_MAX_BYTES=10485760
+SITE_ERROR_LOG_ROTATE_MAX_AGE_DAYS=30
+SITE_ERROR_LOG_ARCHIVE_COMPRESS=true
+
 REVERB_APP_ID=prod-app-id
 REVERB_APP_KEY=prod-app-key
 REVERB_APP_SECRET=prod-app-secret
@@ -97,6 +103,8 @@ VITE_REVERB_PORT="${REVERB_PORT}"
 VITE_REVERB_SCHEME="${REVERB_SCHEME}"
 VITE_REVERB_PATH="${REVERB_PATH}"
 ```
+
+Для lifetime error log убедитесь, что `www-data` имеет права на запись в `storage/logs` и архивную папку `storage/logs/site-errors-archive`.
 
 Если у вас HTTPS, переключите:
 - `APP_URL=https://your-domain.com`
@@ -276,8 +284,11 @@ php artisan about
 php artisan route:list | grep broadcasting
 php artisan route:list | grep activity/heartbeat
 php artisan route:list | grep analytics/events
+php artisan route:list | grep client-errors
 php artisan route:list | grep admin/dashboard
 php artisan route:list | grep admin/dashboard/export
+php artisan route:list | grep admin/error-log
+ls -lah storage/logs
 sudo supervisorctl status
 ```
 
@@ -308,6 +319,8 @@ php artisan tinker --execute="dump(DB::table('analytics_events')->selectRaw('eve
 - IPTV;
 - создание поста с видео, очередь загрузки и отображение ошибок;
 - аналитический дашборд админа, включая блоки retention/content/chats/media/radio/IPTV и Excel/JSON export;
+- вкладку журнала ошибок в админке: preview, поиск, фильтр по типу, filtered export и скачивание полного `.log`;
+- появление архивов в `storage/logs/site-errors-archive` после достижения лимита размера/возраста;
 - скачивание `mkv` и воспроизведение файлов, которые браузер реально поддерживает по кодекам.
 
 Дополнительно для виджета времени/погоды на главной:
@@ -336,7 +349,7 @@ npm audit
 Примечание:
 - `composer audit` сейчас показывает `0 advisories`, но может вернуть non-zero exit code из-за `abandoned` транзитивной зависимости `doctrine/annotations` через `l5-swagger`.
 - `npm run test:js` покрывает frontend helper-логику радио, IPTV, поиска по карусели авторов и глобальной кнопки возврата в начало.
-- `php artisan test` дополнительно покрывает admin analytics/export, client analytics endpoint и Swagger/OpenAPI генерацию.
+- `php artisan test` дополнительно покрывает admin analytics/export, client analytics endpoint, lifetime error log с filtered export/archive rotation и Swagger/OpenAPI генерацию.
 
 На production-сервере выполняйте только сам rollout:
 

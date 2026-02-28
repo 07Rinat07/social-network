@@ -63,6 +63,16 @@ return [
             'level' => env('LOG_LEVEL', 'debug'),
         ],
 
+        'site_errors' => [
+            'driver' => 'single',
+            'path' => env('SITE_ERROR_LOG_PATH', storage_path('logs/site-errors.log')),
+            'archive_path' => env('SITE_ERROR_LOG_ARCHIVE_PATH', storage_path('logs/site-errors-archive')),
+            'rotate_max_bytes' => (int) env('SITE_ERROR_LOG_ROTATE_MAX_BYTES', 10485760),
+            'rotate_max_age_days' => (int) env('SITE_ERROR_LOG_ROTATE_MAX_AGE_DAYS', 30),
+            'compress_archives' => env('SITE_ERROR_LOG_ARCHIVE_COMPRESS', true),
+            'level' => env('LOG_LEVEL', 'debug'),
+        ],
+
         'daily' => [
             'driver' => 'daily',
             'path' => storage_path('logs/laravel.log'),

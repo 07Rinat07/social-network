@@ -12,6 +12,7 @@ use App\Http\Controllers\PostController;
 use App\Http\Controllers\PostImageController;
 use App\Http\Controllers\RadioController;
 use App\Http\Controllers\SiteSettingController;
+use App\Http\Controllers\SiteErrorLogController;
 use App\Http\Controllers\UserBlockController;
 use App\Http\Controllers\UserController;
 use Illuminate\Http\Request;
@@ -24,6 +25,8 @@ Route::middleware(['auth:sanctum', 'throttle:600,1'])->get('/media/avatars/{user
 
 Route::post('/feedback', [FeedbackController::class, 'store'])
     ->middleware('throttle:20,1');
+Route::post('/client-errors', [SiteErrorLogController::class, 'storeClientError'])
+    ->middleware('throttle:30,1');
 Route::get('/site/home-content', [SiteSettingController::class, 'homeContent'])
     ->middleware('throttle:240,1');
 Route::get('/site/world-overview', [SiteSettingController::class, 'worldOverview'])
@@ -141,6 +144,10 @@ Route::middleware(['auth:sanctum', 'verified', 'throttle:600,1'])->group(functio
         Route::get('/summary', [AdminController::class, 'summary']);
         Route::get('/dashboard', [AdminController::class, 'dashboard']);
         Route::get('/dashboard/export', [AdminController::class, 'exportDashboard']);
+        Route::get('/error-log', [SiteErrorLogController::class, 'preview']);
+        Route::get('/error-log/entries', [SiteErrorLogController::class, 'entries']);
+        Route::get('/error-log/export', [SiteErrorLogController::class, 'export']);
+        Route::get('/error-log/download', [SiteErrorLogController::class, 'download']);
 
         Route::get('/users', [AdminController::class, 'users']);
         Route::patch('/users/{user}', [AdminController::class, 'updateUser']);

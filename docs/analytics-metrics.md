@@ -27,6 +27,15 @@
   - Контроллер: `app/Http/Controllers/AnalyticsEventController.php`
   - Сервис записи: `app/Services/AnalyticsEventService.php`
   - Модель событий: `app/Models/AnalyticsEvent.php`
+- Публичный client error intake:
+  - `POST /api/client-errors`
+  - Контроллер: `app/Http/Controllers/SiteErrorLogController.php`
+- Админский diagnostics log:
+  - `GET /api/admin/error-log`
+  - `GET /api/admin/error-log/entries`
+  - `GET /api/admin/error-log/export`
+  - `GET /api/admin/error-log/download`
+  - Сервис: `app/Services/SiteErrorLogService.php`
 
 ## 2. Таблицы-источники
 
@@ -57,6 +66,20 @@
 - `analytics_events`
   - Лёгкие client-side события для `media`, `radio`, `iptv`.
   - Используется для media/video transport analytics, failure rate и mode split.
+
+### 2.3 Operational diagnostics log
+
+- `storage/logs/site-errors.log`
+  - Append-only lifetime text log сайта.
+  - Пишет `server_exception`, `client_error`, `analytics_failure`.
+- `storage/logs/site-errors-archive/*`
+  - Ротационные архивы активного лога по лимиту размера/возраста.
+  - Архив может храниться как plain text или `.gz`, в зависимости от `SITE_ERROR_LOG_ARCHIVE_COMPRESS`.
+- Источник данных:
+  - `App\Services\SiteErrorLogService`
+  - `App\Exceptions\Handler`
+  - `App\Services\AnalyticsEventService`
+  - `resources/js/utils/siteErrorReporter.js`
 
 ## 3. Общие правила расчёта
 
@@ -376,6 +399,12 @@
 - `feedback_resolved_total = COUNT(feedback_messages WHERE status='resolved')`
 - `feedback_created_period = COUNT(feedback_messages WHERE created_at in period)`
 
+Важно:
+
+- этот блок показывает агрегированные счётчики по выбранному периоду и текущему состоянию БД;
+- lifetime `site-errors.log` не является источником этих чисел, а служит отдельным diagnostics-слоем для расшифровки конкретных инцидентов;
+- в text log попадают сырые записи server/client/analytics failures, поэтому он используется для расследования "что, где, почему и когда произошло", а не для периодных KPI.
+
 ## 5. Выгрузка в Excel и JSON
 
 Экспорт использует тот же аналитический payload, что и экран админки.
@@ -398,6 +427,7 @@
 - `time_minutes` появляется только при наличии heartbeat-агрегатов;
 - если heartbeat нет, система автоматически откатывается к action-based оценке;
 - media/radio/IPTV transport metrics строятся по `analytics_events`, а не по server access logs;
+- lifetime error log и его архивы нужны для операционной диагностики, а не для пересчёта dashboard KPI;
 - retention cohorts могут быть `partial`, если окно 30 дней ещё не завершено;
 - demo/seed-данные могут создавать искусственные пики по месяцам и непропорционально высокие значения в коротком периоде.
 
@@ -431,10 +461,18 @@ php artisan tinker --execute="dump(DB::table('user_activity_daily_stats')->sum('
 php artisan tinker --execute="dump(DB::table('analytics_events')->selectRaw('event_name, COUNT(*) as total')->groupBy('event_name')->pluck('total','event_name')->all());"
 ```
 
+### 7.5 Проверка diagnostics log
+
+```bash
+php artisan tinker --execute="dump(app(\App\Services\SiteErrorLogService::class)->preview());"
+php artisan tinker --execute="dump(app(\App\Services\SiteErrorLogService::class)->listEntries('500', 'client_error', 1, 20));"
+```
+
 ## 8. Связанные документы
 
 - `README.md` — обзор проекта и основные API.
 - `DEPLOY.md` — инструкции развертывания и smoke-check.
 - `app/OpenApi/OpenApiSpec.php` — Swagger/OpenAPI аннотации.
 - `tests/Feature/AdminAndChatFeatureTest.php` — регрессионные тесты аналитики.
+- `tests/Feature/SiteErrorLogFeatureTest.php` — регрессионные тесты lifetime error log, фильтров, export и archive rotation.
 - `tests/Feature/SwaggerDocumentationFeatureTest.php` — проверка генерации Swagger.

@@ -3,10 +3,15 @@
 namespace App\Services;
 
 use App\Models\AnalyticsEvent;
-use Illuminate\Support\Arr;
 
 class AnalyticsEventService
 {
+    public function __construct(
+        private readonly SiteErrorLogService $siteErrorLogService
+    )
+    {
+    }
+
     public function recordForUser(int $userId, string $feature, string $eventName, array $payload = []): ?AnalyticsEvent
     {
         if ($userId <= 0) {
@@ -25,7 +30,7 @@ class AnalyticsEventService
 
         $context = $this->sanitizeContext($payload['context'] ?? null);
 
-        return AnalyticsEvent::query()->create([
+        $event = AnalyticsEvent::query()->create([
             'user_id' => $userId,
             'feature' => $normalizedFeature,
             'event_name' => $normalizedEvent,
@@ -38,6 +43,16 @@ class AnalyticsEventService
             'context' => $context === [] ? null : $context,
             'created_at' => now(),
         ]);
+
+        if ($event && $this->siteErrorLogService->shouldLogAnalyticsFailure($event->event_name)) {
+            try {
+                $this->siteErrorLogService->logAnalyticsFailure($event);
+            } catch (\Throwable $_loggingFailure) {
+                // Analytics inserts should not fail because the text log is unavailable.
+            }
+        }
+
+        return $event;
     }
 
     protected function sanitizeContext(mixed $value, int $depth = 0): array

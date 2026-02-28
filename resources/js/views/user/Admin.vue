@@ -53,6 +53,7 @@
                 <button class="btn" :class="activeTab === 'messages' ? 'btn-primary' : 'btn-outline'" @click="selectTab('messages')">{{ $t('admin.tabMessages') }}</button>
                 <button class="btn" :class="activeTab === 'blocks' ? 'btn-primary' : 'btn-outline'" @click="selectTab('blocks')">{{ $t('admin.tabBlocks') }}</button>
                 <button class="btn" :class="activeTab === 'iptvSeeds' ? 'btn-primary' : 'btn-outline'" @click="selectTab('iptvSeeds')">{{ $t('admin.tabIptvSeeds') }}</button>
+                <button class="btn" :class="activeTab === 'errorLog' ? 'btn-primary' : 'btn-outline'" @click="selectTab('errorLog')">{{ $t('admin.tabErrorLog') }}</button>
                 <button class="btn" :class="activeTab === 'settings' ? 'btn-primary' : 'btn-outline'" @click="selectTab('settings')">{{ $t('admin.tabSettings') }}</button>
             </div>
 
@@ -727,16 +728,253 @@
                             </div>
                         </div>
 
-                        <div class="admin-dashboard-mini-grid">
-                            <article
-                                v-for="item in dashboardHealthMetricCards"
-                                :key="`admin-health-${item.key}`"
-                                class="admin-dashboard-mini-card"
-                            >
-                                <span class="admin-dashboard-mini-label">{{ item.label }}</span>
-                                <strong class="admin-dashboard-mini-value">{{ formatDashboardNumber(item.value) }}</strong>
-                            </article>
+                        <div class="admin-dashboard-quality-layout">
+                            <div class="admin-dashboard-mini-grid">
+                                <article
+                                    v-for="item in dashboardHealthMetricCards"
+                                    :key="`admin-health-${item.key}`"
+                                    class="admin-dashboard-mini-card"
+                                >
+                                    <span class="admin-dashboard-mini-label">{{ item.label }}</span>
+                                    <strong class="admin-dashboard-mini-value">{{ formatDashboardNumber(item.value) }}</strong>
+                                </article>
+                            </div>
+
+                            <section class="admin-dashboard-log-card">
+                                <div class="admin-dashboard-log-head">
+                                    <div class="admin-dashboard-card-copy">
+                                        <strong>{{ $t('admin.dashboardErrorLogTitle') }}</strong>
+                                        <span class="muted">{{ $t('admin.dashboardErrorLogSubtitle') }}</span>
+                                    </div>
+
+                                    <div class="admin-dashboard-log-actions">
+                                        <button
+                                            class="btn btn-outline btn-sm"
+                                            @click="selectTab('errorLog')"
+                                        >
+                                            {{ $t('admin.errorLogOpenTab') }}
+                                        </button>
+                                        <button
+                                            class="btn btn-outline btn-sm"
+                                            @click="loadErrorLogPreview()"
+                                            :disabled="errorLogLoading"
+                                        >
+                                            {{ errorLogLoading ? $t('common.loading') : $t('admin.dashboardErrorLogRefresh') }}
+                                        </button>
+                                        <button
+                                            class="btn btn-outline btn-sm"
+                                            @click="downloadErrorLog"
+                                            :disabled="!errorLog.exists || errorLogDownloading"
+                                        >
+                                            {{ errorLogDownloading ? $t('admin.dashboardErrorLogDownloading') : $t('admin.dashboardErrorLogDownload') }}
+                                        </button>
+                                    </div>
+                                </div>
+
+                                <div class="admin-dashboard-log-meta">
+                                    <div class="admin-dashboard-log-pill">
+                                        <small>{{ $t('admin.dashboardErrorLogFile') }}</small>
+                                        <strong>{{ errorLog.file_name }}</strong>
+                                    </div>
+                                    <div class="admin-dashboard-log-pill">
+                                        <small>{{ $t('admin.dashboardErrorLogSize') }}</small>
+                                        <strong>{{ formatDashboardFileSize(errorLog.size_bytes) }}</strong>
+                                    </div>
+                                    <div class="admin-dashboard-log-pill">
+                                        <small>{{ $t('admin.dashboardErrorLogUpdated') }}</small>
+                                        <strong>{{ formatDate(errorLog.updated_at) }}</strong>
+                                    </div>
+                                    <div class="admin-dashboard-log-pill">
+                                        <small>{{ $t('admin.dashboardErrorLogPath') }}</small>
+                                        <code>{{ errorLog.relative_path }}</code>
+                                    </div>
+                                </div>
+
+                                <div v-if="errorLog.exists && errorLog.preview" class="admin-dashboard-log-viewer-wrap">
+                                    <pre class="admin-dashboard-log-viewer">{{ errorLog.preview }}</pre>
+                                </div>
+                                <p v-else class="muted admin-dashboard-log-empty">
+                                    {{ $t('admin.dashboardErrorLogEmpty') }}
+                                </p>
+
+                                <p v-if="errorLog.truncated" class="muted admin-dashboard-log-note">
+                                    {{ $t('admin.dashboardErrorLogTruncated') }}
+                                </p>
+                            </section>
                         </div>
+                    </div>
+                </div>
+            </div>
+
+            <div v-if="activeTab === 'errorLog'" class="simple-list fade-in">
+                <div class="simple-item admin-simple-item-block admin-error-log-panel">
+                    <div class="admin-error-log-toolbar">
+                        <div>
+                            <strong class="admin-section-title">{{ $t('admin.errorLogTabTitle') }}</strong>
+                            <p class="muted admin-error-log-toolbar-note">{{ $t('admin.errorLogTabSubtitle') }}</p>
+                        </div>
+
+                        <div class="admin-error-log-actions">
+                            <button
+                                class="btn btn-outline btn-sm"
+                                @click="refreshErrorLogWorkspace"
+                                :disabled="errorLogEntriesLoading"
+                            >
+                                {{ errorLogEntriesLoading ? $t('common.loading') : $t('admin.dashboardErrorLogRefresh') }}
+                            </button>
+                            <button
+                                class="btn btn-outline btn-sm"
+                                @click="exportFilteredErrorLog"
+                                :disabled="errorLogEntriesLoading || errorLogFilteredExporting"
+                            >
+                                {{ errorLogFilteredExporting ? $t('admin.errorLogExportingFiltered') : $t('admin.errorLogExportFiltered') }}
+                            </button>
+                            <button
+                                class="btn btn-outline btn-sm"
+                                @click="downloadErrorLog"
+                                :disabled="!errorLog.exists || errorLogDownloading"
+                            >
+                                {{ errorLogDownloading ? $t('admin.dashboardErrorLogDownloading') : $t('admin.dashboardErrorLogDownload') }}
+                            </button>
+                        </div>
+                    </div>
+
+                    <div class="admin-error-log-filters">
+                        <input
+                            class="input-field"
+                            type="search"
+                            v-model.trim="errorLogFilters.search"
+                            :placeholder="$t('admin.errorLogSearchPlaceholder')"
+                            @keyup.enter="applyErrorLogFilters"
+                        >
+
+                        <select class="select-field" v-model="errorLogFilters.type">
+                            <option
+                                v-for="option in errorLogTypeOptions"
+                                :key="`error-log-type-${option.value}`"
+                                :value="option.value"
+                            >
+                                {{ option.label }}
+                            </option>
+                        </select>
+
+                        <select class="select-field" v-model.number="errorLogFilters.per_page">
+                            <option :value="10">{{ $t('admin.errorLogPerPageOption', { count: 10 }) }}</option>
+                            <option :value="20">{{ $t('admin.errorLogPerPageOption', { count: 20 }) }}</option>
+                            <option :value="50">{{ $t('admin.errorLogPerPageOption', { count: 50 }) }}</option>
+                        </select>
+
+                        <button
+                            class="btn btn-primary btn-sm"
+                            @click="applyErrorLogFilters"
+                            :disabled="errorLogEntriesLoading"
+                        >
+                            {{ $t('admin.errorLogApply') }}
+                        </button>
+
+                        <button
+                            class="btn btn-outline btn-sm"
+                            @click="resetErrorLogFilters"
+                            :disabled="errorLogEntriesLoading"
+                        >
+                            {{ $t('admin.errorLogReset') }}
+                        </button>
+                    </div>
+
+                    <div class="admin-dashboard-log-meta">
+                        <div class="admin-dashboard-log-pill">
+                            <small>{{ $t('admin.dashboardErrorLogFile') }}</small>
+                            <strong>{{ errorLog.file_name }}</strong>
+                        </div>
+                        <div class="admin-dashboard-log-pill">
+                            <small>{{ $t('admin.dashboardErrorLogSize') }}</small>
+                            <strong>{{ formatDashboardFileSize(errorLog.size_bytes) }}</strong>
+                        </div>
+                        <div class="admin-dashboard-log-pill">
+                            <small>{{ $t('admin.dashboardErrorLogUpdated') }}</small>
+                            <strong>{{ formatDate(errorLog.updated_at) }}</strong>
+                        </div>
+                        <div class="admin-dashboard-log-pill">
+                            <small>{{ $t('admin.errorLogResults') }}</small>
+                            <strong>
+                                {{ $t('admin.errorLogResultsValue', { from: errorLogEntriesMeta.from, to: errorLogEntriesMeta.to, total: errorLogEntriesMeta.total }) }}
+                            </strong>
+                        </div>
+                        <div class="admin-dashboard-log-pill">
+                            <small>{{ $t('admin.errorLogArchives') }}</small>
+                            <strong>
+                                {{ $t('admin.errorLogArchivesValue', { count: errorLog.archive_count, size: formatDashboardFileSize(errorLog.archive_size_bytes) }) }}
+                            </strong>
+                        </div>
+                        <div class="admin-dashboard-log-pill">
+                            <small>{{ $t('admin.dashboardErrorLogPath') }}</small>
+                            <code>{{ errorLog.relative_path }}</code>
+                        </div>
+                        <div class="admin-dashboard-log-pill">
+                            <small>{{ $t('admin.errorLogArchivePath') }}</small>
+                            <code>{{ errorLog.archive_relative_path }}</code>
+                        </div>
+                    </div>
+
+                    <div v-if="errorLogEntries.length > 0" class="admin-error-log-list">
+                        <details
+                            v-for="(entry, index) in errorLogEntries"
+                            :key="entry.id"
+                            class="admin-error-log-entry"
+                            :open="index === 0"
+                        >
+                            <summary class="admin-error-log-entry-summary">
+                                <div class="admin-error-log-entry-main">
+                                    <div class="admin-error-log-entry-topline">
+                                        <span class="admin-error-log-badge" :class="`is-${entry.type}`">
+                                            {{ errorLogTypeLabel(entry.type) }}
+                                        </span>
+                                        <strong>{{ entry.headline }}</strong>
+                                    </div>
+                                    <p v-if="entry.summary" class="muted admin-error-log-entry-summary-text">{{ entry.summary }}</p>
+                                    <div class="admin-error-log-entry-hints">
+                                        <span v-if="entry.kind" class="admin-error-log-chip">{{ entry.kind }}</span>
+                                        <span v-else-if="entry.event" class="admin-error-log-chip">{{ entry.event }}</span>
+                                        <span v-if="entry.status_code" class="admin-error-log-chip">HTTP {{ entry.status_code }}</span>
+                                        <span v-if="entry.request_url" class="admin-error-log-chip">{{ entry.request_method || 'GET' }} {{ entry.request_url }}</span>
+                                        <span v-else-if="entry.file" class="admin-error-log-chip">{{ entry.file }}</span>
+                                    </div>
+                                </div>
+
+                                <div class="admin-error-log-entry-side">
+                                    <span class="muted">{{ formatDate(entry.timestamp) }}</span>
+                                </div>
+                            </summary>
+
+                            <div class="admin-error-log-entry-body">
+                                <pre class="admin-error-log-entry-raw">{{ entry.raw }}</pre>
+                            </div>
+                        </details>
+                    </div>
+                    <p v-else class="muted admin-error-log-empty-state">
+                        {{ errorLogEntriesLoading ? $t('common.loading') : $t('admin.errorLogNoResults') }}
+                    </p>
+
+                    <div class="admin-error-log-pagination" v-if="errorLogEntriesMeta.last_page > 1">
+                        <button
+                            class="btn btn-outline btn-sm"
+                            @click="changeErrorLogPage(errorLogEntriesMeta.current_page - 1)"
+                            :disabled="errorLogEntriesLoading || errorLogEntriesMeta.current_page <= 1"
+                        >
+                            {{ $t('admin.errorLogPreviousPage') }}
+                        </button>
+
+                        <span class="admin-error-log-pagination-status">
+                            {{ $t('admin.errorLogPageStatus', { current: errorLogEntriesMeta.current_page, total: errorLogEntriesMeta.last_page }) }}
+                        </span>
+
+                        <button
+                            class="btn btn-outline btn-sm"
+                            @click="changeErrorLogPage(errorLogEntriesMeta.current_page + 1)"
+                            :disabled="errorLogEntriesLoading || errorLogEntriesMeta.current_page >= errorLogEntriesMeta.last_page"
+                        >
+                            {{ $t('admin.errorLogNextPage') }}
+                        </button>
                     </div>
                 </div>
             </div>
@@ -1461,6 +1699,32 @@ function buildEmptyDashboardPayload(year = new Date().getFullYear()) {
     }
 }
 
+function buildEmptyErrorLogPayload() {
+    return {
+        exists: false,
+        file_name: 'site-errors.log',
+        relative_path: 'storage/logs/site-errors.log',
+        size_bytes: 0,
+        updated_at: null,
+        truncated: false,
+        preview: '',
+        archive_count: 0,
+        archive_size_bytes: 0,
+        archive_relative_path: 'storage/logs/site-errors-archive',
+    }
+}
+
+function buildEmptyErrorLogEntriesMeta() {
+    return {
+        current_page: 1,
+        last_page: 1,
+        per_page: 20,
+        total: 0,
+        from: 0,
+        to: 0,
+    }
+}
+
 export default {
     name: 'Admin',
 
@@ -1476,6 +1740,18 @@ export default {
             dashboardExportDateTo: `${currentYear}-12-31`,
             dashboardExportingFormat: '',
             dashboard: buildEmptyDashboardPayload(currentYear),
+            errorLogLoading: false,
+            errorLogDownloading: false,
+            errorLogFilteredExporting: false,
+            errorLog: buildEmptyErrorLogPayload(),
+            errorLogEntriesLoading: false,
+            errorLogEntries: [],
+            errorLogEntriesMeta: buildEmptyErrorLogEntriesMeta(),
+            errorLogFilters: {
+                search: '',
+                type: 'all',
+                per_page: 20,
+            },
             summary: {},
             users: [],
             posts: [],
@@ -1955,6 +2231,15 @@ export default {
             return this.dashboardExportingFormat !== ''
         },
 
+        errorLogTypeOptions() {
+            return [
+                { value: 'all', label: this.$t('admin.errorLogTypeAll') },
+                { value: 'server_exception', label: this.$t('admin.errorLogTypeServer') },
+                { value: 'client_error', label: this.$t('admin.errorLogTypeClient') },
+                { value: 'analytics_failure', label: this.$t('admin.errorLogTypeAnalytics') },
+            ]
+        },
+
         activeHomeContentLocalePayload() {
             if (!this.homeContentForm?.locales || typeof this.homeContentForm.locales !== 'object') {
                 return this.defaultHomeContentPayload(this.homeContentActiveLocale)
@@ -2009,6 +2294,13 @@ export default {
             }
             if (tab === 'iptvSeeds') {
                 await this.loadIptvSeeds()
+                return
+            }
+            if (tab === 'errorLog') {
+                await Promise.all([
+                    this.loadErrorLogPreview({ suppressAlert: true }),
+                    this.loadErrorLogEntries({ page: this.errorLogEntriesMeta.current_page || 1, suppressAlert: true }),
+                ])
                 return
             }
             if (tab === 'settings') {
@@ -2188,6 +2480,76 @@ export default {
             }
         },
 
+        normalizeErrorLogPayload(payload) {
+            const fallback = buildEmptyErrorLogPayload()
+            const sizeBytes = Number(payload?.size_bytes ?? fallback.size_bytes)
+
+            return {
+                ...fallback,
+                ...payload,
+                exists: Boolean(payload?.exists),
+                file_name: String(payload?.file_name ?? fallback.file_name),
+                relative_path: String(payload?.relative_path ?? fallback.relative_path),
+                size_bytes: Number.isFinite(sizeBytes) ? Math.max(0, sizeBytes) : fallback.size_bytes,
+                updated_at: typeof payload?.updated_at === 'string' && payload.updated_at.trim() !== ''
+                    ? payload.updated_at
+                    : null,
+                truncated: Boolean(payload?.truncated),
+                preview: String(payload?.preview ?? fallback.preview),
+                archive_count: Math.max(0, Number(payload?.archive_count ?? fallback.archive_count)),
+                archive_size_bytes: Math.max(0, Number(payload?.archive_size_bytes ?? fallback.archive_size_bytes)),
+                archive_relative_path: String(payload?.archive_relative_path ?? fallback.archive_relative_path),
+            }
+        },
+
+        normalizeErrorLogEntriesPayload(payload) {
+            const fallbackMeta = buildEmptyErrorLogEntriesMeta()
+            const metaSource = payload?.meta ?? {}
+            const currentPage = Number(metaSource?.current_page ?? fallbackMeta.current_page)
+            const lastPage = Number(metaSource?.last_page ?? fallbackMeta.last_page)
+            const perPage = Number(metaSource?.per_page ?? fallbackMeta.per_page)
+            const total = Number(metaSource?.total ?? fallbackMeta.total)
+            const from = Number(metaSource?.from ?? fallbackMeta.from)
+            const to = Number(metaSource?.to ?? fallbackMeta.to)
+
+            return {
+                items: Array.isArray(payload?.items)
+                    ? payload.items.map((entry) => this.normalizeErrorLogEntry(entry))
+                    : [],
+                meta: {
+                    current_page: Number.isFinite(currentPage) ? Math.max(1, currentPage) : fallbackMeta.current_page,
+                    last_page: Number.isFinite(lastPage) ? Math.max(1, lastPage) : fallbackMeta.last_page,
+                    per_page: Number.isFinite(perPage) ? Math.max(1, perPage) : fallbackMeta.per_page,
+                    total: Number.isFinite(total) ? Math.max(0, total) : fallbackMeta.total,
+                    from: Number.isFinite(from) ? Math.max(0, from) : fallbackMeta.from,
+                    to: Number.isFinite(to) ? Math.max(0, to) : fallbackMeta.to,
+                },
+            }
+        },
+
+        normalizeErrorLogEntry(entry) {
+            return {
+                id: String(entry?.id ?? ''),
+                timestamp: typeof entry?.timestamp === 'string' && entry.timestamp.trim() !== '' ? entry.timestamp : null,
+                type: ['server_exception', 'client_error', 'analytics_failure'].includes(String(entry?.type ?? ''))
+                    ? String(entry.type)
+                    : 'all',
+                headline: String(entry?.headline ?? '').trim() || String(entry?.message ?? '').trim() || 'Log entry',
+                message: String(entry?.message ?? '').trim(),
+                summary: String(entry?.summary ?? '').trim(),
+                exception: String(entry?.exception ?? '').trim(),
+                file: String(entry?.file ?? '').trim(),
+                feature: String(entry?.feature ?? '').trim(),
+                event: String(entry?.event ?? '').trim(),
+                kind: String(entry?.kind ?? '').trim(),
+                status_code: String(entry?.status_code ?? '').trim(),
+                page_url: String(entry?.page_url ?? '').trim(),
+                request_url: String(entry?.request_url ?? '').trim(),
+                request_method: String(entry?.request_method ?? '').trim().toUpperCase(),
+                raw: String(entry?.raw ?? '').trim(),
+            }
+        },
+
         async onDashboardYearChanged() {
             this.setDashboardDateRangeToYear(this.dashboardYear)
             await this.loadDashboard()
@@ -2254,6 +2616,121 @@ export default {
             } finally {
                 this.dashboardLoading = false
             }
+
+            await this.loadErrorLogPreview({ suppressAlert: true })
+        },
+
+        async loadErrorLogPreview(options = {}) {
+            const suppressAlert = Boolean(options?.suppressAlert)
+            this.errorLogLoading = true
+
+            try {
+                const response = await axios.get('/api/admin/error-log')
+                this.errorLog = this.normalizeErrorLogPayload(response.data?.data ?? {})
+            } catch (error) {
+                if (!suppressAlert) {
+                    alert(error.response?.data?.message ?? this.$t('admin.dashboardErrorLogLoadFailed'))
+                }
+            } finally {
+                this.errorLogLoading = false
+            }
+        },
+
+        async loadErrorLogEntries(options = {}) {
+            const suppressAlert = Boolean(options?.suppressAlert)
+            const rawRequestedPage = Number(options?.page ?? this.errorLogEntriesMeta.current_page ?? 1)
+            const requestedPage = Number.isFinite(rawRequestedPage) ? Math.max(1, rawRequestedPage) : 1
+            const safePerPage = [10, 20, 50].includes(Number(this.errorLogFilters.per_page))
+                ? Number(this.errorLogFilters.per_page)
+                : 20
+
+            this.errorLogEntriesLoading = true
+
+            try {
+                const response = await axios.get('/api/admin/error-log/entries', {
+                    params: {
+                        search: String(this.errorLogFilters.search ?? '').trim() || undefined,
+                        type: this.errorLogFilters.type || 'all',
+                        page: requestedPage,
+                        per_page: safePerPage,
+                    },
+                })
+
+                const normalized = this.normalizeErrorLogEntriesPayload(response.data?.data ?? {})
+                this.errorLogEntries = normalized.items
+                this.errorLogEntriesMeta = normalized.meta
+                this.errorLogFilters.per_page = safePerPage
+            } catch (error) {
+                if (!suppressAlert) {
+                    alert(error.response?.data?.message ?? this.$t('admin.errorLogEntriesLoadFailed'))
+                }
+            } finally {
+                this.errorLogEntriesLoading = false
+            }
+        },
+
+        async applyErrorLogFilters() {
+            await this.loadErrorLogEntries({ page: 1 })
+        },
+
+        async refreshErrorLogWorkspace() {
+            await Promise.all([
+                this.loadErrorLogPreview({ suppressAlert: true }),
+                this.loadErrorLogEntries({ page: this.errorLogEntriesMeta.current_page || 1, suppressAlert: true }),
+            ])
+        },
+
+        async exportFilteredErrorLog() {
+            if (this.errorLogFilteredExporting) {
+                return
+            }
+
+            this.errorLogFilteredExporting = true
+
+            try {
+                const params = {
+                    type: this.errorLogFilters.type || 'all',
+                }
+
+                const search = String(this.errorLogFilters.search ?? '').trim()
+                if (search !== '') {
+                    params.search = search
+                }
+
+                const response = await axios.get('/api/admin/error-log/export', {
+                    params,
+                    responseType: 'blob',
+                })
+
+                const fallbackName = 'site-errors-filtered.log'
+                const contentDisposition = response.headers?.['content-disposition'] ?? ''
+                const fileName = this.extractDashboardDownloadFileName(contentDisposition, fallbackName)
+
+                this.triggerDashboardDownloadBlob(response.data, fileName)
+            } catch (error) {
+                alert(error.response?.data?.message ?? this.$t('admin.errorLogExportFilteredFailed'))
+            } finally {
+                this.errorLogFilteredExporting = false
+            }
+        },
+
+        async resetErrorLogFilters() {
+            this.errorLogFilters = {
+                search: '',
+                type: 'all',
+                per_page: 20,
+            }
+
+            await this.loadErrorLogEntries({ page: 1 })
+        },
+
+        async changeErrorLogPage(page) {
+            const nextPage = Math.max(1, Number(page ?? 1))
+            if (!Number.isFinite(nextPage)) {
+                return
+            }
+
+            await this.loadErrorLogEntries({ page: nextPage })
         },
 
         isDashboardExporting(format) {
@@ -2365,6 +2842,45 @@ export default {
             } finally {
                 this.dashboardExportingFormat = ''
             }
+        },
+
+        async downloadErrorLog() {
+            if (this.errorLogDownloading || !this.errorLog.exists) {
+                return
+            }
+
+            this.errorLogDownloading = true
+
+            try {
+                const response = await axios.get('/api/admin/error-log/download', {
+                    responseType: 'blob',
+                })
+
+                const fallbackName = this.errorLog?.file_name || 'site-errors.log'
+                const contentDisposition = response.headers?.['content-disposition'] ?? ''
+                const fileName = this.extractDashboardDownloadFileName(contentDisposition, fallbackName)
+
+                this.triggerDashboardDownloadBlob(response.data, fileName)
+            } catch (error) {
+                alert(error.response?.data?.message ?? this.$t('admin.dashboardErrorLogDownloadFailed'))
+            } finally {
+                this.errorLogDownloading = false
+            }
+        },
+
+        errorLogTypeLabel(type) {
+            const key = String(type ?? '').trim()
+            if (key === 'server_exception') {
+                return this.$t('admin.errorLogTypeServer')
+            }
+            if (key === 'client_error') {
+                return this.$t('admin.errorLogTypeClient')
+            }
+            if (key === 'analytics_failure') {
+                return this.$t('admin.errorLogTypeAnalytics')
+            }
+
+            return this.$t('admin.errorLogTypeAll')
         },
 
         async loadSummary() {
@@ -3101,6 +3617,22 @@ export default {
                 minimumFractionDigits: 0,
                 maximumFractionDigits: 1,
             }).format(safeValue)
+        },
+
+        formatDashboardFileSize(value) {
+            const rawSize = Number(value ?? 0)
+            const size = Number.isFinite(rawSize) ? Math.max(0, rawSize) : 0
+            const units = ['B', 'KB', 'MB', 'GB']
+
+            if (size <= 0) {
+                return '0 B'
+            }
+
+            const exponent = Math.min(Math.floor(Math.log(size) / Math.log(1024)), units.length - 1)
+            const normalized = size / (1024 ** exponent)
+            const digits = exponent === 0 ? 0 : normalized >= 10 ? 1 : 2
+
+            return `${normalized.toFixed(digits)} ${units[exponent]}`
         },
 
         formatDashboardMonth(monthNumber) {

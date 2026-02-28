@@ -2,6 +2,7 @@
 
 namespace App\Exceptions;
 
+use App\Services\SiteErrorLogService;
 use Illuminate\Foundation\Exceptions\Handler as ExceptionHandler;
 use Throwable;
 
@@ -41,10 +42,19 @@ class Handler extends ExceptionHandler
      *
      * @return void
      */
-    public function register()
+    public function register(): void
     {
-        $this->reportable(function (Throwable $e) {
-            //
+        $this->reportable(function (Throwable $e): void {
+            if (!$this->shouldReport($e)) {
+                return;
+            }
+
+            try {
+                $request = app()->bound('request') ? request() : null;
+                app(SiteErrorLogService::class)->logThrowable($e, $request);
+            } catch (Throwable $_loggingFailure) {
+                // Keep exception reporting non-blocking even if the custom text log cannot be written.
+            }
         });
     }
 }

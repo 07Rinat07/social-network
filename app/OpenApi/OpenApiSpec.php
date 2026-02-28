@@ -7,8 +7,8 @@ use OpenApi\Annotations as OA;
 /**
  * @OA\Info(
  *     title="Solid Social API",
- *     version="1.2.1",
- *     description="API documentation for Solid Social Network SPA, synchronized with the latest verified routes for feed, media upload, chats, radio, IPTV, client analytics tracking, and extended admin analytics/export flows. Detailed analytics formulas and source tables are documented in docs/analytics-metrics.md."
+ *     version="1.3.0",
+ *     description="API documentation for Solid Social Network SPA, synchronized with the latest verified routes for feed, media upload, chats, radio, IPTV, client analytics tracking, lifetime site error logging, and extended admin analytics/export flows. Detailed analytics formulas, diagnostics notes, and source tables are documented in docs/analytics-metrics.md."
  * )
  *
  * @OA\Server(
@@ -69,6 +69,11 @@ use OpenApi\Annotations as OA;
  * @OA\Tag(
  *     name="Admin Analytics",
  *     description="Admin dashboard analytics and exports. Metric formulas, fallback logic, and source tables are documented in docs/analytics-metrics.md."
+ * )
+ *
+ * @OA\Tag(
+ *     name="Admin Diagnostics",
+ *     description="Admin diagnostics endpoints for lifetime site error log preview, search, export, and raw log download."
  * )
  *
  * @OA\SecurityScheme(
@@ -220,6 +225,78 @@ use OpenApi\Annotations as OA;
  *         additionalProperties=true,
  *         example={"completed": true, "source": "theater", "channel_name": "News 24"}
  *     )
+ * )
+ *
+ * @OA\Schema(
+ *     schema="ClientErrorRequest",
+ *     type="object",
+ *     description="Public client-side runtime error payload mirrored into the lifetime site error log.",
+ *     required={"kind","message"},
+ *     @OA\Property(property="kind", type="string", enum={"runtime","promise","vue","http"}, example="http"),
+ *     @OA\Property(property="message", type="string", maxLength=4000, example="Request failed with status code 500"),
+ *     @OA\Property(property="stack", type="string", nullable=true, maxLength=30000, example="AxiosError: Request failed with status code 500\n    at fetchDashboard (...snip...)"),
+ *     @OA\Property(property="page_url", type="string", nullable=true, maxLength=2048, example="https://example.com/ru/admin"),
+ *     @OA\Property(property="route_name", type="string", nullable=true, maxLength=120, example="admin"),
+ *     @OA\Property(property="request_url", type="string", nullable=true, maxLength=2048, example="https://example.com/api/admin/dashboard"),
+ *     @OA\Property(property="request_method", type="string", nullable=true, maxLength=16, example="GET"),
+ *     @OA\Property(property="status_code", type="integer", nullable=true, minimum=0, maximum=999, example=500),
+ *     @OA\Property(property="source_file", type="string", nullable=true, maxLength=2048, example="resources/js/views/user/Admin.vue"),
+ *     @OA\Property(property="source_line", type="integer", nullable=true, minimum=0, maximum=999999, example=2683),
+ *     @OA\Property(property="source_column", type="integer", nullable=true, minimum=0, maximum=999999, example=17),
+ *     @OA\Property(
+ *         property="context",
+ *         type="object",
+ *         nullable=true,
+ *         additionalProperties=true,
+ *         example={"component": "AdminErrorLogTab", "filter_type": "client_error"}
+ *     )
+ * )
+ *
+ * @OA\Schema(
+ *     schema="SiteErrorLogPreview",
+ *     type="object",
+ *     required={"exists","file_name","relative_path","size_bytes","truncated","preview","archive_count","archive_size_bytes","archive_relative_path"},
+ *     @OA\Property(property="exists", type="boolean", example=true),
+ *     @OA\Property(property="file_name", type="string", example="site-errors.log"),
+ *     @OA\Property(property="relative_path", type="string", example="storage/logs/site-errors.log"),
+ *     @OA\Property(property="size_bytes", type="integer", example=18342),
+ *     @OA\Property(property="updated_at", type="string", format="date-time", nullable=true, example="2026-02-28T20:15:03+00:00"),
+ *     @OA\Property(property="truncated", type="boolean", example=true),
+ *     @OA\Property(property="preview", type="string", example="=== SITE ERROR ENTRY ===\nTimestamp: 2026-02-28T20:15:03+00:00\nType: server_exception\n..."),
+ *     @OA\Property(property="archive_count", type="integer", example=4),
+ *     @OA\Property(property="archive_size_bytes", type="integer", example=512993),
+ *     @OA\Property(property="archive_relative_path", type="string", example="storage/logs/site-errors-archive")
+ * )
+ *
+ * @OA\Schema(
+ *     schema="SiteErrorLogEntry",
+ *     type="object",
+ *     required={"id","timestamp","type","headline","summary","raw"},
+ *     @OA\Property(property="id", type="string", example="d7b120ff24399f0d1ef5de18fcb2468f95f2f3c2"),
+ *     @OA\Property(property="timestamp", type="string", format="date-time", nullable=true, example="2026-02-28T20:15:03+00:00"),
+ *     @OA\Property(property="type", type="string", enum={"server_exception","client_error","analytics_failure"}, example="client_error"),
+ *     @OA\Property(property="headline", type="string", example="Request failed with status code 500"),
+ *     @OA\Property(property="message", type="string", nullable=true, example="Request failed with status code 500"),
+ *     @OA\Property(property="summary", type="string", example="HTTP 500 | https://example.com/api/admin/dashboard"),
+ *     @OA\Property(property="exception", type="string", nullable=true, example="RuntimeException"),
+ *     @OA\Property(property="file", type="string", nullable=true, example="app/Http/Controllers/AdminController.php:221"),
+ *     @OA\Property(property="feature", type="string", nullable=true, example="iptv"),
+ *     @OA\Property(property="event", type="string", nullable=true, example="iptv_proxy_failed"),
+ *     @OA\Property(property="kind", type="string", nullable=true, example="http"),
+ *     @OA\Property(property="status_code", type="string", nullable=true, example="500"),
+ *     @OA\Property(property="page_url", type="string", nullable=true, example="https://example.com/ru/admin"),
+ *     @OA\Property(property="request_url", type="string", nullable=true, example="https://example.com/api/admin/dashboard"),
+ *     @OA\Property(property="request_method", type="string", nullable=true, example="GET"),
+ *     @OA\Property(property="user_id", type="string", nullable=true, example="7"),
+ *     @OA\Property(property="source", type="string", nullable=true, example="resources/js/views/user/Admin.vue:2683:17"),
+ *     @OA\Property(property="route_name", type="string", nullable=true, example="admin"),
+ *     @OA\Property(property="environment", type="string", nullable=true, example="production"),
+ *     @OA\Property(property="entity_type", type="string", nullable=true, example="channel"),
+ *     @OA\Property(property="entity_id", type="string", nullable=true, example="42"),
+ *     @OA\Property(property="entity_key", type="string", nullable=true, example="discovery-hd"),
+ *     @OA\Property(property="session_id", type="string", nullable=true, example="iptv:01hr8g0dn7q"),
+ *     @OA\Property(property="metric_value", type="string", nullable=true, example="1"),
+ *     @OA\Property(property="raw", type="string", example="=== SITE ERROR ENTRY ===\nTimestamp: 2026-02-28T20:15:03+00:00\nType: client_error\n...")
  * )
  */
 class OpenApiSpec
@@ -1569,6 +1646,31 @@ class OpenApiSpec
     }
 
     /**
+     * @OA\Post(
+     *     path="/api/client-errors",
+     *     operationId="storeClientError",
+     *     tags={"Activity"},
+     *     summary="Store a public client runtime/Vue/promise/HTTP error in the lifetime site error log",
+     *     @OA\RequestBody(
+     *         required=true,
+     *         @OA\JsonContent(ref="#/components/schemas/ClientErrorRequest")
+     *     ),
+     *     @OA\Response(
+     *         response=201,
+     *         description="Client error accepted",
+     *         @OA\JsonContent(
+     *             @OA\Property(property="message", type="string", example="Client error accepted.")
+     *         )
+     *     ),
+     *     @OA\Response(response=422, description="Validation error"),
+     *     @OA\Response(response=429, description="Too many requests")
+     * )
+     */
+    public function storeClientError(): void
+    {
+    }
+
+    /**
      * @OA\Get(
      *     path="/api/admin/summary",
      *     operationId="adminSummary",
@@ -1628,6 +1730,119 @@ class OpenApiSpec
      * )
      */
     public function adminDashboardExport(): void
+    {
+    }
+
+    /**
+     * @OA\Get(
+     *     path="/api/admin/error-log",
+     *     operationId="adminErrorLogPreview",
+     *     tags={"Admin Diagnostics"},
+     *     summary="Get lifetime site error log preview and archive statistics",
+     *     security={{"sanctumCookie":{}}},
+     *     @OA\Response(
+     *         response=200,
+     *         description="Preview payload for active site-errors.log and archive folder",
+     *         @OA\JsonContent(
+     *             @OA\Property(property="data", ref="#/components/schemas/SiteErrorLogPreview")
+     *         )
+     *     ),
+     *     @OA\Response(response=401, description="Unauthenticated"),
+     *     @OA\Response(response=403, description="Admin access required")
+     * )
+     */
+    public function adminErrorLogPreview(): void
+    {
+    }
+
+    /**
+     * @OA\Get(
+     *     path="/api/admin/error-log/entries",
+     *     operationId="adminErrorLogEntries",
+     *     tags={"Admin Diagnostics"},
+     *     summary="Search and filter structured error log entries across active log and archives",
+     *     security={{"sanctumCookie":{}}},
+     *     @OA\Parameter(name="search", in="query", required=false, description="Free-text search across raw log entries", @OA\Schema(type="string", maxLength=200)),
+     *     @OA\Parameter(name="type", in="query", required=false, description="Entry type filter", @OA\Schema(type="string", enum={"all","server_exception","client_error","analytics_failure"})),
+     *     @OA\Parameter(name="page", in="query", required=false, @OA\Schema(type="integer", minimum=1)),
+     *     @OA\Parameter(name="per_page", in="query", required=false, @OA\Schema(type="integer", minimum=1, maximum=100)),
+     *     @OA\Response(
+     *         response=200,
+     *         description="Paginated structured entries for admin diagnostics UI",
+     *         @OA\JsonContent(
+     *             @OA\Property(property="data", type="object",
+     *                 @OA\Property(property="items", type="array", @OA\Items(ref="#/components/schemas/SiteErrorLogEntry")),
+     *                 @OA\Property(property="meta", type="object",
+     *                     @OA\Property(property="current_page", type="integer", example=1),
+     *                     @OA\Property(property="last_page", type="integer", example=3),
+     *                     @OA\Property(property="per_page", type="integer", example=20),
+     *                     @OA\Property(property="total", type="integer", example=45),
+     *                     @OA\Property(property="from", type="integer", example=1),
+     *                     @OA\Property(property="to", type="integer", example=20)
+     *                 ),
+     *                 @OA\Property(property="filters", type="object",
+     *                     @OA\Property(property="search", type="string", example="500"),
+     *                     @OA\Property(property="type", type="string", example="client_error")
+     *                 )
+     *             )
+     *         )
+     *     ),
+     *     @OA\Response(response=401, description="Unauthenticated"),
+     *     @OA\Response(response=403, description="Admin access required"),
+     *     @OA\Response(response=422, description="Validation error")
+     * )
+     */
+    public function adminErrorLogEntries(): void
+    {
+    }
+
+    /**
+     * @OA\Get(
+     *     path="/api/admin/error-log/export",
+     *     operationId="adminErrorLogExport",
+     *     tags={"Admin Diagnostics"},
+     *     summary="Export only the filtered site error log entries as a text file",
+     *     security={{"sanctumCookie":{}}},
+     *     @OA\Parameter(name="search", in="query", required=false, description="Free-text search across raw log entries", @OA\Schema(type="string", maxLength=200)),
+     *     @OA\Parameter(name="type", in="query", required=false, description="Entry type filter", @OA\Schema(type="string", enum={"all","server_exception","client_error","analytics_failure"})),
+     *     @OA\Response(
+     *         response=200,
+     *         description="Plain-text filtered export stream",
+     *         @OA\MediaType(mediaType="text/plain", @OA\Schema(type="string", format="binary"))
+     *     ),
+     *     @OA\Response(response=401, description="Unauthenticated"),
+     *     @OA\Response(response=403, description="Admin access required"),
+     *     @OA\Response(response=422, description="Validation error")
+     * )
+     */
+    public function adminErrorLogExport(): void
+    {
+    }
+
+    /**
+     * @OA\Get(
+     *     path="/api/admin/error-log/download",
+     *     operationId="adminErrorLogDownload",
+     *     tags={"Admin Diagnostics"},
+     *     summary="Download the current raw lifetime site error log file",
+     *     security={{"sanctumCookie":{}}},
+     *     @OA\Response(
+     *         response=200,
+     *         description="Current raw site-errors.log stream",
+     *         @OA\MediaType(mediaType="text/plain", @OA\Schema(type="string", format="binary"))
+     *     ),
+     *     @OA\Response(
+     *         response=404,
+     *         description="Log file does not exist yet",
+     *         @OA\JsonContent(
+     *             @OA\Property(property="message", type="string", example="Site error log file does not exist yet.")
+     *         )
+     *     ),
+     *     @OA\Response(response=401, description="Unauthenticated"),
+     *     @OA\Response(response=403, description="Admin access required")
+     * )
+     */
+    public function adminErrorLogDownload(): void
     {
     }
 }

@@ -31,6 +31,7 @@ SPA-социальная сеть на `Laravel + Vue` с realtime-чатами,
 - realtime-чаты с presence-статусами и typing-индикаторами;
 - радио и IPTV-плеер (direct/proxy/transcode/relay режимы);
 - админ-панель для модерации, настройки и аналитического дашборда;
+- lifetime text error log для серверных, клиентских и analytics failure ошибок с просмотром и экспортом из админки;
 - серверный heartbeat-трекинг пользовательской активности по модулям;
 - клиентский event-трекинг для видео, upload-failure, радио и IPTV;
 - мультиязычный интерфейс `RU/EN` с SEO URL (`/ru/...`, `/en/...`).
@@ -90,6 +91,9 @@ SPA-социальная сеть на `Laravel + Vue` с realtime-чатами,
 - Excel-выгрузка теперь включает блоки `Summary`, `Retention`, `Retention Cohorts`, `Content`, `Top Posts`, `Top Authors`, `Chats`, `Media`, `Radio`, `IPTV`, `Errors / Moderation`, а также пользовательскую сводку за период.
 - Серверный endpoint heartbeat: `POST /api/activity/heartbeat` (auth + verified).
 - Серверный endpoint client analytics: `POST /api/analytics/events` (auth + verified).
+- Публичный endpoint client runtime log: `POST /api/client-errors` с записью `runtime/promise/vue/http` ошибок в lifetime text log.
+- В админке есть preview на dashboard и отдельная вкладка журнала ошибок с поиском, фильтром по типу, пагинацией, filtered export и скачиванием полного `.log`.
+- История журнала не теряется после ротации: старые файлы архивируются, при необходимости сжимаются в `.gz`, а поиск/фильтр/экспорт читают и активный лог, и архивы.
 - Агрегация активности в таблицы:
   - `user_activity_sessions` (сессии пользователя по feature),
   - `user_activity_daily_stats` (дневная агрегированная статистика),
@@ -174,6 +178,7 @@ SPA-социальная сеть на `Laravel + Vue` с realtime-чатами,
 | Radio | Поиск, подборки, воспроизведение, избранное и их распределение | `app/Http/Controllers/RadioController.php`, `app/Console/Commands/DistributeAdminRadioFavorites.php` |
 | Админка | Модерация пользователей/контента/обращений, настройки сайта | `/api/admin/*`, `app/Http/Controllers/AdminController.php` |
 | Аналитика активности | Heartbeat + client analytics events, дашборд и Excel/JSON export | `app/Http/Controllers/ActivityHeartbeatController.php`, `app/Http/Controllers/AnalyticsEventController.php`, `app/Services/AdminDashboardService.php`, `app/Services/AdminDashboardExportService.php` |
+| Диагностика ошибок | Lifetime log сайта, preview/search/filter/export/download, archive rotation | `app/Http/Controllers/SiteErrorLogController.php`, `app/Services/SiteErrorLogService.php`, `resources/js/utils/siteErrorReporter.js` |
 | Контент главной | RU/EN контент, world overview (время/погода) | `app/Http/Controllers/SiteSettingController.php`, `app/Services/WorldOverviewService.php` |
 | i18n + SEO | RU/EN маршруты, runtime перевод, SEO мета | `resources/js/router/index.js`, `resources/js/i18n` |
 
@@ -283,9 +288,10 @@ docker/
 - API throttling настроен по маршрутам:
   - авторизованные API-запросы: `throttle:600,1`;
   - публичные `site/home-content` и `site/world-overview`: `throttle:240,1`;
-  - feedback anti-spam: `throttle:20,1`;
-  - media (`post-images`, `avatars`): `throttle:600,1`;
-  - IPTV segment/playlist delivery (public relay/proxy/transcode): `throttle:1200,1`.
+- feedback anti-spam: `throttle:20,1`;
+- public client error log: `throttle:30,1` на `POST /api/client-errors`;
+- media (`post-images`, `avatars`): `throttle:600,1`;
+- IPTV segment/playlist delivery (public relay/proxy/transcode): `throttle:1200,1`.
 - Отправка email verification notification: `throttle:6,1`.
 - Heartbeat endpoint: `throttle:120,1` на `POST /api/activity/heartbeat`.
 - Client analytics endpoint: `throttle:240,1` на `POST /api/analytics/events`.
@@ -369,6 +375,7 @@ docker/
 - Realtime: `REVERB_*`, `VITE_REVERB_*`
 - IPTV: `IPTV_FFMPEG_BIN`
 - Radio API: `RADIO_BROWSER_BASE_URL`
+- Lifetime error log: `SITE_ERROR_LOG_PATH`, `SITE_ERROR_LOG_ARCHIVE_PATH`, `SITE_ERROR_LOG_ROTATE_MAX_BYTES`, `SITE_ERROR_LOG_ROTATE_MAX_AGE_DAYS`, `SITE_ERROR_LOG_ARCHIVE_COMPRESS`
 - Docker Compose (host only): `WEB_FORWARD_PORT`, `DB_FORWARD_PORT`, `VITE_FORWARD_PORT`, `REVERB_FORWARD_PORT`, `APP_HEALTHCHECK_START_PERIOD`, `RUN_MIGRATIONS`, `RUN_SEEDERS_ON_EMPTY_DB`, `DEMO_SEED_USE_REMOTE_IMAGES`
 - Docker env selector: `DOCKER_ENV_FILE` (например `.env.docker`)
 
@@ -381,6 +388,7 @@ docker/
 - Медиа (доступ, fallback, cache-bust query): `php artisan test tests/Feature/MediaPostFeatureTest.php`
 - Heartbeat трекинг: `php artisan test tests/Feature/ActivityHeartbeatFeatureTest.php`
 - Дашборд/экспорт админ-аналитики: `php artisan test tests/Feature/AdminAndChatFeatureTest.php`
+- Lifetime error log, фильтры, export и archive rotation: `php artisan test tests/Feature/SiteErrorLogFeatureTest.php`
 - Сид демо-контента: `php artisan test tests/Feature/DemoSocialContentSeederFeatureTest.php`
 - IPTV: `php artisan test tests/Feature/IptvFeatureTest.php`
 - IPTV Админка (Сидеры): `php artisan test tests/Feature/AdminIptvSeedFeatureTest.php`
@@ -409,7 +417,7 @@ docker/
 - `npm run build`
 
 Последний полный прогон (28 февраля 2026):
-- `php artisan test`: `196 passed` (`1681 assertions`).
+- `php artisan test`: `203 passed` (`1744 assertions`).
 - `npm run test:js`: `33 passed`.
 
 Проверка зависимостей (28 февраля 2026):
@@ -421,6 +429,7 @@ docker/
 
 ### Публичные
 - `POST /api/feedback`
+- `POST /api/client-errors`
 - `GET /api/site/home-content`
 - `GET /api/site/world-overview?locale=ru|en`
 
@@ -456,8 +465,14 @@ docker/
   - `GET /api/admin/summary`
   - `GET /api/admin/dashboard?year=YYYY&date_from=YYYY-MM-DD&date_to=YYYY-MM-DD`
 - `GET /api/admin/dashboard/export?format=xls|json&locale=ru|en&year=YYYY&date_from=YYYY-MM-DD&date_to=YYYY-MM-DD`
+- Диагностика lifetime error log:
+  - `GET /api/admin/error-log`
+  - `GET /api/admin/error-log/entries?search=...&type=all|server_exception|client_error|analytics_failure&page=1&per_page=20`
+  - `GET /api/admin/error-log/export?search=...&type=...`
+  - `GET /api/admin/error-log/download`
 - Экспорт запускается из админки и возвращает поток файла (`Content-Disposition`) для прямого скачивания.
 - JSON/XLS payload синхронизирован с блоками `retention`, `content`, `chats`, `media`, `radio`, `iptv`, `errors_and_moderation`.
+- Lifetime error log работает как отдельный operational diagnostics контур: хранит подробные сырые записи за весь срок жизни сайта, умеет искать по активному логу и архивам и не зависит от периодного dashboard payload.
 - Формулы и источники данных описаны в [docs/analytics-metrics.md](docs/analytics-metrics.md).
 
 ## Swagger / OpenAPI
@@ -466,8 +481,8 @@ docker/
 - Сгенерированный JSON-файл на диске: `storage/api-docs/api-docs.json`
 - Генерация документации: `php artisan l5-swagger:generate`
 - Базовые аннотации: `app/OpenApi/OpenApiSpec.php`
-- Актуальная версия спецификации: `1.2.1`
-- Спецификация синхронизирована с ключевыми маршрутами `users`, `posts`, `post_media`, `chat settings/archives`, `IPTV library/playback sessions`, `activity heartbeat`, `client analytics events`, `admin analytics/export`.
+- Актуальная версия спецификации: `1.3.0`
+- Спецификация синхронизирована с ключевыми маршрутами `users`, `posts`, `post_media`, `chat settings/archives`, `IPTV library/playback sessions`, `activity heartbeat`, `client analytics events`, `client error logging`, `admin analytics/export`, `admin diagnostics error-log`.
 - Для блока админ-аналитики Swagger синхронизирован с проектной методикой расчётов из [docs/analytics-metrics.md](docs/analytics-metrics.md).
 - Генерация и доступность Swagger UI дополнительно проверяются тестом `tests/Feature/SwaggerDocumentationFeatureTest.php`.
 
