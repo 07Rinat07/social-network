@@ -73,6 +73,8 @@
                             :preload="mediaPlayerPreload(media)"
                             player-class="media-video"
                             :shell-class="mediaPlayerShellClass(media)"
+                            @playbackstate="handleInlineMediaPlaybackState(media, 'inline', $event)"
+                            @enterfullscreen="handleInlineMediaFullscreenEnter(media, 'inline')"
                         ></MediaPlayer>
                     </div>
                     <button
@@ -138,6 +140,8 @@
                             :preload="mediaPlayerPreload(media)"
                             player-class="media-video"
                             :shell-class="mediaPlayerShellClass(media)"
+                            @playbackstate="handleInlineMediaPlaybackState(media, 'repost-inline', $event)"
+                            @enterfullscreen="handleInlineMediaFullscreenEnter(media, 'repost-inline')"
                         ></MediaPlayer>
                     </div>
                 </template>
@@ -251,6 +255,7 @@ import PostMediaTheater from './PostMediaTheater.vue'
 import MediaPlayer from './MediaPlayer.vue'
 import StickerPicker from './stickers/StickerPicker.vue'
 import StickerRichText from './stickers/StickerRichText.vue'
+import { ANALYTICS_EVENTS, ANALYTICS_FEATURES, createAnalyticsSessionId, reportAnalyticsEvent } from '../utils/analyticsTracker.mjs'
 import { applyImagePreviewFallback, resetImagePreviewFallback } from '../utils/mediaPreview'
 import {
     replaceMarkedEmojiWithStickerTokens,
@@ -298,6 +303,7 @@ export default {
             showCommentStickerTray: false,
             showRepostStickerTray: false,
             failedAvatarUrls: {},
+            videoAnalyticsSessions: {},
         }
     },
 
@@ -360,6 +366,10 @@ export default {
         this.markViewed()
     },
 
+    beforeUnmount() {
+        this.finalizeAllInlineMediaAnalytics()
+    },
+
     methods: {
         handlePreviewError(event, label = 'Preview unavailable') {
             applyImagePreviewFallback(event, label)
@@ -393,6 +403,156 @@ export default {
             return ''
         },
 
+        inlineVideoAnalyticsKey(media, scope = 'inline') {
+            const mediaId = Number.isInteger(Number(media?.id)) ? Number(media.id) : 0
+            const source = String(media?.url || '').trim()
+            return [String(this.post?.id || 'post'), String(scope || 'inline'), mediaId > 0 ? `id-${mediaId}` : source]
+                .filter(Boolean)
+                .join('::')
+        },
+
+        ensureInlineVideoAnalyticsSession(media, scope = 'inline') {
+            const key = this.inlineVideoAnalyticsKey(media, scope)
+            const existing = this.videoAnalyticsSessions[key]
+            if (existing) {
+                return existing
+            }
+
+            const next = {
+                sessionId: createAnalyticsSessionId(`video-${scope}`),
+                watchSeconds: 0,
+                lastTime: 0,
+                maxTime: 0,
+                duration: 0,
+                completed: false,
+                mediaId: Number.isInteger(Number(media?.id)) ? Number(media.id) : null,
+                title: String(this.post?.title || '').trim(),
+                url: String(media?.url || '').trim(),
+            }
+
+            this.videoAnalyticsSessions = {
+                ...this.videoAnalyticsSessions,
+                [key]: next,
+            }
+
+            return next
+        },
+
+        async finalizeInlineVideoAnalytics(media, scope = 'inline') {
+            const key = this.inlineVideoAnalyticsKey(media, scope)
+            const session = this.videoAnalyticsSessions[key]
+            if (!session?.sessionId) {
+                return
+            }
+
+            const duration = Math.max(0, Number(session.duration || 0))
+            const maxTime = Math.max(0, Number(session.maxTime || 0))
+            const watchSeconds = Math.max(0, Math.round(session.watchSeconds || 0))
+            const completionPercent = duration > 0
+                ? Math.min(100, Number(((maxTime / duration) * 100).toFixed(1)))
+                : 0
+            const completed = Boolean(session.completed) || (duration > 0 && maxTime >= duration * 0.95)
+
+            await reportAnalyticsEvent({
+                feature: ANALYTICS_FEATURES.MEDIA,
+                event_name: ANALYTICS_EVENTS.VIDEO_SESSION,
+                entity_type: 'post_media',
+                entity_id: session.mediaId,
+                entity_key: session.url,
+                session_id: session.sessionId,
+                duration_seconds: watchSeconds,
+                metric_value: completionPercent,
+                context: {
+                    completed,
+                    theater_used: false,
+                    post_id: Number(this.post?.id || 0),
+                    title: session.title,
+                    player_scope: scope,
+                    duration_seconds: duration,
+                    watched_max_seconds: maxTime,
+                },
+            })
+
+            const nextSessions = { ...this.videoAnalyticsSessions }
+            delete nextSessions[key]
+            this.videoAnalyticsSessions = nextSessions
+        },
+
+        async finalizeAllInlineMediaAnalytics() {
+            const sessions = Object.entries(this.videoAnalyticsSessions)
+            if (sessions.length === 0) {
+                return
+            }
+
+            for (const [key, session] of sessions) {
+                const scope = String(key.split('::')[1] || 'inline')
+                await this.finalizeInlineVideoAnalytics({
+                    id: session.mediaId,
+                    url: session.url,
+                }, scope)
+            }
+        },
+
+        handleInlineMediaPlaybackState(media, scope = 'inline', payload = {}) {
+            const state = String(payload?.state || '')
+            const currentTime = Math.max(0, Number(payload?.currentTime || 0))
+            const duration = Math.max(0, Number(payload?.duration || 0))
+            const key = this.inlineVideoAnalyticsKey(media, scope)
+            let session = this.videoAnalyticsSessions[key]
+
+            if (!session && !['play', 'timeupdate', 'pause', 'ended'].includes(state)) {
+                return
+            }
+
+            if (!session) {
+                session = this.ensureInlineVideoAnalyticsSession(media, scope)
+            }
+
+            if (duration > 0) {
+                session.duration = Math.max(Number(session.duration || 0), duration)
+            }
+
+            if (currentTime >= Number(session.lastTime || 0) && (currentTime - Number(session.lastTime || 0)) <= 15) {
+                session.watchSeconds += Math.max(0, currentTime - Number(session.lastTime || 0))
+            }
+
+            session.lastTime = currentTime
+            session.maxTime = Math.max(Number(session.maxTime || 0), currentTime)
+
+            this.videoAnalyticsSessions = {
+                ...this.videoAnalyticsSessions,
+                [key]: session,
+            }
+
+            if (state === 'ended') {
+                session.completed = true
+                void this.finalizeInlineVideoAnalytics(media, scope)
+                return
+            }
+
+            if (state === 'pause' && Number(session.maxTime || 0) > 0) {
+                void this.finalizeInlineVideoAnalytics(media, scope)
+            }
+        },
+
+        async handleInlineMediaFullscreenEnter(media, scope = 'inline') {
+            const session = this.ensureInlineVideoAnalyticsSession(media, scope)
+
+            await reportAnalyticsEvent({
+                feature: ANALYTICS_FEATURES.MEDIA,
+                event_name: ANALYTICS_EVENTS.VIDEO_FULLSCREEN_ENTER,
+                entity_type: 'post_media',
+                entity_id: session.mediaId,
+                entity_key: session.url,
+                session_id: session.sessionId,
+                context: {
+                    post_id: Number(this.post?.id || 0),
+                    title: session.title,
+                    player_scope: scope,
+                },
+            })
+        },
+
         pauseAllInlineMediaPlayers() {
             const refs = Array.isArray(this.$refs.postMediaPlayers)
                 ? this.$refs.postMediaPlayers
@@ -412,6 +572,8 @@ export default {
             this.$refs.postMediaTheater?.open({
                 source: media.url,
                 mimeType: media.mime_type,
+                mediaId: Number.isInteger(Number(media?.id)) ? Number(media.id) : null,
+                postId: Number.isInteger(Number(this.post?.id)) ? Number(this.post.id) : null,
                 title: String(title || this.post?.title || this.$t('common.video')).trim() || this.$t('common.video'),
                 downloadHref: media.url,
                 downloadName: this.mediaDownloadName(media),

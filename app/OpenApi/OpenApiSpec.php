@@ -7,8 +7,8 @@ use OpenApi\Annotations as OA;
 /**
  * @OA\Info(
  *     title="Solid Social API",
- *     version="1.0.0",
- *     description="API documentation for Solid Social Network SPA"
+ *     version="1.2.1",
+ *     description="API documentation for Solid Social Network SPA, synchronized with the latest verified routes for feed, media upload, chats, radio, IPTV, client analytics tracking, and extended admin analytics/export flows. Detailed analytics formulas and source tables are documented in docs/analytics-metrics.md."
  * )
  *
  * @OA\Server(
@@ -42,6 +42,21 @@ use OpenApi\Annotations as OA;
  * )
  *
  * @OA\Tag(
+ *     name="Users",
+ *     description="User discovery, profile and follow actions"
+ * )
+ *
+ * @OA\Tag(
+ *     name="Posts",
+ *     description="Feed, discover and engagement endpoints"
+ * )
+ *
+ * @OA\Tag(
+ *     name="Media",
+ *     description="Media upload and download endpoints"
+ * )
+ *
+ * @OA\Tag(
  *     name="Activity",
  *     description="User activity heartbeat tracking"
  * )
@@ -53,7 +68,7 @@ use OpenApi\Annotations as OA;
  *
  * @OA\Tag(
  *     name="Admin Analytics",
- *     description="Admin dashboard analytics and exports"
+ *     description="Admin dashboard analytics and exports. Metric formulas, fallback logic, and source tables are documented in docs/analytics-metrics.md."
  * )
  *
  * @OA\SecurityScheme(
@@ -107,6 +122,105 @@ use OpenApi\Annotations as OA;
  *     @OA\Property(property="bitrate", type="integer", example=128),
  *     @OA\Property(property="votes", type="integer", example=420)
  * )
+ *
+ * @OA\Schema(
+ *     schema="UserSummary",
+ *     type="object",
+ *     required={"id","name"},
+ *     @OA\Property(property="id", type="integer", example=12),
+ *     @OA\Property(property="name", type="string", example="Test User 1"),
+ *     @OA\Property(property="display_name", type="string", nullable=true, example="Test User 1"),
+ *     @OA\Property(property="nickname", type="string", nullable=true, example="test_user_1"),
+ *     @OA\Property(property="avatar_url", type="string", format="uri", nullable=true, example="https://example.com/api/media/avatars/12"),
+ *     @OA\Property(property="is_followed", type="boolean", nullable=true, example=false)
+ * )
+ *
+ * @OA\Schema(
+ *     schema="UploadedPostMedia",
+ *     type="object",
+ *     required={"id","type","url"},
+ *     @OA\Property(property="id", type="integer", example=81),
+ *     @OA\Property(property="type", type="string", enum={"image","video"}, example="video"),
+ *     @OA\Property(property="url", type="string", format="uri", example="https://example.com/api/media/post-images/81"),
+ *     @OA\Property(property="mime_type", type="string", example="video/mp4"),
+ *     @OA\Property(property="size", type="integer", example=10485760),
+ *     @OA\Property(property="original_name", type="string", example="clip.mp4")
+ * )
+ *
+ * @OA\Schema(
+ *     schema="IptvSavedPlaylist",
+ *     type="object",
+ *     required={"id","name","url","channels_count"},
+ *     @OA\Property(property="id", type="integer", example=4),
+ *     @OA\Property(property="name", type="string", example="Main playlist"),
+ *     @OA\Property(property="url", type="string", format="uri", example="https://iptv.example.com/playlist.m3u8"),
+ *     @OA\Property(property="channels_count", type="integer", example=240),
+ *     @OA\Property(property="updated_at", type="string", format="date-time", nullable=true)
+ * )
+ *
+ * @OA\Schema(
+ *     schema="IptvSavedChannel",
+ *     type="object",
+ *     required={"id","name","url"},
+ *     @OA\Property(property="id", type="integer", example=9),
+ *     @OA\Property(property="name", type="string", example="Discovery HD"),
+ *     @OA\Property(property="url", type="string", format="uri", example="https://stream.example.com/discovery.m3u8"),
+ *     @OA\Property(property="group", type="string", nullable=true, example="Entertainment"),
+ *     @OA\Property(property="logo", type="string", format="uri", nullable=true, example="https://stream.example.com/logo.png"),
+ *     @OA\Property(property="updated_at", type="string", format="date-time", nullable=true)
+ * )
+ *
+ * @OA\Schema(
+ *     schema="PlaybackSession",
+ *     type="object",
+ *     required={"session_id","source_url","playlist_url"},
+ *     @OA\Property(property="session_id", type="string", example="iptv_01hxy2kkt2f7b8s"),
+ *     @OA\Property(property="source_url", type="string", format="uri", example="https://stream.example.com/live.m3u8"),
+ *     @OA\Property(property="playlist_url", type="string", example="/api/iptv/proxy/iptv_01hxy2kkt2f7b8s/playlist.m3u8"),
+ *     @OA\Property(property="profile", type="string", nullable=true, example="balanced")
+ * )
+ *
+ * @OA\Schema(
+ *     schema="AnalyticsEventRequest",
+ *     type="object",
+ *     description="Client analytics event payload for media, radio, and IPTV metrics. These events feed admin transport/media blocks and the XLS/JSON export.",
+ *     required={"feature","event_name"},
+ *     @OA\Property(property="feature", type="string", enum={"media","social","chats","radio","iptv"}, example="media"),
+ *     @OA\Property(
+ *         property="event_name",
+ *         type="string",
+ *         enum={
+ *             "media_upload_failed",
+ *             "video_session",
+ *             "video_theater_open",
+ *             "video_fullscreen_enter",
+ *             "radio_play_started",
+ *             "radio_play_failed",
+ *             "iptv_direct_started",
+ *             "iptv_direct_failed",
+ *             "iptv_proxy_started",
+ *             "iptv_proxy_failed",
+ *             "iptv_relay_started",
+ *             "iptv_relay_failed",
+ *             "iptv_ffmpeg_started",
+ *             "iptv_ffmpeg_failed"
+ *         },
+ *         example="video_session"
+ *     ),
+ *     @OA\Property(property="entity_type", type="string", nullable=true, example="post_media"),
+ *     @OA\Property(property="entity_id", type="integer", nullable=true, minimum=1, example=81),
+ *     @OA\Property(property="entity_key", type="string", nullable=true, example="station-abc"),
+ *     @OA\Property(property="session_id", type="string", nullable=true, example="video:01hr8g0dn7q"),
+ *     @OA\Property(property="duration_seconds", type="integer", nullable=true, minimum=0, example=95),
+ *     @OA\Property(property="metric_value", type="number", format="float", nullable=true, example=82.4),
+ *     @OA\Property(
+ *         property="context",
+ *         type="object",
+ *         nullable=true,
+ *         additionalProperties=true,
+ *         example={"completed": true, "source": "theater", "channel_name": "News 24"}
+ *     )
+ * )
  */
 class OpenApiSpec
 {
@@ -144,6 +258,21 @@ class OpenApiSpec
     }
 
     /**
+     * @OA\Get(
+     *     path="/api/site/config",
+     *     operationId="getPublicSiteConfig",
+     *     tags={"Site"},
+     *     summary="Get public site configuration for authenticated verified user",
+     *     security={{"sanctumCookie":{}}},
+     *     @OA\Response(response=200, description="Public config payload"),
+     *     @OA\Response(response=401, description="Unauthenticated")
+     * )
+     */
+    public function getPublicSiteConfig(): void
+    {
+    }
+
+    /**
      * @OA\Post(
      *     path="/api/feedback",
      *     operationId="storeFeedback",
@@ -169,6 +298,320 @@ class OpenApiSpec
      * )
      */
     public function storeFeedback(): void
+    {
+    }
+
+    /**
+     * @OA\Get(
+     *     path="/api/users",
+     *     operationId="getUsersIndex",
+     *     tags={"Users"},
+     *     summary="Search and paginate users except the current viewer",
+     *     security={{"sanctumCookie":{}}},
+     *     @OA\Parameter(name="search", in="query", required=false, description="Name or nickname search", @OA\Schema(type="string")),
+     *     @OA\Parameter(name="per_page", in="query", required=false, @OA\Schema(type="integer", minimum=1, maximum=50)),
+     *     @OA\Response(
+     *         response=200,
+     *         description="Paginated users",
+     *         @OA\JsonContent(
+     *             @OA\Property(property="data", type="array", @OA\Items(ref="#/components/schemas/UserSummary"))
+     *         )
+     *     ),
+     *     @OA\Response(response=401, description="Unauthenticated")
+     * )
+     */
+    public function getUsersIndex(): void
+    {
+    }
+
+    /**
+     * @OA\Get(
+     *     path="/api/users/{user}/posts",
+     *     operationId="getUserPosts",
+     *     tags={"Users"},
+     *     summary="Get paginated posts for a specific user",
+     *     security={{"sanctumCookie":{}}},
+     *     @OA\Parameter(name="user", in="path", required=true, @OA\Schema(type="integer", minimum=1)),
+     *     @OA\Parameter(name="per_page", in="query", required=false, @OA\Schema(type="integer", minimum=1, maximum=50)),
+     *     @OA\Response(response=200, description="User posts payload"),
+     *     @OA\Response(response=401, description="Unauthenticated")
+     * )
+     */
+    public function getUserPosts(): void
+    {
+    }
+
+    /**
+     * @OA\Get(
+     *     path="/api/users/following_posts",
+     *     operationId="getFollowingPosts",
+     *     tags={"Users"},
+     *     summary="Get feed posts from followed users",
+     *     security={{"sanctumCookie":{}}},
+     *     @OA\Parameter(name="per_page", in="query", required=false, @OA\Schema(type="integer", minimum=1, maximum=50)),
+     *     @OA\Response(response=200, description="Following feed payload"),
+     *     @OA\Response(response=401, description="Unauthenticated")
+     * )
+     */
+    public function getFollowingPosts(): void
+    {
+    }
+
+    /**
+     * @OA\Post(
+     *     path="/api/users/profile",
+     *     operationId="updateUserProfile",
+     *     tags={"Users"},
+     *     summary="Update current user profile and avatar",
+     *     security={{"sanctumCookie":{}, "xsrfHeader":{}}},
+     *     @OA\RequestBody(
+     *         required=true,
+     *         @OA\MediaType(
+     *             mediaType="multipart/form-data",
+     *             @OA\Schema(
+     *                 required={"name"},
+     *                 @OA\Property(property="name", type="string", maxLength=255, example="Test User 1"),
+     *                 @OA\Property(property="nickname", type="string", nullable=true, maxLength=40, example="test_user_1"),
+     *                 @OA\Property(property="avatar", type="string", format="binary"),
+     *                 @OA\Property(property="remove_avatar", type="boolean", nullable=true, example=false)
+     *             )
+     *         )
+     *     ),
+     *     @OA\Response(response=200, description="Profile updated"),
+     *     @OA\Response(response=401, description="Unauthenticated"),
+     *     @OA\Response(response=422, description="Validation error")
+     * )
+     */
+    public function updateUserProfile(): void
+    {
+    }
+
+    /**
+     * @OA\Post(
+     *     path="/api/users/{user}/toggle_following",
+     *     operationId="toggleFollowing",
+     *     tags={"Users"},
+     *     summary="Follow or unfollow a target user",
+     *     security={{"sanctumCookie":{}, "xsrfHeader":{}}},
+     *     @OA\Parameter(name="user", in="path", required=true, @OA\Schema(type="integer", minimum=1)),
+     *     @OA\Response(response=200, description="Follow state updated"),
+     *     @OA\Response(response=401, description="Unauthenticated"),
+     *     @OA\Response(response=422, description="Invalid target")
+     * )
+     */
+    public function toggleFollowing(): void
+    {
+    }
+
+    /**
+     * @OA\Post(
+     *     path="/api/post_media",
+     *     operationId="uploadPostMedia",
+     *     tags={"Media"},
+     *     summary="Upload image or video asset before post creation",
+     *     security={{"sanctumCookie":{}, "xsrfHeader":{}}},
+     *     @OA\RequestBody(
+     *         required=true,
+     *         @OA\MediaType(
+     *             mediaType="multipart/form-data",
+     *             @OA\Schema(
+     *                 required={"file"},
+     *                 @OA\Property(
+     *                     property="file",
+     *                     type="string",
+     *                     format="binary",
+     *                     description="Supported formats: jpg, jpeg, png, webp, gif, mp4, webm, mov, m4v, avi, mkv. Maximum size: 200 MB."
+     *                 )
+     *             )
+     *         )
+     *     ),
+     *     @OA\Response(
+     *         response=200,
+     *         description="Uploaded media payload",
+     *         @OA\JsonContent(ref="#/components/schemas/UploadedPostMedia")
+     *     ),
+     *     @OA\Response(response=401, description="Unauthenticated"),
+     *     @OA\Response(response=422, description="Validation error")
+     * )
+     */
+    public function uploadPostMedia(): void
+    {
+    }
+
+    /**
+     * @OA\Get(
+     *     path="/api/media/post-images/{postImage}",
+     *     operationId="getPostMediaFile",
+     *     tags={"Media"},
+     *     summary="Get public placeholder-aware post media file",
+     *     @OA\Parameter(name="postImage", in="path", required=true, @OA\Schema(type="integer", minimum=1)),
+     *     @OA\Response(
+     *         response=200,
+     *         description="Image or video bytes",
+     *         @OA\MediaType(mediaType="image/*", @OA\Schema(type="string", format="binary")),
+     *         @OA\MediaType(mediaType="video/*", @OA\Schema(type="string", format="binary"))
+     *     ),
+     *     @OA\Response(response=403, description="Private media is not available"),
+     *     @OA\Response(response=404, description="Media not found")
+     * )
+     */
+    public function getPostMediaFile(): void
+    {
+    }
+
+    /**
+     * @OA\Get(
+     *     path="/api/media/chat-attachments/{attachment}",
+     *     operationId="getChatAttachment",
+     *     tags={"Media"},
+     *     summary="Stream chat attachment for conversation participant",
+     *     security={{"sanctumCookie":{}}},
+     *     @OA\Parameter(name="attachment", in="path", required=true, @OA\Schema(type="integer", minimum=1)),
+     *     @OA\Response(response=200, description="Attachment bytes"),
+     *     @OA\Response(response=401, description="Unauthenticated"),
+     *     @OA\Response(response=403, description="No access to this attachment"),
+     *     @OA\Response(response=404, description="Attachment not found")
+     * )
+     */
+    public function getChatAttachment(): void
+    {
+    }
+
+    /**
+     * @OA\Get(
+     *     path="/api/media/chat-attachments/{attachment}/download",
+     *     operationId="downloadChatAttachment",
+     *     tags={"Media"},
+     *     summary="Download chat attachment for conversation participant",
+     *     security={{"sanctumCookie":{}}},
+     *     @OA\Parameter(name="attachment", in="path", required=true, @OA\Schema(type="integer", minimum=1)),
+     *     @OA\Response(response=200, description="Attachment download stream"),
+     *     @OA\Response(response=401, description="Unauthenticated"),
+     *     @OA\Response(response=403, description="No access to this attachment"),
+     *     @OA\Response(response=404, description="Attachment not found")
+     * )
+     */
+    public function downloadChatAttachment(): void
+    {
+    }
+
+    /**
+     * @OA\Get(
+     *     path="/api/posts",
+     *     operationId="getOwnPosts",
+     *     tags={"Posts"},
+     *     summary="Get current user's own posts",
+     *     security={{"sanctumCookie":{}}},
+     *     @OA\Parameter(name="per_page", in="query", required=false, @OA\Schema(type="integer", minimum=1, maximum=50)),
+     *     @OA\Response(response=200, description="Paginated own posts"),
+     *     @OA\Response(response=401, description="Unauthenticated")
+     * )
+     */
+    public function getOwnPosts(): void
+    {
+    }
+
+    /**
+     * @OA\Post(
+     *     path="/api/posts",
+     *     operationId="createPost",
+     *     tags={"Posts"},
+     *     summary="Create a post with optional uploaded media",
+     *     security={{"sanctumCookie":{}, "xsrfHeader":{}}},
+     *     @OA\RequestBody(
+     *         required=true,
+     *         @OA\JsonContent(
+     *             required={"title","content"},
+     *             @OA\Property(property="title", type="string", maxLength=255, example="Weekend notes"),
+     *             @OA\Property(property="content", type="string", maxLength=5000, example="Fresh air, good road and no notifications for two hours."),
+     *             @OA\Property(property="image_id", type="integer", nullable=true, example=81),
+     *             @OA\Property(property="media_ids", type="array", @OA\Items(type="integer"), nullable=true, example={81,82}),
+     *             @OA\Property(property="is_public", type="boolean", nullable=true, example=true),
+     *             @OA\Property(property="show_in_feed", type="boolean", nullable=true, example=true),
+     *             @OA\Property(property="show_in_carousel", type="boolean", nullable=true, example=false)
+     *         )
+     *     ),
+     *     @OA\Response(response=200, description="Created post resource"),
+     *     @OA\Response(response=401, description="Unauthenticated"),
+     *     @OA\Response(response=422, description="Validation error")
+     * )
+     */
+    public function createPost(): void
+    {
+    }
+
+    /**
+     * @OA\Get(
+     *     path="/api/posts/discover",
+     *     operationId="getDiscoverPosts",
+     *     tags={"Posts"},
+     *     summary="Get public discover feed",
+     *     security={{"sanctumCookie":{}}},
+     *     @OA\Parameter(name="sort", in="query", required=false, @OA\Schema(type="string", enum={"popular","most_viewed","newest"})),
+     *     @OA\Parameter(name="per_page", in="query", required=false, @OA\Schema(type="integer", minimum=1, maximum=50)),
+     *     @OA\Response(response=200, description="Discover feed payload"),
+     *     @OA\Response(response=401, description="Unauthenticated")
+     * )
+     */
+    public function getDiscoverPosts(): void
+    {
+    }
+
+    /**
+     * @OA\Get(
+     *     path="/api/posts/carousel",
+     *     operationId="getCarouselMedia",
+     *     tags={"Posts"},
+     *     summary="Get public media items marked for home carousel",
+     *     security={{"sanctumCookie":{}}},
+     *     @OA\Parameter(name="limit", in="query", required=false, @OA\Schema(type="integer", minimum=1, maximum=100)),
+     *     @OA\Response(response=200, description="Carousel media payload"),
+     *     @OA\Response(response=401, description="Unauthenticated")
+     * )
+     */
+    public function getCarouselMedia(): void
+    {
+    }
+
+    /**
+     * @OA\Post(
+     *     path="/api/posts/{post}/view",
+     *     operationId="markPostViewed",
+     *     tags={"Posts"},
+     *     summary="Mark post as viewed once per viewer per day",
+     *     security={{"sanctumCookie":{}, "xsrfHeader":{}}},
+     *     @OA\Parameter(name="post", in="path", required=true, @OA\Schema(type="integer", minimum=1)),
+     *     @OA\Response(response=200, description="View counter payload"),
+     *     @OA\Response(response=401, description="Unauthenticated"),
+     *     @OA\Response(response=403, description="Post is not available for this viewer")
+     * )
+     */
+    public function markPostViewed(): void
+    {
+    }
+
+    /**
+     * @OA\Post(
+     *     path="/api/posts/{post}/comment",
+     *     operationId="createPostComment",
+     *     tags={"Posts"},
+     *     summary="Create comment for post with optional parent comment",
+     *     security={{"sanctumCookie":{}, "xsrfHeader":{}}},
+     *     @OA\Parameter(name="post", in="path", required=true, @OA\Schema(type="integer", minimum=1)),
+     *     @OA\RequestBody(
+     *         required=true,
+     *         @OA\JsonContent(
+     *             required={"body"},
+     *             @OA\Property(property="body", type="string", maxLength=2000, example="Отличный пост."),
+     *             @OA\Property(property="parent_id", type="integer", nullable=true, example=15)
+     *         )
+     *     ),
+     *     @OA\Response(response=200, description="Created comment resource"),
+     *     @OA\Response(response=401, description="Unauthenticated"),
+     *     @OA\Response(response=422, description="Validation error")
+     * )
+     */
+    public function createPostComment(): void
     {
     }
 
@@ -348,6 +791,228 @@ class OpenApiSpec
     }
 
     /**
+     * @OA\Post(
+     *     path="/api/iptv/playlist/fetch",
+     *     operationId="fetchIptvPlaylist",
+     *     tags={"IPTV"},
+     *     summary="Fetch remote IPTV playlist text by URL",
+     *     security={{"sanctumCookie":{}, "xsrfHeader":{}}},
+     *     @OA\RequestBody(
+     *         required=true,
+     *         @OA\JsonContent(
+     *             required={"url"},
+     *             @OA\Property(property="url", type="string", format="uri", maxLength=2000, example="https://iptv.example.com/playlist.m3u8")
+     *         )
+     *     ),
+     *     @OA\Response(response=200, description="Playlist text payload"),
+     *     @OA\Response(response=401, description="Unauthenticated"),
+     *     @OA\Response(response=422, description="Invalid or unsafe playlist URL"),
+     *     @OA\Response(response=503, description="Playlist source unavailable")
+     * )
+     */
+    public function fetchIptvPlaylist(): void
+    {
+    }
+
+    /**
+     * @OA\Get(
+     *     path="/api/iptv/saved",
+     *     operationId="getSavedIptvLibrary",
+     *     tags={"IPTV"},
+     *     summary="Get current user's saved IPTV playlists and channels",
+     *     security={{"sanctumCookie":{}}},
+     *     @OA\Response(
+     *         response=200,
+     *         description="Saved IPTV library payload",
+     *         @OA\JsonContent(
+     *             @OA\Property(
+     *                 property="data",
+     *                 type="object",
+     *                 @OA\Property(property="playlists", type="array", @OA\Items(ref="#/components/schemas/IptvSavedPlaylist")),
+     *                 @OA\Property(property="channels", type="array", @OA\Items(ref="#/components/schemas/IptvSavedChannel"))
+     *             )
+     *         )
+     *     ),
+     *     @OA\Response(response=401, description="Unauthenticated")
+     * )
+     */
+    public function getSavedIptvLibrary(): void
+    {
+    }
+
+    /**
+     * @OA\Post(
+     *     path="/api/iptv/saved/playlists",
+     *     operationId="storeSavedIptvPlaylist",
+     *     tags={"IPTV"},
+     *     summary="Save IPTV playlist URL into personal library",
+     *     security={{"sanctumCookie":{}, "xsrfHeader":{}}},
+     *     @OA\RequestBody(
+     *         required=true,
+     *         @OA\JsonContent(
+     *             required={"url"},
+     *             @OA\Property(property="name", type="string", nullable=true, maxLength=120, example="News pack"),
+     *             @OA\Property(property="url", type="string", format="uri", maxLength=2000, example="https://iptv.example.com/news.m3u8"),
+     *             @OA\Property(property="channels_count", type="integer", nullable=true, example=120)
+     *         )
+     *     ),
+     *     @OA\Response(response=201, description="Playlist saved", @OA\JsonContent(@OA\Property(property="data", ref="#/components/schemas/IptvSavedPlaylist"))),
+     *     @OA\Response(response=401, description="Unauthenticated"),
+     *     @OA\Response(response=422, description="Validation error")
+     * )
+     */
+    public function storeSavedIptvPlaylist(): void
+    {
+    }
+
+    /**
+     * @OA\Post(
+     *     path="/api/iptv/saved/channels",
+     *     operationId="storeSavedIptvChannel",
+     *     tags={"IPTV"},
+     *     summary="Save IPTV channel into personal library",
+     *     security={{"sanctumCookie":{}, "xsrfHeader":{}}},
+     *     @OA\RequestBody(
+     *         required=true,
+     *         @OA\JsonContent(
+     *             required={"name","url"},
+     *             @OA\Property(property="name", type="string", maxLength=120, example="Discovery HD"),
+     *             @OA\Property(property="url", type="string", format="uri", maxLength=4000, example="https://stream.example.com/discovery.m3u8"),
+     *             @OA\Property(property="group", type="string", nullable=true, maxLength=160, example="Entertainment"),
+     *             @OA\Property(property="logo", type="string", format="uri", nullable=true, maxLength=2000, example="https://stream.example.com/logo.png")
+     *         )
+     *     ),
+     *     @OA\Response(response=201, description="Channel saved", @OA\JsonContent(@OA\Property(property="data", ref="#/components/schemas/IptvSavedChannel"))),
+     *     @OA\Response(response=401, description="Unauthenticated"),
+     *     @OA\Response(response=422, description="Validation error")
+     * )
+     */
+    public function storeSavedIptvChannel(): void
+    {
+    }
+
+    /**
+     * @OA\Post(
+     *     path="/api/iptv/proxy/start",
+     *     operationId="startIptvProxy",
+     *     tags={"IPTV"},
+     *     summary="Start proxy playback session for remote IPTV stream",
+     *     security={{"sanctumCookie":{}, "xsrfHeader":{}}},
+     *     @OA\RequestBody(
+     *         required=true,
+     *         @OA\JsonContent(
+     *             required={"url"},
+     *             @OA\Property(property="url", type="string", format="uri", maxLength=4000, example="https://stream.example.com/live.m3u8")
+     *         )
+     *     ),
+     *     @OA\Response(response=200, description="Proxy session payload", @OA\JsonContent(@OA\Property(property="data", ref="#/components/schemas/PlaybackSession"))),
+     *     @OA\Response(response=401, description="Unauthenticated"),
+     *     @OA\Response(response=422, description="Invalid or unsafe source URL"),
+     *     @OA\Response(response=503, description="Proxy session could not be started")
+     * )
+     */
+    public function startIptvProxy(): void
+    {
+    }
+
+    /**
+     * @OA\Post(
+     *     path="/api/iptv/transcode/start",
+     *     operationId="startIptvTranscode",
+     *     tags={"IPTV"},
+     *     summary="Start FFmpeg-backed compatibility session",
+     *     security={{"sanctumCookie":{}, "xsrfHeader":{}}},
+     *     @OA\RequestBody(
+     *         required=true,
+     *         @OA\JsonContent(
+     *             required={"url"},
+     *             @OA\Property(property="url", type="string", format="uri", maxLength=2000, example="https://stream.example.com/live.m3u8"),
+     *             @OA\Property(property="profile", type="string", nullable=true, enum={"fast","balanced","stable"}, example="balanced")
+     *         )
+     *     ),
+     *     @OA\Response(response=200, description="Transcode session payload", @OA\JsonContent(@OA\Property(property="data", ref="#/components/schemas/PlaybackSession"))),
+     *     @OA\Response(response=401, description="Unauthenticated"),
+     *     @OA\Response(response=422, description="Invalid or unsafe source URL"),
+     *     @OA\Response(response=503, description="Compatibility session could not be started")
+     * )
+     */
+    public function startIptvTranscode(): void
+    {
+    }
+
+    /**
+     * @OA\Post(
+     *     path="/api/iptv/relay/start",
+     *     operationId="startIptvRelay",
+     *     tags={"IPTV"},
+     *     summary="Start lightweight relay playback session",
+     *     security={{"sanctumCookie":{}, "xsrfHeader":{}}},
+     *     @OA\RequestBody(
+     *         required=true,
+     *         @OA\JsonContent(
+     *             required={"url"},
+     *             @OA\Property(property="url", type="string", format="uri", maxLength=2000, example="https://stream.example.com/live.m3u8")
+     *         )
+     *     ),
+     *     @OA\Response(response=200, description="Relay session payload", @OA\JsonContent(@OA\Property(property="data", ref="#/components/schemas/PlaybackSession"))),
+     *     @OA\Response(response=401, description="Unauthenticated"),
+     *     @OA\Response(response=422, description="Invalid or unsafe source URL"),
+     *     @OA\Response(response=503, description="Relay session could not be started")
+     * )
+     */
+    public function startIptvRelay(): void
+    {
+    }
+
+    /**
+     * @OA\Delete(
+     *     path="/api/iptv/proxy/{session}",
+     *     operationId="stopIptvProxy",
+     *     tags={"IPTV"},
+     *     summary="Stop active proxy playback session",
+     *     security={{"sanctumCookie":{}, "xsrfHeader":{}}},
+     *     @OA\Parameter(name="session", in="path", required=true, @OA\Schema(type="string")),
+     *     @OA\Response(response=200, description="Proxy session stopped"),
+     *     @OA\Response(response=401, description="Unauthenticated")
+     * )
+     */
+    public function stopIptvProxy(): void
+    {
+    }
+
+    /**
+     * @OA\Delete(
+     *     path="/api/iptv/transcode/{session}",
+     *     operationId="stopIptvTranscode",
+     *     tags={"IPTV"},
+     *     summary="Stop active transcode playback session",
+     *     security={{"sanctumCookie":{}, "xsrfHeader":{}}},
+     *     @OA\Parameter(name="session", in="path", required=true, @OA\Schema(type="string")),
+     *     @OA\Response(response=200, description="Transcode session stopped"),
+     *     @OA\Response(response=401, description="Unauthenticated")
+     * )
+     */
+    public function stopIptvTranscode(): void
+    {
+    }
+
+    /**
+     * @OA\Delete(
+     *     path="/api/iptv/relay/{session}",
+     *     operationId="stopIptvRelay",
+     *     tags={"IPTV"},
+     *     summary="Stop active relay playback session",
+     *     security={{"sanctumCookie":{}, "xsrfHeader":{}}},
+     *     @OA\Parameter(name="session", in="path", required=true, @OA\Schema(type="string")),
+     *     @OA\Response(response=200, description="Relay session stopped"),
+     *     @OA\Response(response=401, description="Unauthenticated")
+     * )
+     */
+    public function stopIptvRelay(): void
+    {
+    }
+
+    /**
      * @OA\Get(
      *     path="/api/chats/unread-summary",
      *     operationId="getChatUnreadSummary",
@@ -386,6 +1051,128 @@ class OpenApiSpec
      * )
      */
     public function getChatsIndex(): void
+    {
+    }
+
+    /**
+     * @OA\Get(
+     *     path="/api/chats/users",
+     *     operationId="getChatUsers",
+     *     tags={"Chat"},
+     *     summary="List users available for direct chats with optional search",
+     *     security={{"sanctumCookie":{}}},
+     *     @OA\Parameter(name="search", in="query", required=false, @OA\Schema(type="string")),
+     *     @OA\Response(response=200, description="Chat user list"),
+     *     @OA\Response(response=401, description="Unauthenticated")
+     * )
+     */
+    public function getChatUsers(): void
+    {
+    }
+
+    /**
+     * @OA\Get(
+     *     path="/api/chats/settings",
+     *     operationId="getChatSettings",
+     *     tags={"Chat"},
+     *     summary="Get current user's chat storage settings",
+     *     security={{"sanctumCookie":{}}},
+     *     @OA\Response(response=200, description="Chat settings payload"),
+     *     @OA\Response(response=401, description="Unauthenticated")
+     * )
+     */
+    public function getChatSettings(): void
+    {
+    }
+
+    /**
+     * @OA\Patch(
+     *     path="/api/chats/settings",
+     *     operationId="updateChatSettings",
+     *     tags={"Chat"},
+     *     summary="Update current user's chat storage settings",
+     *     security={{"sanctumCookie":{}, "xsrfHeader":{}}},
+     *     @OA\RequestBody(
+     *         required=true,
+     *         @OA\JsonContent(
+     *             required={"save_text_messages","save_media_attachments","save_file_attachments","auto_archive_enabled"},
+     *             @OA\Property(property="save_text_messages", type="boolean", example=true),
+     *             @OA\Property(property="save_media_attachments", type="boolean", example=true),
+     *             @OA\Property(property="save_file_attachments", type="boolean", example=true),
+     *             @OA\Property(property="retention_days", type="integer", nullable=true, example=30),
+     *             @OA\Property(property="auto_archive_enabled", type="boolean", example=false)
+     *         )
+     *     ),
+     *     @OA\Response(response=200, description="Chat settings updated"),
+     *     @OA\Response(response=401, description="Unauthenticated"),
+     *     @OA\Response(response=422, description="Validation error")
+     * )
+     */
+    public function updateChatSettings(): void
+    {
+    }
+
+    /**
+     * @OA\Get(
+     *     path="/api/chats/archives",
+     *     operationId="getChatArchives",
+     *     tags={"Chat"},
+     *     summary="List chat archives created by current user",
+     *     security={{"sanctumCookie":{}}},
+     *     @OA\Response(response=200, description="Archive list"),
+     *     @OA\Response(response=401, description="Unauthenticated")
+     * )
+     */
+    public function getChatArchives(): void
+    {
+    }
+
+    /**
+     * @OA\Post(
+     *     path="/api/chats/archives",
+     *     operationId="createChatArchive",
+     *     tags={"Chat"},
+     *     summary="Create downloadable archive for current user's chats",
+     *     security={{"sanctumCookie":{}, "xsrfHeader":{}}},
+     *     @OA\Response(response=201, description="Archive created"),
+     *     @OA\Response(response=401, description="Unauthenticated")
+     * )
+     */
+    public function createChatArchive(): void
+    {
+    }
+
+    /**
+     * @OA\Get(
+     *     path="/api/chats/archives/{archive}/download",
+     *     operationId="downloadChatArchive",
+     *     tags={"Chat"},
+     *     summary="Download previously created chat archive",
+     *     security={{"sanctumCookie":{}}},
+     *     @OA\Parameter(name="archive", in="path", required=true, @OA\Schema(type="integer", minimum=1)),
+     *     @OA\Response(response=200, description="Archive download stream"),
+     *     @OA\Response(response=401, description="Unauthenticated"),
+     *     @OA\Response(response=404, description="Archive not found")
+     * )
+     */
+    public function downloadChatArchive(): void
+    {
+    }
+
+    /**
+     * @OA\Post(
+     *     path="/api/chats/archives/{archive}/restore",
+     *     operationId="restoreChatArchive",
+     *     tags={"Chat"},
+     *     summary="Restore chat archive into current account",
+     *     security={{"sanctumCookie":{}, "xsrfHeader":{}}},
+     *     @OA\Parameter(name="archive", in="path", required=true, @OA\Schema(type="integer", minimum=1)),
+     *     @OA\Response(response=200, description="Archive restored"),
+     *     @OA\Response(response=401, description="Unauthenticated"),
+     *     @OA\Response(response=404, description="Archive not found")
+     * )
+     */
+    public function restoreChatArchive(): void
     {
     }
 
@@ -445,6 +1232,22 @@ class OpenApiSpec
      * )
      */
     public function getChatConversation(): void
+    {
+    }
+
+    /**
+     * @OA\Post(
+     *     path="/api/chats/{conversation}/read",
+     *     operationId="markChatRead",
+     *     tags={"Chat"},
+     *     summary="Mark conversation as read for current user",
+     *     security={{"sanctumCookie":{}, "xsrfHeader":{}}},
+     *     @OA\Parameter(name="conversation", in="path", required=true, @OA\Schema(type="integer", minimum=1)),
+     *     @OA\Response(response=200, description="Conversation marked as read"),
+     *     @OA\Response(response=403, description="No access to this conversation")
+     * )
+     */
+    public function markChatRead(): void
     {
     }
 
@@ -735,13 +1538,44 @@ class OpenApiSpec
     }
 
     /**
+     * @OA\Post(
+     *     path="/api/analytics/events",
+     *     operationId="storeAnalyticsEvent",
+     *     tags={"Activity"},
+     *     summary="Store a lightweight authenticated analytics event from the client",
+     *     security={{"sanctumCookie":{}, "xsrfHeader":{}}},
+     *     @OA\RequestBody(
+     *         required=true,
+     *         @OA\JsonContent(ref="#/components/schemas/AnalyticsEventRequest")
+     *     ),
+     *     @OA\Response(
+     *         response=201,
+     *         description="Analytics event accepted",
+     *         @OA\JsonContent(
+     *             @OA\Property(property="message", type="string", example="Analytics event accepted."),
+     *             @OA\Property(
+     *                 property="data",
+     *                 type="object",
+     *                 @OA\Property(property="id", type="integer", example=501)
+     *             )
+     *         )
+     *     ),
+     *     @OA\Response(response=401, description="Unauthenticated"),
+     *     @OA\Response(response=422, description="Validation error")
+     * )
+     */
+    public function storeAnalyticsEvent(): void
+    {
+    }
+
+    /**
      * @OA\Get(
      *     path="/api/admin/summary",
      *     operationId="adminSummary",
      *     tags={"Admin Analytics"},
      *     summary="Admin summary counters",
      *     security={{"sanctumCookie":{}}},
-     *     @OA\Response(response=200, description="Summary payload"),
+     *     @OA\Response(response=200, description="Summary payload with direct COUNT(*) counters from users, posts, comments, media, likes, feedback, chat, and active blocks tables"),
      *     @OA\Response(response=401, description="Unauthenticated"),
      *     @OA\Response(response=403, description="Admin access required")
      * )
@@ -760,7 +1594,7 @@ class OpenApiSpec
      *     @OA\Parameter(name="year", in="query", required=false, @OA\Schema(type="integer", minimum=2000)),
      *     @OA\Parameter(name="date_from", in="query", required=false, description="YYYY-MM-DD", @OA\Schema(type="string", format="date")),
      *     @OA\Parameter(name="date_to", in="query", required=false, description="YYYY-MM-DD", @OA\Schema(type="string", format="date")),
-     *     @OA\Response(response=200, description="Dashboard analytics payload"),
+     *     @OA\Response(response=200, description="Dashboard analytics payload with KPI, retention, cohort, content, chats, media, radio, IPTV, and moderation/error sections. Uses heartbeat-derived time metrics when user_activity_daily_stats is populated; otherwise falls back to action-based counts."),
      *     @OA\Response(response=401, description="Unauthenticated"),
      *     @OA\Response(response=403, description="Admin access required"),
      *     @OA\Response(response=422, description="Validation error")
@@ -781,9 +1615,10 @@ class OpenApiSpec
      *     @OA\Parameter(name="date_from", in="query", required=false, description="YYYY-MM-DD", @OA\Schema(type="string", format="date")),
      *     @OA\Parameter(name="date_to", in="query", required=false, description="YYYY-MM-DD", @OA\Schema(type="string", format="date")),
      *     @OA\Parameter(name="format", in="query", required=false, @OA\Schema(type="string", enum={"xls","json"})),
+     *     @OA\Parameter(name="locale", in="query", required=false, description="Locale for XLS headings. JSON payload is not localized.", @OA\Schema(type="string", enum={"ru","en"})),
      *     @OA\Response(
      *         response=200,
-     *         description="Export stream",
+     *         description="Export stream containing the same analytics payload as admin dashboard: summary KPI, retention, content, chats, media, radio, IPTV and moderation/error sections",
      *         @OA\MediaType(mediaType="application/vnd.ms-excel", @OA\Schema(type="string", format="binary")),
      *         @OA\MediaType(mediaType="application/json", @OA\Schema(type="string"))
      *     ),

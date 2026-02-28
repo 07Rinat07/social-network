@@ -43,8 +43,10 @@ class DemoSocialContentSeederFeatureTest extends TestCase
         $demoUser = User::query()->where('email', 'demo01@example.com')->first();
         $this->assertNotNull($demoUser);
         $this->assertIsString($demoUser?->avatar_path);
-        $this->assertStringStartsWith('seed/avatars/', (string) $demoUser?->avatar_path);
+        $this->assertStringStartsWith('seed/avatars/clothed-avatar-', (string) $demoUser?->avatar_path);
+        $this->assertStringEndsWith('.svg', (string) $demoUser?->avatar_path);
         $this->assertTrue(Storage::disk('public')->exists((string) $demoUser?->avatar_path));
+        $this->assertStringContainsString('<path d="M76 278c9-58 46-94 84-94 38 0 75 36 84 94"', Storage::disk('public')->get((string) $demoUser?->avatar_path));
 
         $postImage = PostImage::query()->where('path', 'like', 'seed/posts/%')->first();
         $this->assertNotNull($postImage);
@@ -64,5 +66,34 @@ class DemoSocialContentSeederFeatureTest extends TestCase
 
         $this->assertNotNull($postImage);
         $this->assertTrue(Storage::disk('public')->exists((string) $postImage?->path));
+    }
+
+    public function test_demo_social_content_seeder_replaces_legacy_seed_avatar_with_clothed_svg_avatar(): void
+    {
+        Storage::fake('public');
+
+        $legacyUser = User::query()->create([
+            'name' => 'Demo User 01',
+            'nickname' => 'demo_user_01',
+            'email' => 'demo01@example.com',
+            'email_verified_at' => now(),
+            'password' => bcrypt('password'),
+            'is_admin' => false,
+            'avatar_path' => 'seed/avatars/portrait-320x320-6001.jpg',
+        ]);
+
+        Storage::disk('public')->put('seed/avatars/portrait-320x320-6001.jpg', 'legacy');
+        putenv('DEMO_SEED_USE_REMOTE_IMAGES=0');
+
+        Http::preventStrayRequests();
+
+        $this->seed(DemoSocialContentSeeder::class);
+
+        $legacyUser->refresh();
+
+        $this->assertNotSame('seed/avatars/portrait-320x320-6001.jpg', $legacyUser->avatar_path);
+        $this->assertStringStartsWith('seed/avatars/clothed-avatar-', (string) $legacyUser->avatar_path);
+        $this->assertStringEndsWith('.svg', (string) $legacyUser->avatar_path);
+        $this->assertTrue(Storage::disk('public')->exists((string) $legacyUser->avatar_path));
     }
 }

@@ -148,6 +148,8 @@ class UploadedVideoTranscodeService
         $clientExtension = strtolower(trim((string) $file->getClientOriginalExtension()));
         $fileSize = (int) ($file->getSize() ?: 0);
 
+        // Trust server-side MIME first, but keep extension/client MIME as a fallback because browser
+        // uploads for formats like MKV may still arrive as application/octet-stream.
         $isVideo = str_starts_with($serverMimeType, 'video/')
             || str_starts_with($clientMimeType, 'video/')
             || in_array($clientExtension, ['mp4', 'webm', 'mov', 'm4v', 'avi', 'mkv'], true);
@@ -194,6 +196,8 @@ class UploadedVideoTranscodeService
         }
 
         foreach ($uniqueCandidates as $candidate) {
+            // Probe each candidate once and memoize the first working binary so repeated uploads
+            // do not pay the process startup cost on every request.
             $probe = new Process([$candidate, '-version']);
             $probe->setTimeout(15);
             $probe->setIdleTimeout(15);

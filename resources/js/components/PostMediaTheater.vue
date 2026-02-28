@@ -39,7 +39,9 @@
                         :autoplay="true"
                         player-class="media-video"
                         shell-class="media-player-shell--theater"
+                        @enterfullscreen="handlePlayerEnterFullscreen"
                         @exitfullscreen="handlePlayerExitFullscreen"
+                        @playbackstate="handlePlaybackState"
                     ></MediaPlayer>
                 </div>
             </div>
@@ -50,6 +52,7 @@
 <script>
 import { nextTick } from 'vue'
 import MediaPlayer from './MediaPlayer.vue'
+import { ANALYTICS_EVENTS, ANALYTICS_FEATURES, createAnalyticsSessionId, reportAnalyticsEvent } from '../utils/analyticsTracker.mjs'
 
 export default {
     name: 'PostMediaTheater',
@@ -69,6 +72,14 @@ export default {
             downloadLabelText: '',
             hadBodyNoScrollBeforeOpen: false,
             suppressCloseOnFullscreenExit: false,
+            analyticsSessionId: '',
+            analyticsMediaId: null,
+            analyticsPostId: null,
+            analyticsWatchSeconds: 0,
+            analyticsLastTime: 0,
+            analyticsMaxTime: 0,
+            analyticsDuration: 0,
+            analyticsCompleted: false,
         }
     },
 
@@ -103,9 +114,22 @@ export default {
         if (typeof document !== 'undefined' && this.isOpen && !this.hadBodyNoScrollBeforeOpen) {
             document.body.classList.remove('no-scroll')
         }
+
+        void this.finalizeAnalyticsSession()
     },
 
     methods: {
+        resetAnalyticsSession() {
+            this.analyticsSessionId = ''
+            this.analyticsMediaId = null
+            this.analyticsPostId = null
+            this.analyticsWatchSeconds = 0
+            this.analyticsLastTime = 0
+            this.analyticsMaxTime = 0
+            this.analyticsDuration = 0
+            this.analyticsCompleted = false
+        },
+
         async open(payload = {}) {
             const source = String(payload?.source || '').trim()
             if (source === '') {
@@ -127,6 +151,27 @@ export default {
             this.downloadName = String(payload?.downloadName || '').trim()
             this.downloadLabelText = String(payload?.downloadLabel || '').trim() || this.$t('common.download')
             this.isOpen = true
+            this.analyticsSessionId = createAnalyticsSessionId('video-theater')
+            this.analyticsMediaId = Number.isInteger(Number(payload?.mediaId)) ? Number(payload.mediaId) : null
+            this.analyticsPostId = Number.isInteger(Number(payload?.postId)) ? Number(payload.postId) : null
+            this.analyticsWatchSeconds = 0
+            this.analyticsLastTime = 0
+            this.analyticsMaxTime = 0
+            this.analyticsDuration = 0
+            this.analyticsCompleted = false
+
+            await reportAnalyticsEvent({
+                feature: ANALYTICS_FEATURES.MEDIA,
+                event_name: ANALYTICS_EVENTS.VIDEO_THEATER_OPEN,
+                entity_type: 'post_media',
+                entity_id: this.analyticsMediaId,
+                entity_key: this.source,
+                session_id: this.analyticsSessionId,
+                context: {
+                    post_id: this.analyticsPostId ?? 0,
+                    title: this.titleText,
+                },
+            })
 
             await nextTick()
             if (preferFullscreen) {
@@ -136,6 +181,7 @@ export default {
         },
 
         async close() {
+            await this.finalizeAnalyticsSession()
             this.$refs.player?.pause?.()
 
             if (this.$refs.player?.isFullscreen?.()) {
@@ -151,12 +197,51 @@ export default {
             this.downloadName = ''
             this.downloadLabelText = ''
             this.suppressCloseOnFullscreenExit = false
+            this.resetAnalyticsSession()
         },
 
         onWindowKeyDown(event) {
             if (event.key === 'Escape' && this.isOpen) {
                 this.close()
             }
+        },
+
+        handlePlaybackState(payload) {
+            const state = String(payload?.state || '')
+            const currentTime = Math.max(0, Number(payload?.currentTime || 0))
+            const duration = Math.max(0, Number(payload?.duration || 0))
+
+            if (duration > 0) {
+                this.analyticsDuration = Math.max(this.analyticsDuration, duration)
+            }
+
+            if (currentTime >= this.analyticsLastTime && (currentTime - this.analyticsLastTime) <= 15) {
+                this.analyticsWatchSeconds += Math.max(0, currentTime - this.analyticsLastTime)
+            }
+
+            this.analyticsLastTime = currentTime
+            this.analyticsMaxTime = Math.max(this.analyticsMaxTime, currentTime)
+
+            if (state === 'ended') {
+                this.analyticsCompleted = true
+                void this.finalizeAnalyticsSession()
+            }
+        },
+
+        async handlePlayerEnterFullscreen() {
+            await reportAnalyticsEvent({
+                feature: ANALYTICS_FEATURES.MEDIA,
+                event_name: ANALYTICS_EVENTS.VIDEO_FULLSCREEN_ENTER,
+                entity_type: 'post_media',
+                entity_id: this.analyticsMediaId,
+                entity_key: this.source,
+                session_id: this.analyticsSessionId || null,
+                context: {
+                    post_id: this.analyticsPostId ?? 0,
+                    title: this.titleText,
+                    player_scope: 'theater',
+                },
+            })
         },
 
         handlePlayerExitFullscreen() {
@@ -170,6 +255,42 @@ export default {
             }
 
             this.close()
+        },
+
+        async finalizeAnalyticsSession() {
+            if (!this.analyticsSessionId) {
+                return
+            }
+
+            const duration = Math.max(0, Number(this.analyticsDuration || 0))
+            const maxTime = Math.max(0, Number(this.analyticsMaxTime || 0))
+            const watchSeconds = Math.max(0, Math.round(this.analyticsWatchSeconds || 0))
+            const completionPercent = duration > 0
+                ? Math.min(100, Number(((maxTime / duration) * 100).toFixed(1)))
+                : 0
+            const completed = this.analyticsCompleted || (duration > 0 && maxTime >= duration * 0.95)
+            const sessionId = this.analyticsSessionId
+
+            this.analyticsSessionId = ''
+
+            await reportAnalyticsEvent({
+                feature: ANALYTICS_FEATURES.MEDIA,
+                event_name: ANALYTICS_EVENTS.VIDEO_SESSION,
+                entity_type: 'post_media',
+                entity_id: this.analyticsMediaId,
+                entity_key: this.source,
+                session_id: sessionId,
+                duration_seconds: watchSeconds,
+                metric_value: completionPercent,
+                context: {
+                    completed,
+                    theater_used: true,
+                    post_id: this.analyticsPostId ?? 0,
+                    title: this.titleText,
+                    duration_seconds: duration,
+                    watched_max_seconds: maxTime,
+                },
+            })
         },
     },
 }

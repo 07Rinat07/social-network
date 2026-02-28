@@ -82,6 +82,8 @@
             </div>
         </div>
 
+        <SectionTopButton :has-persistent-widgets="canUsePersistentWidgets"></SectionTopButton>
+
         <div v-if="canUsePersistentWidgets" class="widget-docks">
             <PersistentRadioWidget
                 class="app-widget app-widget--left"
@@ -101,6 +103,7 @@
 
 <script>
 import BrandLogo from './components/BrandLogo.vue'
+import SectionTopButton from './components/SectionTopButton.vue'
 import PersistentRadioWidget from './components/widgets/PersistentRadioWidget.vue'
 import PersistentChatWidget from './components/widgets/PersistentChatWidget.vue'
 import globalTropicalBeachBackground from '../images/home-tropical-beach.jpg'
@@ -122,6 +125,7 @@ export default {
     name: 'App',
     components: {
         BrandLogo,
+        SectionTopButton,
         PersistentRadioWidget,
         PersistentChatWidget,
     },

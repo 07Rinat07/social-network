@@ -2,6 +2,7 @@
 
 use App\Http\Controllers\AdminController;
 use App\Http\Controllers\ActivityHeartbeatController;
+use App\Http\Controllers\AnalyticsEventController;
 use App\Http\Controllers\Auth\EmailVerificationNotificationController;
 use App\Http\Controllers\ChatController;
 use App\Http\Controllers\FeedbackController;
@@ -57,6 +58,8 @@ Route::middleware(['auth:sanctum', 'verified', 'throttle:600,1'])->group(functio
     Route::get('/feedback/my', [FeedbackController::class, 'my']);
     Route::post('/activity/heartbeat', [ActivityHeartbeatController::class, 'store'])
         ->middleware('throttle:120,1');
+    Route::post('/analytics/events', [AnalyticsEventController::class, 'store'])
+        ->middleware('throttle:240,1');
 
     Route::get('/users', [UserController::class, 'index']);
     Route::get('/users/{user}/posts', [UserController::class, 'post']);

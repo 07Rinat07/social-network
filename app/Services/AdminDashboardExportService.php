@@ -138,13 +138,21 @@ class AdminDashboardExportService
         );
     }
 
-    public function toXls(array $payload): string
+    public function toXls(array $payload, string $locale = 'en'): string
     {
+        $locale = $this->normalizeExportLocale($locale);
         $dashboard = (array) ($payload['dashboard'] ?? []);
         $kpis = (array) ($dashboard['kpis'] ?? []);
         $engagement = (array) ($dashboard['engagement'] ?? []);
         $highlight = (array) ($dashboard['highlights'] ?? []);
         $period = (array) ($payload['period'] ?? []);
+        $retention = (array) ($dashboard['retention'] ?? []);
+        $content = (array) ($dashboard['content'] ?? []);
+        $chats = (array) ($dashboard['chats'] ?? []);
+        $media = (array) ($dashboard['media'] ?? []);
+        $radio = (array) ($dashboard['radio'] ?? []);
+        $iptv = (array) ($dashboard['iptv'] ?? []);
+        $errorsAndModeration = (array) ($dashboard['errors_and_moderation'] ?? []);
         $preferenceItems = is_array($dashboard['preference']['items'] ?? null)
             ? $dashboard['preference']['items']
             : [];
@@ -154,6 +162,13 @@ class AdminDashboardExportService
         $activityByMonth = is_array($dashboard['activity_by_month'] ?? null)
             ? $dashboard['activity_by_month']
             : [];
+        $cohorts = is_array($retention['cohorts'] ?? null) ? $retention['cohorts'] : [];
+        $topPosts = is_array($content['top_posts'] ?? null) ? $content['top_posts'] : [];
+        $topAuthors = is_array($content['top_authors'] ?? null) ? $content['top_authors'] : [];
+        $chatAttachmentBreakdown = is_array($chats['attachment_breakdown'] ?? null) ? $chats['attachment_breakdown'] : [];
+        $radioTopStations = is_array($radio['top_stations'] ?? null) ? $radio['top_stations'] : [];
+        $iptvModeSplit = is_array($iptv['mode_split'] ?? null) ? $iptv['mode_split'] : [];
+        $iptvTopChannels = is_array($iptv['top_channels'] ?? null) ? $iptv['top_channels'] : [];
         $users = is_array($payload['users'] ?? null) ? $payload['users'] : [];
 
         $metaRows = [
@@ -174,6 +189,15 @@ class AdminDashboardExportService
             ['Active users 30d', (string) ($engagement['active_users_30d'] ?? 0)],
             ['Creators 30d', (string) ($engagement['creators_30d'] ?? 0)],
             ['Chatters 30d', (string) ($engagement['chatters_30d'] ?? 0)],
+            ['DAU', (string) ($retention['dau'] ?? 0)],
+            ['WAU', (string) ($retention['wau'] ?? 0)],
+            ['MAU', (string) ($retention['mau'] ?? 0)],
+            ['Stickiness %', (string) ($retention['stickiness_percent'] ?? 0)],
+            ['Content engagement/post', (string) ($content['engagement_per_post'] ?? 0)],
+            ['Media upload failure rate %', (string) ($media['upload_failure_rate_percent'] ?? 0)],
+            ['Radio failure rate %', (string) ($radio['failure_rate_percent'] ?? 0)],
+            ['IPTV failure rate %', (string) ($iptv['failure_rate_percent'] ?? 0)],
+            ['Tracked failures total', (string) ($errorsAndModeration['total_tracked_failures'] ?? 0)],
         ];
 
         $html = [];
@@ -221,6 +245,210 @@ class AdminDashboardExportService
         }
         $html[] = '</tbody></table>';
 
+        $html[] = '<h2>Retention</h2>';
+        $html[] = '<table><thead><tr><th>Metric</th><th>Value</th></tr></thead><tbody>';
+        foreach ([
+            ['DAU', $retention['dau'] ?? 0],
+            ['WAU', $retention['wau'] ?? 0],
+            ['MAU', $retention['mau'] ?? 0],
+            ['Stickiness %', $retention['stickiness_percent'] ?? 0],
+            ['New active users 30d', $retention['new_active_users_30d'] ?? 0],
+            ['Returning users 30d', $retention['returning_users_30d'] ?? 0],
+        ] as $row) {
+            $html[] = '<tr><td>' . $this->escape($row[0]) . '</td><td>' . $this->escape($row[1]) . '</td></tr>';
+        }
+        $html[] = '</tbody></table>';
+
+        $html[] = '<h2>Retention Cohorts</h2>';
+        $html[] = '<table><thead><tr><th>Month</th><th>New Users</th><th>Retained Users</th><th>Retention %</th><th>Partial</th></tr></thead><tbody>';
+        foreach ($cohorts as $item) {
+            $html[] = '<tr>'
+                . '<td>' . $this->escape($item['month'] ?? '') . '</td>'
+                . '<td>' . $this->escape($item['new_users'] ?? 0) . '</td>'
+                . '<td>' . $this->escape($item['retained_users'] ?? 0) . '</td>'
+                . '<td>' . $this->escape($item['retention_percent'] ?? 0) . '</td>'
+                . '<td>' . $this->escape(!empty($item['partial']) ? '1' : '0') . '</td>'
+                . '</tr>';
+        }
+        $html[] = '</tbody></table>';
+
+        $html[] = '<h2>Content</h2>';
+        $html[] = '<table><thead><tr><th>Metric</th><th>Value</th></tr></thead><tbody>';
+        foreach ([
+            ['Posts Total', $content['posts_total'] ?? 0],
+            ['Public Posts', $content['public_posts'] ?? 0],
+            ['Private Posts', $content['private_posts'] ?? 0],
+            ['Carousel Posts', $content['carousel_posts'] ?? 0],
+            ['Engagement Total', $content['engagement_total'] ?? 0],
+            ['Views Total', $content['views_total'] ?? 0],
+            ['Likes Total', $content['likes_total'] ?? 0],
+            ['Comments Total', $content['comments_total'] ?? 0],
+            ['Reposts Total', $content['reposts_total'] ?? 0],
+            ['Engagement / Post', $content['engagement_per_post'] ?? 0],
+            ['Avg Views / Post', $content['avg_views_per_post'] ?? 0],
+            ['View -> Engagement Rate %', $content['view_to_engagement_rate_percent'] ?? 0],
+        ] as $row) {
+            $html[] = '<tr><td>' . $this->escape($row[0]) . '</td><td>' . $this->escape($row[1]) . '</td></tr>';
+        }
+        $html[] = '</tbody></table>';
+
+        $html[] = '<h2>Top Posts</h2>';
+        $html[] = '<table><thead><tr><th>ID</th><th>Title</th><th>Author</th><th>Views</th><th>Likes</th><th>Comments</th><th>Reposts</th><th>Engagement</th><th>Public</th><th>Carousel</th></tr></thead><tbody>';
+        foreach ($topPosts as $item) {
+            $html[] = '<tr>'
+                . '<td>' . $this->escape($item['id'] ?? '') . '</td>'
+                . '<td>' . $this->escape($item['title'] ?? '') . '</td>'
+                . '<td>' . $this->escape(trim(((string) ($item['author_name'] ?? '')) . ' @' . ((string) ($item['author_nickname'] ?? '')))) . '</td>'
+                . '<td>' . $this->escape($item['views_count'] ?? 0) . '</td>'
+                . '<td>' . $this->escape($item['likes_count'] ?? 0) . '</td>'
+                . '<td>' . $this->escape($item['comments_count'] ?? 0) . '</td>'
+                . '<td>' . $this->escape($item['reposts_count'] ?? 0) . '</td>'
+                . '<td>' . $this->escape($item['engagement_score'] ?? 0) . '</td>'
+                . '<td>' . $this->escape(!empty($item['is_public']) ? '1' : '0') . '</td>'
+                . '<td>' . $this->escape(!empty($item['show_in_carousel']) ? '1' : '0') . '</td>'
+                . '</tr>';
+        }
+        $html[] = '</tbody></table>';
+
+        $html[] = '<h2>Top Authors</h2>';
+        $html[] = '<table><thead><tr><th>User ID</th><th>Name</th><th>Nickname</th><th>Posts</th><th>Views</th><th>Engagement Total</th><th>Engagement / Post</th></tr></thead><tbody>';
+        foreach ($topAuthors as $item) {
+            $html[] = '<tr>'
+                . '<td>' . $this->escape($item['user_id'] ?? '') . '</td>'
+                . '<td>' . $this->escape($item['name'] ?? '') . '</td>'
+                . '<td>' . $this->escape($item['nickname'] ?? '') . '</td>'
+                . '<td>' . $this->escape($item['posts_count'] ?? 0) . '</td>'
+                . '<td>' . $this->escape($item['views_count'] ?? 0) . '</td>'
+                . '<td>' . $this->escape($item['engagement_total'] ?? 0) . '</td>'
+                . '<td>' . $this->escape($item['engagement_per_post'] ?? 0) . '</td>'
+                . '</tr>';
+        }
+        $html[] = '</tbody></table>';
+
+        $html[] = '<h2>Chats</h2>';
+        $html[] = '<table><thead><tr><th>Metric</th><th>Value</th></tr></thead><tbody>';
+        foreach ([
+            ['Messages Total', $chats['messages_total'] ?? 0],
+            ['Active Chatters', $chats['active_chatters'] ?? 0],
+            ['Attachments Total', $chats['attachments_total'] ?? 0],
+            ['Reply Samples', $chats['reply_samples'] ?? 0],
+            ['Avg Reply Minutes', $chats['avg_reply_minutes'] ?? 0],
+            ['Median Reply Minutes', $chats['median_reply_minutes'] ?? 0],
+        ] as $row) {
+            $html[] = '<tr><td>' . $this->escape($row[0]) . '</td><td>' . $this->escape($row[1]) . '</td></tr>';
+        }
+        $html[] = '</tbody></table>';
+
+        $html[] = '<h2>Chat Attachment Breakdown</h2>';
+        $html[] = '<table><thead><tr><th>Type</th><th>Value</th></tr></thead><tbody>';
+        foreach ($chatAttachmentBreakdown as $item) {
+            $html[] = '<tr><td>' . $this->escape($item['type'] ?? '') . '</td><td>' . $this->escape($item['value'] ?? 0) . '</td></tr>';
+        }
+        $html[] = '</tbody></table>';
+
+        $html[] = '<h2>Media</h2>';
+        $html[] = '<table><thead><tr><th>Metric</th><th>Value</th></tr></thead><tbody>';
+        foreach ([
+            ['Uploads Total', $media['uploads_total'] ?? 0],
+            ['Post Media Uploads', $media['post_media_uploads'] ?? 0],
+            ['Chat Attachment Uploads', $media['chat_attachments_uploads'] ?? 0],
+            ['Images Uploaded', $media['images_uploaded'] ?? 0],
+            ['Videos Uploaded', $media['videos_uploaded'] ?? 0],
+            ['Avg Upload Size KB', $media['avg_upload_size_kb'] ?? 0],
+            ['Failed Uploads', $media['failed_uploads'] ?? 0],
+            ['Upload Failure Rate %', $media['upload_failure_rate_percent'] ?? 0],
+            ['Video Sessions', $media['video_sessions'] ?? 0],
+            ['Video Completed Sessions', $media['video_completed_sessions'] ?? 0],
+            ['Video Completion Rate %', $media['video_completion_rate_percent'] ?? 0],
+            ['Video Watch Seconds', $media['video_watch_seconds'] ?? 0],
+            ['Avg Video Completion %', $media['avg_video_completion_percent'] ?? 0],
+            ['Theater Opens', $media['theater_opens'] ?? 0],
+            ['Fullscreen Entries', $media['fullscreen_entries'] ?? 0],
+        ] as $row) {
+            $html[] = '<tr><td>' . $this->escape($row[0]) . '</td><td>' . $this->escape($row[1]) . '</td></tr>';
+        }
+        $html[] = '</tbody></table>';
+
+        $html[] = '<h2>Radio</h2>';
+        $html[] = '<table><thead><tr><th>Metric</th><th>Value</th></tr></thead><tbody>';
+        foreach ([
+            ['Active Users Period', $radio['active_users_period'] ?? 0],
+            ['Favorite Additions Period', $radio['favorite_additions_period'] ?? 0],
+            ['Sessions Started', $radio['sessions_started'] ?? 0],
+            ['Failures Total', $radio['failures_total'] ?? 0],
+            ['Failure Rate %', $radio['failure_rate_percent'] ?? 0],
+        ] as $row) {
+            $html[] = '<tr><td>' . $this->escape($row[0]) . '</td><td>' . $this->escape($row[1]) . '</td></tr>';
+        }
+        $html[] = '</tbody></table>';
+
+        $html[] = '<h2>Top Radio Stations</h2>';
+        $html[] = '<table><thead><tr><th>Entity Key</th><th>Entity ID</th><th>Label</th><th>Value</th></tr></thead><tbody>';
+        foreach ($radioTopStations as $item) {
+            $html[] = '<tr>'
+                . '<td>' . $this->escape($item['entity_key'] ?? '') . '</td>'
+                . '<td>' . $this->escape($item['entity_id'] ?? '') . '</td>'
+                . '<td>' . $this->escape($item['label'] ?? '') . '</td>'
+                . '<td>' . $this->escape($item['value'] ?? 0) . '</td>'
+                . '</tr>';
+        }
+        $html[] = '</tbody></table>';
+
+        $html[] = '<h2>IPTV</h2>';
+        $html[] = '<table><thead><tr><th>Metric</th><th>Value</th></tr></thead><tbody>';
+        foreach ([
+            ['Active Users Period', $iptv['active_users_period'] ?? 0],
+            ['Saved Channels Period', $iptv['saved_channels_period'] ?? 0],
+            ['Saved Playlists Period', $iptv['saved_playlists_period'] ?? 0],
+            ['Sessions Started', $iptv['sessions_started'] ?? 0],
+            ['Failures Total', $iptv['failures_total'] ?? 0],
+            ['Failure Rate %', $iptv['failure_rate_percent'] ?? 0],
+        ] as $row) {
+            $html[] = '<tr><td>' . $this->escape($row[0]) . '</td><td>' . $this->escape($row[1]) . '</td></tr>';
+        }
+        $html[] = '</tbody></table>';
+
+        $html[] = '<h2>IPTV Mode Split</h2>';
+        $html[] = '<table><thead><tr><th>Mode</th><th>Started</th><th>Failed</th><th>Share %</th></tr></thead><tbody>';
+        foreach ($iptvModeSplit as $item) {
+            $html[] = '<tr>'
+                . '<td>' . $this->escape($item['key'] ?? '') . '</td>'
+                . '<td>' . $this->escape($item['started'] ?? 0) . '</td>'
+                . '<td>' . $this->escape($item['failed'] ?? 0) . '</td>'
+                . '<td>' . $this->escape($item['share'] ?? 0) . '</td>'
+                . '</tr>';
+        }
+        $html[] = '</tbody></table>';
+
+        $html[] = '<h2>Top IPTV Channels</h2>';
+        $html[] = '<table><thead><tr><th>Entity Key</th><th>Entity ID</th><th>Label</th><th>Value</th></tr></thead><tbody>';
+        foreach ($iptvTopChannels as $item) {
+            $html[] = '<tr>'
+                . '<td>' . $this->escape($item['entity_key'] ?? '') . '</td>'
+                . '<td>' . $this->escape($item['entity_id'] ?? '') . '</td>'
+                . '<td>' . $this->escape($item['label'] ?? '') . '</td>'
+                . '<td>' . $this->escape($item['value'] ?? 0) . '</td>'
+                . '</tr>';
+        }
+        $html[] = '</tbody></table>';
+
+        $html[] = '<h2>Errors / Moderation</h2>';
+        $html[] = '<table><thead><tr><th>Metric</th><th>Value</th></tr></thead><tbody>';
+        foreach ([
+            ['Media Upload Failures', $errorsAndModeration['media_upload_failures'] ?? 0],
+            ['Radio Failures', $errorsAndModeration['radio_failures'] ?? 0],
+            ['IPTV Failures', $errorsAndModeration['iptv_failures'] ?? 0],
+            ['Tracked Failures Total', $errorsAndModeration['total_tracked_failures'] ?? 0],
+            ['Active Blocks Total', $errorsAndModeration['active_blocks_total'] ?? 0],
+            ['Feedback New Total', $errorsAndModeration['feedback_new_total'] ?? 0],
+            ['Feedback In Progress Total', $errorsAndModeration['feedback_in_progress_total'] ?? 0],
+            ['Feedback Resolved Total', $errorsAndModeration['feedback_resolved_total'] ?? 0],
+            ['Feedback Created Period', $errorsAndModeration['feedback_created_period'] ?? 0],
+        ] as $row) {
+            $html[] = '<tr><td>' . $this->escape($row[0]) . '</td><td>' . $this->escape($row[1]) . '</td></tr>';
+        }
+        $html[] = '</tbody></table>';
+
         $html[] = '<h2>Users Activity And Statistics (Selected Period)</h2>';
         $html[] = '<table><thead><tr>'
             . '<th>User ID</th><th>Name</th><th>Nickname</th><th>Email</th><th>Is Admin</th><th>Email Verified</th><th>Registered At</th>'
@@ -264,7 +492,9 @@ class AdminDashboardExportService
         $html[] = '</tbody></table>';
         $html[] = '</body></html>';
 
-        return "\xEF\xBB\xBF" . implode('', $html);
+        $document = implode('', $html);
+
+        return "\xEF\xBB\xBF" . $this->localizeXlsDocument($document, $locale);
     }
 
     protected function resolvePeriod(?int $year, ?string $dateFrom, ?string $dateTo): array
@@ -450,5 +680,174 @@ class AdminDashboardExportService
     protected function escape(mixed $value): string
     {
         return htmlspecialchars((string) $value, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
+    }
+
+    protected function normalizeExportLocale(string $locale): string
+    {
+        return trim(mb_strtolower($locale)) === 'ru' ? 'ru' : 'en';
+    }
+
+    protected function localizeXlsDocument(string $document, string $locale): string
+    {
+        if ($locale !== 'ru') {
+            return $document;
+        }
+
+        return strtr($document, $this->xlsRussianReplacements());
+    }
+
+    protected function xlsRussianReplacements(): array
+    {
+        return [
+            'Admin Dashboard Export' => 'Экспорт аналитики платформы',
+            'Users Activity And Statistics (Selected Period)' => 'Пользователи и активность за период',
+            'Subscriptions By Month (Dashboard Year)' => 'Подписки по месяцам (год дашборда)',
+            'Monthly Activity By Feature (Dashboard Year)' => 'Месячная активность по модулям (год дашборда)',
+            'Preference Distribution (Dashboard Year)' => 'Распределение предпочтений (год дашборда)',
+            'Retention Cohorts' => 'Когорты удержания',
+            'Top Radio Stations' => 'Топ радиостанций',
+            'Top IPTV Channels' => 'Топ IPTV-каналов',
+            'IPTV Mode Split' => 'Режимы IPTV',
+            'Errors / Moderation' => 'Ошибки / модерация',
+            'Top Authors' => 'Топ авторов',
+            'Top Posts' => 'Топ постов',
+            'Chat Attachment Breakdown' => 'Структура вложений чатов',
+            '>Retention<' => '>Удержание<',
+            '>Content<' => '>Контент<',
+            '>Chats<' => '>Чаты<',
+            '>Media<' => '>Медиа<',
+            '>Radio<' => '>Радио<',
+            '>IPTV<' => '>IPTV / ТВ<',
+            '>Metric<' => '>Метрика<',
+            '>Value<' => '>Значение<',
+            '>Month<' => '>Месяц<',
+            '>Feature<' => '>Модуль<',
+            '>Share %<' => '>Доля %<',
+            '>New Users<' => '>Новые пользователи<',
+            '>Retained Users<' => '>Удержанные пользователи<',
+            '>Retention %<' => '>Retention %<',
+            '>Partial<' => '>Неполное окно<',
+            '>ID<' => '>ID<',
+            '>Title<' => '>Заголовок<',
+            '>Author<' => '>Автор<',
+            '>Views<' => '>Просмотры<',
+            '>Likes<' => '>Лайки<',
+            '>Comments<' => '>Комментарии<',
+            '>Reposts<' => '>Репосты<',
+            '>Engagement<' => '>Вовлеченность<',
+            '>Public<' => '>Публичный<',
+            '>Carousel<' => '>Карусель<',
+            '>User ID<' => '>ID пользователя<',
+            '>Name<' => '>Имя<',
+            '>Nickname<' => '>Никнейм<',
+            '>Posts<' => '>Посты<',
+            '>Type<' => '>Тип<',
+            '>Entity Key<' => '>Ключ сущности<',
+            '>Entity ID<' => '>ID сущности<',
+            '>Label<' => '>Подпись<',
+            '>Mode<' => '>Режим<',
+            '>Started<' => '>Запущено<',
+            '>Failed<' => '>Ошибок<',
+            '>Total<' => '>Всего<',
+            '>Email<' => '>Email<',
+            '>Admin<' => '>Админ<',
+            '>Email Verified At<' => '>Email подтвержден<',
+            '>Registered At<' => '>Дата регистрации<',
+            '>Followers Total<' => '>Подписчиков всего<',
+            '>Followings Total<' => '>Подписок всего<',
+            '>Social Actions Period<' => '>Действия соцсети за период<',
+            '>Chats Actions Period<' => '>Действия чатов за период<',
+            '>Radio Actions Period<' => '>Действия радио за период<',
+            '>IPTV Actions Period<' => '>Действия IPTV за период<',
+            '>Total Actions Period<' => '>Всего действий за период<',
+            '>Social Minutes Period<' => '>Минуты соцсети за период<',
+            '>Chats Minutes Period<' => '>Минуты чатов за период<',
+            '>Radio Minutes Period<' => '>Минуты радио за период<',
+            '>IPTV Minutes Period<' => '>Минуты IPTV за период<',
+            '>Total Minutes Period<' => '>Всего минут за период<',
+            '>Heartbeat Events Period<' => '>Heartbeat событий за период<',
+            '>Activity Method<' => '>Метод активности<',
+            '>Preferred Feature Period<' => '>Предпочитаемый модуль за период<',
+            '>Last Heartbeat At<' => '>Последний heartbeat<',
+            'Generated at' => 'Сформировано',
+            'Period from' => 'Период с',
+            'Period to' => 'Период по',
+            'Period mode' => 'Режим периода',
+            'Dashboard year context' => 'Контекстный год дашборда',
+            'Preference model' => 'Модель предпочтений',
+            'Users total' => 'Пользователей всего',
+            'Users new (dashboard year)' => 'Новых пользователей (год дашборда)',
+            'Subscriptions (dashboard year)' => 'Подписок (год дашборда)',
+            'Subscriptions avg/month (dashboard year)' => 'Подписок в среднем за месяц (год дашборда)',
+            'Subscriptions peak month' => 'Пиковый месяц подписок',
+            'Subscriptions peak value' => 'Пиковое значение подписок',
+            'Activity peak month' => 'Пиковый месяц активности',
+            'Activity peak value' => 'Пиковое значение активности',
+            'Active users 30d' => 'Активные пользователи 30д',
+            'Creators 30d' => 'Авторы постов 30д',
+            'Chatters 30d' => 'Пишут в чатах 30д',
+            'Stickiness %' => 'Stickiness %',
+            'Content engagement/post' => 'Вовлеченность на пост',
+            'Media upload failure rate %' => 'Доля ошибок загрузки медиа %',
+            'Radio failure rate %' => 'Доля ошибок радио %',
+            'IPTV failure rate %' => 'Доля ошибок IPTV %',
+            'Tracked failures total' => 'Всего отслеженных ошибок',
+            'New active users 30d' => 'Новые активные пользователи 30д',
+            'Returning users 30d' => 'Вернувшиеся пользователи 30д',
+            'Posts Total' => 'Постов всего',
+            'Public Posts' => 'Публичных постов',
+            'Private Posts' => 'Приватных постов',
+            'Carousel Posts' => 'Постов в карусели',
+            'Engagement Total' => 'Суммарная вовлеченность',
+            'Views Total' => 'Просмотров всего',
+            'Likes Total' => 'Лайков всего',
+            'Comments Total' => 'Комментариев всего',
+            'Reposts Total' => 'Репостов всего',
+            'Engagement / Post' => 'Вовлеченность / пост',
+            'Avg Views / Post' => 'Средние просмотры / пост',
+            'View -> Engagement Rate %' => 'Конверсия просмотр -> вовлеченность %',
+            'Messages Total' => 'Сообщений всего',
+            'Active Chatters' => 'Активных участников чатов',
+            'Attachments Total' => 'Вложений всего',
+            'Reply Samples' => 'Замеров ответа',
+            'Avg Reply Minutes' => 'Среднее время ответа, мин',
+            'Median Reply Minutes' => 'Медианное время ответа, мин',
+            'Uploads Total' => 'Загрузок всего',
+            'Post Media Uploads' => 'Загрузки медиа постов',
+            'Chat Attachment Uploads' => 'Загрузки вложений чатов',
+            'Images Uploaded' => 'Загружено изображений',
+            'Videos Uploaded' => 'Загружено видео',
+            'Avg Upload Size KB' => 'Средний размер загрузки, KB',
+            'Failed Uploads' => 'Неудачных загрузок',
+            'Upload Failure Rate %' => 'Доля ошибок загрузки %',
+            'Video Sessions' => 'Видео-сессии',
+            'Video Completed Sessions' => 'Завершенные видео-сессии',
+            'Video Completion Rate %' => 'Доля завершения видео %',
+            'Video Watch Seconds' => 'Секунды просмотра видео',
+            'Avg Video Completion %' => 'Средний completion %',
+            'Theater Opens' => 'Открытия режима кино',
+            'Fullscreen Entries' => 'Переходы в полноэкранный режим',
+            'Active Users Period' => 'Активные пользователи за период',
+            'Favorite Additions Period' => 'Добавления в избранное за период',
+            'Sessions Started' => 'Стартов сессий',
+            'Failures Total' => 'Ошибок всего',
+            'Failure Rate %' => 'Доля ошибок %',
+            'Saved Channels Period' => 'Сохранено каналов за период',
+            'Saved Playlists Period' => 'Сохранено плейлистов за период',
+            'Media Upload Failures' => 'Ошибки загрузки медиа',
+            'Radio Failures' => 'Ошибки радио',
+            'IPTV Failures' => 'Ошибки IPTV',
+            'Active Blocks Total' => 'Активных блокировок',
+            'Feedback New Total' => 'Новых обращений',
+            'Feedback In Progress Total' => 'Обращений в работе',
+            'Feedback Resolved Total' => 'Решенных обращений',
+            'Feedback Created Period' => 'Обращений за период',
+            '<td>social</td>' => '<td>Соцсеть</td>',
+            '<td>chats</td>' => '<td>Чаты</td>',
+            '<td>radio</td>' => '<td>Радио</td>',
+            '<td>iptv</td>' => '<td>IPTV / ТВ</td>',
+            '<td>actions</td>' => '<td>действия</td>',
+            '<td>time_minutes</td>' => '<td>время, минуты</td>',
+        ];
     }
 }

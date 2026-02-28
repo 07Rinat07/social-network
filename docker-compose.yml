@@ -5,7 +5,7 @@ services:
     image: node:22-alpine
     working_dir: /var/www/html
     env_file:
-      - ./.env.docker.example
+      - ./${DOCKER_ENV_FILE:-.env.docker.example}
     command: sh -lc "sh docker/node/ensure-node-deps.sh && npm run build"
     volumes:
       - ./:/var/www/html
@@ -20,10 +20,10 @@ services:
     restart: unless-stopped
     working_dir: /var/www/html
     env_file:
-      - ./.env.docker.example
+      - ./${DOCKER_ENV_FILE:-.env.docker.example}
     environment:
       COMPOSER_HOME: /tmp/composer
-      LARAVEL_ENV_FILE: .env.docker.example
+      LARAVEL_ENV_FILE: ${DOCKER_ENV_FILE:-.env.docker.example}
       RUN_MIGRATIONS: ${RUN_MIGRATIONS:-1}
     volumes:
       - ./:/var/www/html
@@ -66,9 +66,9 @@ services:
     working_dir: /var/www/html
     command: sh -lc "php artisan reverb:start --host=0.0.0.0 --port=6001"
     env_file:
-      - ./.env.docker.example
+      - ./${DOCKER_ENV_FILE:-.env.docker.example}
     environment:
-      LARAVEL_ENV_FILE: .env.docker.example
+      LARAVEL_ENV_FILE: ${DOCKER_ENV_FILE:-.env.docker.example}
     ports:
       - "${REVERB_FORWARD_PORT:-6001}:6001"
     volumes:
@@ -83,11 +83,8 @@ services:
   db:
     image: mysql:8.4
     restart: unless-stopped
-    environment:
-      MYSQL_DATABASE: social_network
-      MYSQL_USER: social
-      MYSQL_PASSWORD: social
-      MYSQL_ROOT_PASSWORD: root
+    env_file:
+      - ./${DOCKER_ENV_FILE:-.env.docker.example}
     ports:
       - "${DB_FORWARD_PORT:-3307}:3306"
     volumes:
@@ -105,7 +102,7 @@ services:
     image: node:22-alpine
     working_dir: /var/www/html
     env_file:
-      - ./.env.docker.example
+      - ./${DOCKER_ENV_FILE:-.env.docker.example}
     command: sh -lc "sh docker/node/ensure-node-deps.sh && npm run dev -- --host 0.0.0.0 --port 5173"
     ports:
       - "${VITE_FORWARD_PORT:-5173}:5173"

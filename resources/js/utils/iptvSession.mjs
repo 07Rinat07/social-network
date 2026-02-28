@@ -1,9 +1,10 @@
-export const IPTV_STATE_STORAGE_KEY = 'solid-social:iptv-player-state:v3'
+export const IPTV_STATE_STORAGE_KEY = 'solid-social:iptv-player-state:v4'
 export const IPTV_RECENT_LIMIT = 40
 
 const IPTV_FAVORITES_LIMIT = 500
 const IPTV_CHANNEL_SNAPSHOT_LIMIT = 250
 const IPTV_CHANNEL_SNAPSHOT_MAX_BYTES = 384 * 1024
+const IPTV_OWNER_SCOPE_MAX_LENGTH = 120
 
 const VIEW_MODES = new Set(['all', 'favorites', 'recent'])
 const SORT_MODES = new Set(['group', 'name'])
@@ -92,6 +93,7 @@ export function buildPersistedIptvState(state) {
     const channelsSnapshot = limitChannelSnapshot(rawChannels)
 
     return {
+        ownerScope: normalizeString(state?.ownerScope, IPTV_OWNER_SCOPE_MAX_LENGTH),
         viewMode: VIEW_MODES.has(state?.viewMode) ? state.viewMode : 'all',
         selectedGroup: normalizeString(state?.selectedGroup, 160) || 'all',
         sortMode: SORT_MODES.has(state?.sortMode) ? state.sortMode : 'group',
@@ -137,4 +139,17 @@ export function parsePersistedIptvState(rawState) {
     }
 
     return buildPersistedIptvState(payload)
+}
+
+export function isPersistedIptvStateOwnedBy(payload, ownerScope) {
+    if (!payload || typeof payload !== 'object') {
+        return false
+    }
+
+    const normalizedOwnerScope = normalizeString(ownerScope, IPTV_OWNER_SCOPE_MAX_LENGTH)
+    if (normalizedOwnerScope === '') {
+        return false
+    }
+
+    return payload.ownerScope === normalizedOwnerScope
 }

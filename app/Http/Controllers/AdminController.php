@@ -100,6 +100,7 @@ class AdminController extends Controller
             'date_from' => ['nullable', 'date_format:Y-m-d', 'required_with:date_to'],
             'date_to' => ['nullable', 'date_format:Y-m-d', 'required_with:date_from', 'after_or_equal:date_from'],
             'format' => ['nullable', 'string', Rule::in(['xls', 'json'])],
+            'locale' => ['nullable', 'string', Rule::in(['ru', 'en'])],
         ]);
 
         $format = (string) ($validated['format'] ?? 'xls');
@@ -120,7 +121,10 @@ class AdminController extends Controller
             $contentType = 'application/json; charset=UTF-8';
             $fileName = "admin_dashboard_{$rangeLabel}_{$timestamp}.json";
         } else {
-            $content = $this->adminDashboardExportService->toXls($payload);
+            $content = $this->adminDashboardExportService->toXls(
+                $payload,
+                (string) ($validated['locale'] ?? 'en')
+            );
             $contentType = 'application/vnd.ms-excel; charset=UTF-8';
             $fileName = "admin_dashboard_{$rangeLabel}_{$timestamp}.xls";
         }

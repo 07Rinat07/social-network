@@ -166,17 +166,30 @@
                 </div>
 
                 <div class="admin-dashboard-grid">
-                    <div class="simple-item admin-dashboard-card">
-                        <div class="admin-dashboard-card-head">
-                            <strong>{{ $t('admin.dashboardSubscriptionsTrend') }}</strong>
-                            <span class="muted">
-                                {{
-                                    $t('admin.dashboardPeakMonth', {
-                                        month: formatDashboardMonth(dashboard.kpis?.subscriptions_peak_month?.month),
-                                        count: formatDashboardNumber(dashboard.kpis?.subscriptions_peak_month?.value),
-                                    })
-                                }}
-                            </span>
+                    <div class="simple-item admin-dashboard-card admin-dashboard-card--trend">
+                        <div class="admin-dashboard-card-head admin-dashboard-card-head--analytics">
+                            <div class="admin-dashboard-card-copy">
+                                <strong>{{ $t('admin.dashboardSubscriptionsTrend') }}</strong>
+                                <span class="muted">
+                                    {{
+                                        $t('admin.dashboardPeakMonth', {
+                                            month: formatDashboardMonth(dashboard.kpis?.subscriptions_peak_month?.month),
+                                            count: formatDashboardNumber(dashboard.kpis?.subscriptions_peak_month?.value),
+                                        })
+                                    }}
+                                </span>
+                            </div>
+
+                            <div class="admin-dashboard-head-pills">
+                                <div class="admin-dashboard-head-pill">
+                                    <small>{{ $t('admin.dashboardAverageShort') }}</small>
+                                    <strong>{{ formatDashboardNumber(dashboard.kpis?.subscriptions_avg_month ?? 0) }}</strong>
+                                </div>
+                                <div class="admin-dashboard-head-pill">
+                                    <small>{{ $t('admin.dashboardPeakShort') }}</small>
+                                    <strong>{{ formatDashboardNumber(dashboard.kpis?.subscriptions_peak_month?.value) }}</strong>
+                                </div>
+                            </div>
                         </div>
 
                         <div class="admin-dashboard-line-chart">
@@ -236,10 +249,23 @@
                         </div>
                     </div>
 
-                    <div class="simple-item admin-dashboard-card">
-                        <div class="admin-dashboard-card-head">
-                            <strong>{{ $t('admin.dashboardFeaturePreferences') }}</strong>
-                            <span class="muted">{{ dashboardMethodLabelText }}</span>
+                    <div class="simple-item admin-dashboard-card admin-dashboard-card--preference">
+                        <div class="admin-dashboard-card-head admin-dashboard-card-head--analytics">
+                            <div class="admin-dashboard-card-copy">
+                                <strong>{{ $t('admin.dashboardFeaturePreferences') }}</strong>
+                                <span class="muted">{{ dashboardMethodLabelText }}</span>
+                            </div>
+
+                            <div class="admin-dashboard-head-pills">
+                                <div class="admin-dashboard-head-pill">
+                                    <small>{{ $t('admin.dashboardLeaderShort') }}</small>
+                                    <strong>{{ dashboardFeatureLabel(dashboard.preference?.leader_key) }}</strong>
+                                </div>
+                                <div class="admin-dashboard-head-pill">
+                                    <small>{{ $t('admin.dashboardTotalShort') }}</small>
+                                    <strong>{{ formatDashboardNumber(dashboard.preference?.total_actions) }}</strong>
+                                </div>
+                            </div>
                         </div>
 
                         <div class="admin-dashboard-preference">
@@ -270,71 +296,448 @@
                     </div>
                 </div>
 
-                <div class="simple-item admin-dashboard-card">
-                    <div class="admin-dashboard-card-head">
-                        <strong>{{ $t('admin.dashboardMonthlyActivity') }}</strong>
-                        <span class="muted">
-                            {{
-                                $t('admin.dashboardActivityPeak', {
-                                    month: formatDashboardMonth(dashboard.highlights?.activity_peak_month),
-                                    count: formatDashboardNumber(dashboard.highlights?.activity_peak_value),
-                                })
-                            }}
-                        </span>
-                    </div>
+                <div class="simple-item admin-dashboard-card admin-dashboard-card--activity">
+                    <div class="admin-dashboard-card-head admin-dashboard-card-head--activity">
+                        <div class="admin-activity-head-copy">
+                            <strong>{{ $t('admin.dashboardMonthlyActivity') }}</strong>
+                            <p class="muted admin-activity-head-note">
+                                {{
+                                    $t('admin.dashboardActivityPeak', {
+                                        month: formatDashboardMonth(dashboardActivityPeakItem.month),
+                                        count: formatDashboardNumber(dashboardActivityPeakItem.total),
+                                    })
+                                }}
+                            </p>
+                        </div>
 
-                    <div class="admin-activity-rows">
-                        <div
-                            class="admin-activity-row"
-                            v-for="item in (dashboard.activity_by_month ?? [])"
-                            :key="`admin-dashboard-activity-${item.month}`"
-                        >
-                            <span class="admin-activity-month">{{ formatDashboardMonth(item.month) }}</span>
-                            <div class="admin-activity-track">
-                                <div class="admin-activity-stack" :style="{ width: dashboardActivityRowWidth(item.total) }">
-                                    <span class="admin-activity-segment is-social" :style="{ width: dashboardActivitySegmentWidth(item.social, item.total) }"></span>
-                                    <span class="admin-activity-segment is-chats" :style="{ width: dashboardActivitySegmentWidth(item.chats, item.total) }"></span>
-                                    <span class="admin-activity-segment is-radio" :style="{ width: dashboardActivitySegmentWidth(item.radio, item.total) }"></span>
-                                    <span class="admin-activity-segment is-iptv" :style="{ width: dashboardActivitySegmentWidth(item.iptv, item.total) }"></span>
-                                </div>
-                            </div>
-                            <strong class="admin-activity-total">{{ formatDashboardNumber(item.total) }}</strong>
+                        <div class="admin-activity-head-badge">
+                            <span>{{ $t('admin.dashboardActivityTotalPeriod') }}</span>
+                            <strong>{{ formatDashboardNumber(dashboardActivityTotalPeriod) }}</strong>
+                            <small>
+                                {{ $t('admin.dashboardActivityPeakShare', { percent: dashboardActivityPeakSharePercent }) }}
+                            </small>
                         </div>
                     </div>
 
-                    <div class="admin-activity-legend">
-                        <span><i class="admin-activity-dot is-social"></i>{{ dashboardFeatureLabel('social') }}</span>
-                        <span><i class="admin-activity-dot is-chats"></i>{{ dashboardFeatureLabel('chats') }}</span>
-                        <span><i class="admin-activity-dot is-radio"></i>{{ dashboardFeatureLabel('radio') }}</span>
-                        <span><i class="admin-activity-dot is-iptv"></i>{{ dashboardFeatureLabel('iptv') }}</span>
+                    <div class="admin-activity-kpi-grid">
+                        <article
+                            v-for="item in dashboardActivitySummaryCards"
+                            :key="`admin-activity-kpi-${item.key}`"
+                            class="admin-activity-kpi-card"
+                            :style="{ '--activity-accent': item.color }"
+                        >
+                            <span class="admin-activity-kpi-card__label">{{ item.label }}</span>
+                            <strong class="admin-activity-kpi-card__value">{{ formatDashboardNumber(item.value) }}</strong>
+                        </article>
+                    </div>
+
+                    <div class="admin-activity-showcase">
+                        <section class="admin-activity-chart-panel">
+                            <div class="admin-activity-panel-head">
+                                <strong>{{ $t('admin.dashboardActivityTrend') }}</strong>
+                                <span class="muted">{{ $t('admin.dashboardActivityMatrix') }}</span>
+                            </div>
+
+                            <div class="admin-activity-visual">
+                                <svg viewBox="0 0 760 228" role="img" aria-hidden="true" preserveAspectRatio="none">
+                                    <defs>
+                                        <filter id="admin-dashboard-activity-glow">
+                                            <feGaussianBlur stdDeviation="2.4" result="coloredBlur" />
+                                            <feMerge>
+                                                <feMergeNode in="coloredBlur" />
+                                                <feMergeNode in="SourceGraphic" />
+                                            </feMerge>
+                                        </filter>
+                                    </defs>
+
+                                    <line
+                                        v-for="gridLine in dashboardActivityChartGridLines"
+                                        :key="`admin-dashboard-activity-grid-${gridLine.index}`"
+                                        x1="18"
+                                        :y1="gridLine.y"
+                                        x2="742"
+                                        :y2="gridLine.y"
+                                        stroke="rgba(132, 204, 242, 0.18)"
+                                        stroke-dasharray="5 8"
+                                        stroke-width="1"
+                                    />
+
+                                    <path
+                                        v-for="series in dashboardActivityChartSeries"
+                                        :key="`admin-dashboard-activity-series-${series.key}`"
+                                        :d="series.path"
+                                        fill="none"
+                                        :stroke="series.color"
+                                        stroke-width="3.2"
+                                        stroke-linecap="round"
+                                        stroke-linejoin="round"
+                                        filter="url(#admin-dashboard-activity-glow)"
+                                    />
+
+                                    <g
+                                        v-for="series in dashboardActivityChartSeries"
+                                        :key="`admin-dashboard-activity-points-${series.key}`"
+                                    >
+                                        <circle
+                                            v-for="point in series.points"
+                                            :key="`admin-dashboard-activity-point-${series.key}-${point.month}`"
+                                            :cx="point.x"
+                                            :cy="point.y"
+                                            r="3.35"
+                                            :fill="series.color"
+                                            stroke="#071a3d"
+                                            stroke-width="1.1"
+                                            filter="url(#admin-dashboard-activity-glow)"
+                                        />
+                                    </g>
+                                </svg>
+                            </div>
+
+                            <div class="admin-activity-axis">
+                                <span
+                                    v-for="item in dashboardActivityChartMonths"
+                                    :key="`admin-dashboard-activity-axis-${item.month}`"
+                                >
+                                    {{ formatDashboardMonth(item.month) }}
+                                </span>
+                            </div>
+
+                            <div class="admin-activity-rows">
+                                <div
+                                    class="admin-activity-row"
+                                    :class="{ 'is-peak': Number(item.month) === Number(dashboardActivityPeakItem.month) }"
+                                    v-for="item in (dashboard.activity_by_month ?? [])"
+                                    :key="`admin-dashboard-activity-${item.month}`"
+                                >
+                                    <span class="admin-activity-month">{{ formatDashboardMonth(item.month) }}</span>
+                                    <div class="admin-activity-track">
+                                        <div class="admin-activity-stack" :style="{ width: dashboardActivityRowWidth(item.total) }">
+                                            <span class="admin-activity-segment is-social" :style="{ width: dashboardActivitySegmentWidth(item.social, item.total) }"></span>
+                                            <span class="admin-activity-segment is-chats" :style="{ width: dashboardActivitySegmentWidth(item.chats, item.total) }"></span>
+                                            <span class="admin-activity-segment is-radio" :style="{ width: dashboardActivitySegmentWidth(item.radio, item.total) }"></span>
+                                            <span class="admin-activity-segment is-iptv" :style="{ width: dashboardActivitySegmentWidth(item.iptv, item.total) }"></span>
+                                        </div>
+                                    </div>
+                                    <strong class="admin-activity-total">{{ formatDashboardNumber(item.total) }}</strong>
+                                </div>
+                            </div>
+
+                            <div class="admin-activity-legend">
+                                <span><i class="admin-activity-dot is-social"></i>{{ dashboardFeatureLabel('social') }}</span>
+                                <span><i class="admin-activity-dot is-chats"></i>{{ dashboardFeatureLabel('chats') }}</span>
+                                <span><i class="admin-activity-dot is-radio"></i>{{ dashboardFeatureLabel('radio') }}</span>
+                                <span><i class="admin-activity-dot is-iptv"></i>{{ dashboardFeatureLabel('iptv') }}</span>
+                            </div>
+                        </section>
+
+                        <aside class="admin-activity-insights">
+                            <article class="admin-activity-insight-card">
+                                <span class="admin-activity-insight-label">{{ $t('admin.dashboardActivityLeaderModule') }}</span>
+                                <strong class="admin-activity-insight-value">{{ dashboardFeatureLabel(dashboardActivityLeaderItem.key) }}</strong>
+                                <small class="muted">{{ formatDashboardNumber(dashboardActivityLeaderItem.value) }}</small>
+                            </article>
+
+                            <article class="admin-activity-insight-card">
+                                <span class="admin-activity-insight-label">{{ $t('admin.dashboardActivityPeakMonthLabel') }}</span>
+                                <strong class="admin-activity-insight-value">{{ formatDashboardMonth(dashboardActivityPeakItem.month) }}</strong>
+                                <small class="muted">{{ formatDashboardNumber(dashboardActivityPeakItem.total) }}</small>
+                            </article>
+
+                            <article class="admin-activity-insight-card admin-activity-insight-card--modules">
+                                <span class="admin-activity-insight-label">{{ $t('admin.dashboardActivityModuleBreakdown') }}</span>
+
+                                <div class="admin-activity-module-list">
+                                    <div
+                                        class="admin-activity-module-item"
+                                        v-for="item in dashboardActivityModuleItems"
+                                        :key="`admin-activity-module-${item.key}`"
+                                    >
+                                        <div class="admin-activity-module-row">
+                                            <span class="admin-activity-module-label">
+                                                <i class="admin-activity-dot" :style="{ background: item.color }"></i>
+                                                {{ item.label }}
+                                            </span>
+                                            <strong>{{ formatDashboardNumber(item.value) }}</strong>
+                                        </div>
+
+                                        <div class="admin-activity-module-meter">
+                                            <span
+                                                class="admin-activity-module-fill"
+                                                :style="{ width: `${item.share.toFixed(2)}%`, '--activity-accent': item.color }"
+                                            ></span>
+                                        </div>
+                                    </div>
+                                </div>
+                            </article>
+                        </aside>
                     </div>
                 </div>
 
-                <div class="admin-dashboard-engagement-grid">
-                    <article class="admin-dashboard-mini-card">
-                        <span>{{ $t('admin.dashboardEngagementUsers30d') }}</span>
-                        <strong>{{ formatDashboardNumber(dashboard.engagement?.active_users_30d) }}</strong>
-                    </article>
-                    <article class="admin-dashboard-mini-card">
-                        <span>{{ $t('admin.dashboardEngagementCreators30d') }}</span>
-                        <strong>{{ formatDashboardNumber(dashboard.engagement?.creators_30d) }}</strong>
-                    </article>
-                    <article class="admin-dashboard-mini-card">
-                        <span>{{ $t('admin.dashboardEngagementChatters30d') }}</span>
-                        <strong>{{ formatDashboardNumber(dashboard.engagement?.chatters_30d) }}</strong>
-                    </article>
-                    <article class="admin-dashboard-mini-card">
-                        <span>{{ $t('admin.dashboardEngagementSocial30d') }}</span>
-                        <strong>{{ formatDashboardNumber(dashboard.engagement?.social_active_users_30d) }}</strong>
-                    </article>
-                    <article class="admin-dashboard-mini-card">
-                        <span>{{ $t('admin.dashboardEngagementRadio30d') }}</span>
-                        <strong>{{ formatDashboardNumber(dashboard.engagement?.radio_active_users_30d) }}</strong>
-                    </article>
-                    <article class="admin-dashboard-mini-card">
-                        <span>{{ $t('admin.dashboardEngagementIptv30d') }}</span>
-                        <strong>{{ formatDashboardNumber(dashboard.engagement?.iptv_active_users_30d) }}</strong>
-                    </article>
+                <div class="admin-dashboard-analytics-stack">
+                    <div class="simple-item admin-dashboard-card admin-dashboard-card--retention">
+                        <div class="admin-dashboard-card-head admin-dashboard-card-head--analytics">
+                            <div class="admin-dashboard-card-copy">
+                                <strong>{{ $t('admin.dashboardRetentionTitle') }}</strong>
+                                <span class="muted">{{ $t('admin.dashboardRetentionSubtitle') }}</span>
+                            </div>
+                        </div>
+
+                        <div class="admin-dashboard-mini-grid">
+                            <article
+                                v-for="item in dashboardRetentionCards"
+                                :key="`admin-retention-${item.key}`"
+                                class="admin-dashboard-mini-card"
+                            >
+                                <span class="admin-dashboard-mini-label">{{ item.label }}</span>
+                                <strong class="admin-dashboard-mini-value">
+                                    {{ formatDashboardNumber(item.value) }}<template v-if="item.suffix">{{ item.suffix }}</template>
+                                </strong>
+                            </article>
+                        </div>
+
+                        <div class="admin-dashboard-table-wrap">
+                            <table class="admin-dashboard-table">
+                                <thead>
+                                <tr>
+                                    <th>{{ $t('admin.dashboardMonthColumn') }}</th>
+                                    <th>{{ $t('admin.dashboardRetentionNewUsers') }}</th>
+                                    <th>{{ $t('admin.dashboardRetentionRetainedUsers') }}</th>
+                                    <th>{{ $t('admin.dashboardRetentionRate') }}</th>
+                                    <th>{{ $t('admin.dashboardRetentionPartial') }}</th>
+                                </tr>
+                                </thead>
+                                <tbody>
+                                <tr
+                                    v-for="item in (dashboard.retention?.cohorts ?? [])"
+                                    :key="`admin-retention-cohort-${item.month}`"
+                                >
+                                    <td>{{ formatDashboardMonth(item.month) }}</td>
+                                    <td>{{ formatDashboardNumber(item.new_users) }}</td>
+                                    <td>{{ formatDashboardNumber(item.retained_users) }}</td>
+                                    <td>{{ Number(item.retention_percent ?? 0).toFixed(1) }}%</td>
+                                    <td>{{ item.partial ? $t('admin.dashboardPartialYes') : $t('admin.dashboardPartialNo') }}</td>
+                                </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+
+                    <div class="admin-dashboard-grid admin-dashboard-grid--deep">
+                        <div class="simple-item admin-dashboard-card admin-dashboard-card--deep">
+                            <div class="admin-dashboard-card-head admin-dashboard-card-head--analytics">
+                                <div class="admin-dashboard-card-copy">
+                                    <strong>{{ $t('admin.dashboardContentTitle') }}</strong>
+                                    <span class="muted">{{ $t('admin.dashboardContentSubtitle') }}</span>
+                                </div>
+                            </div>
+
+                            <div class="admin-dashboard-mini-grid">
+                                <article
+                                    v-for="item in dashboardContentMetricCards"
+                                    :key="`admin-content-${item.key}`"
+                                    class="admin-dashboard-mini-card"
+                                >
+                                    <span class="admin-dashboard-mini-label">{{ item.label }}</span>
+                                    <strong class="admin-dashboard-mini-value">
+                                        {{ formatDashboardNumber(item.value) }}<template v-if="item.suffix">{{ item.suffix }}</template>
+                                    </strong>
+                                </article>
+                            </div>
+
+                            <div class="admin-dashboard-split-list">
+                                <div class="admin-dashboard-list-card">
+                                    <strong>{{ $t('admin.dashboardTopPostsTitle') }}</strong>
+                                    <div class="admin-dashboard-entity-list">
+                                        <article
+                                            v-for="item in (dashboard.content?.top_posts ?? [])"
+                                            :key="`admin-top-post-${item.id}`"
+                                            class="admin-dashboard-entity-item"
+                                        >
+                                            <strong>{{ item.title || `#${item.id}` }}</strong>
+                                            <span class="muted">{{ item.author_name }}<template v-if="item.author_nickname"> · @{{ item.author_nickname }}</template></span>
+                                            <small>
+                                                {{ $t('admin.dashboardTopPostMeta', {
+                                                    engagement: formatDashboardNumber(item.engagement_score),
+                                                    views: formatDashboardNumber(item.views_count),
+                                                }) }}
+                                            </small>
+                                        </article>
+                                    </div>
+                                </div>
+
+                                <div class="admin-dashboard-list-card">
+                                    <strong>{{ $t('admin.dashboardTopAuthorsTitle') }}</strong>
+                                    <div class="admin-dashboard-entity-list">
+                                        <article
+                                            v-for="item in (dashboard.content?.top_authors ?? [])"
+                                            :key="`admin-top-author-${item.user_id}`"
+                                            class="admin-dashboard-entity-item"
+                                        >
+                                            <strong>{{ item.name || `#${item.user_id}` }}</strong>
+                                            <span class="muted"><template v-if="item.nickname">@{{ item.nickname }}</template><template v-else>#{{ item.user_id }}</template></span>
+                                            <small>
+                                                {{ $t('admin.dashboardTopAuthorMeta', {
+                                                    posts: formatDashboardNumber(item.posts_count),
+                                                    engagement: formatDashboardNumber(item.engagement_total),
+                                                }) }}
+                                            </small>
+                                        </article>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="simple-item admin-dashboard-card admin-dashboard-card--deep">
+                            <div class="admin-dashboard-card-head admin-dashboard-card-head--analytics">
+                                <div class="admin-dashboard-card-copy">
+                                    <strong>{{ $t('admin.dashboardChatsTitle') }}</strong>
+                                    <span class="muted">{{ $t('admin.dashboardChatsSubtitle') }}</span>
+                                </div>
+                            </div>
+
+                            <div class="admin-dashboard-mini-grid">
+                                <article
+                                    v-for="item in dashboardChatMetricCards"
+                                    :key="`admin-chats-${item.key}`"
+                                    class="admin-dashboard-mini-card"
+                                >
+                                    <span class="admin-dashboard-mini-label">{{ item.label }}</span>
+                                    <strong class="admin-dashboard-mini-value">
+                                        {{ formatDashboardNumber(item.value) }}<template v-if="item.suffix">{{ item.suffix }}</template>
+                                    </strong>
+                                </article>
+                            </div>
+
+                            <div class="admin-dashboard-pill-list">
+                                <span
+                                    v-for="item in (dashboard.chats?.attachment_breakdown ?? [])"
+                                    :key="`admin-chat-attachment-${item.type}`"
+                                    class="admin-dashboard-type-pill"
+                                >
+                                    {{ item.type }} · {{ formatDashboardNumber(item.value) }}
+                                </span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="admin-dashboard-grid admin-dashboard-grid--deep">
+                        <div class="simple-item admin-dashboard-card admin-dashboard-card--deep">
+                            <div class="admin-dashboard-card-head admin-dashboard-card-head--analytics">
+                                <div class="admin-dashboard-card-copy">
+                                    <strong>{{ $t('admin.dashboardMediaTitle') }}</strong>
+                                    <span class="muted">{{ $t('admin.dashboardMediaSubtitle') }}</span>
+                                </div>
+                            </div>
+
+                            <div class="admin-dashboard-mini-grid">
+                                <article
+                                    v-for="item in dashboardMediaMetricCards"
+                                    :key="`admin-media-${item.key}`"
+                                    class="admin-dashboard-mini-card"
+                                >
+                                    <span class="admin-dashboard-mini-label">{{ item.label }}</span>
+                                    <strong class="admin-dashboard-mini-value">
+                                        {{ formatDashboardNumber(item.value) }}<template v-if="item.suffix">{{ item.suffix }}</template>
+                                    </strong>
+                                </article>
+                            </div>
+                        </div>
+
+                        <div class="simple-item admin-dashboard-card admin-dashboard-card--deep">
+                            <div class="admin-dashboard-card-head admin-dashboard-card-head--analytics">
+                                <div class="admin-dashboard-card-copy">
+                                    <strong>{{ $t('admin.dashboardTransportTitle') }}</strong>
+                                    <span class="muted">{{ $t('admin.dashboardTransportSubtitle') }}</span>
+                                </div>
+                            </div>
+
+                            <div class="admin-dashboard-dual-stack">
+                                <section class="admin-dashboard-stack-block">
+                                    <strong>{{ $t('admin.dashboardRadioTitle') }}</strong>
+                                    <div class="admin-dashboard-mini-grid admin-dashboard-mini-grid--compact">
+                                        <article
+                                            v-for="item in dashboardRadioMetricCards"
+                                            :key="`admin-radio-${item.key}`"
+                                            class="admin-dashboard-mini-card"
+                                        >
+                                            <span class="admin-dashboard-mini-label">{{ item.label }}</span>
+                                            <strong class="admin-dashboard-mini-value">
+                                                {{ formatDashboardNumber(item.value) }}<template v-if="item.suffix">{{ item.suffix }}</template>
+                                            </strong>
+                                        </article>
+                                    </div>
+
+                                    <div class="admin-dashboard-entity-list admin-dashboard-entity-list--compact">
+                                        <article
+                                            v-for="item in (dashboard.radio?.top_stations ?? [])"
+                                            :key="`admin-radio-station-${item.entity_key || item.entity_id}`"
+                                            class="admin-dashboard-entity-item"
+                                        >
+                                            <strong>{{ item.label || item.entity_key || item.entity_id }}</strong>
+                                            <small>{{ formatDashboardNumber(item.value) }}</small>
+                                        </article>
+                                    </div>
+                                </section>
+
+                                <section class="admin-dashboard-stack-block">
+                                    <strong>{{ $t('admin.dashboardIptvTitle') }}</strong>
+                                    <div class="admin-dashboard-mini-grid admin-dashboard-mini-grid--compact">
+                                        <article
+                                            v-for="item in dashboardIptvMetricCards"
+                                            :key="`admin-iptv-${item.key}`"
+                                            class="admin-dashboard-mini-card"
+                                        >
+                                            <span class="admin-dashboard-mini-label">{{ item.label }}</span>
+                                            <strong class="admin-dashboard-mini-value">
+                                                {{ formatDashboardNumber(item.value) }}<template v-if="item.suffix">{{ item.suffix }}</template>
+                                            </strong>
+                                        </article>
+                                    </div>
+
+                                    <div class="admin-dashboard-pill-list">
+                                        <span
+                                            v-for="item in (dashboard.iptv?.mode_split ?? [])"
+                                            :key="`admin-iptv-mode-${item.key}`"
+                                            class="admin-dashboard-type-pill"
+                                        >
+                                            {{ item.key }} · {{ formatDashboardNumber(item.started) }} / {{ Number(item.share ?? 0).toFixed(1) }}%
+                                        </span>
+                                    </div>
+
+                                    <div class="admin-dashboard-entity-list admin-dashboard-entity-list--compact">
+                                        <article
+                                            v-for="item in (dashboard.iptv?.top_channels ?? [])"
+                                            :key="`admin-iptv-channel-${item.entity_key || item.entity_id}`"
+                                            class="admin-dashboard-entity-item"
+                                        >
+                                            <strong>{{ item.label || item.entity_key || item.entity_id }}</strong>
+                                            <small>{{ formatDashboardNumber(item.value) }}</small>
+                                        </article>
+                                    </div>
+                                </section>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="simple-item admin-dashboard-card admin-dashboard-card--quality">
+                        <div class="admin-dashboard-card-head admin-dashboard-card-head--analytics">
+                            <div class="admin-dashboard-card-copy">
+                                <strong>{{ $t('admin.dashboardQualityTitle') }}</strong>
+                                <span class="muted">{{ $t('admin.dashboardQualitySubtitle') }}</span>
+                            </div>
+                        </div>
+
+                        <div class="admin-dashboard-mini-grid">
+                            <article
+                                v-for="item in dashboardHealthMetricCards"
+                                :key="`admin-health-${item.key}`"
+                                class="admin-dashboard-mini-card"
+                            >
+                                <span class="admin-dashboard-mini-label">{{ item.label }}</span>
+                                <strong class="admin-dashboard-mini-value">{{ formatDashboardNumber(item.value) }}</strong>
+                            </article>
+                        </div>
+                    </div>
                 </div>
             </div>
 
@@ -840,12 +1243,18 @@ const DASHBOARD_CHART_HEIGHT = 250
 const DASHBOARD_CHART_PADDING_X = 26
 const DASHBOARD_CHART_PADDING_TOP = 16
 const DASHBOARD_CHART_PADDING_BOTTOM = 28
+const DASHBOARD_ACTIVITY_CHART_WIDTH = 760
+const DASHBOARD_ACTIVITY_CHART_HEIGHT = 228
+const DASHBOARD_ACTIVITY_CHART_PADDING_X = 18
+const DASHBOARD_ACTIVITY_CHART_PADDING_TOP = 18
+const DASHBOARD_ACTIVITY_CHART_PADDING_BOTTOM = 28
+const DASHBOARD_ACTIVITY_CHART_GRID_LINES = 4
 const DASHBOARD_MIN_ACTIVITY_BAR_PERCENT = 3
 const DASHBOARD_FEATURE_COLORS = {
-    social: '#0f6cf2',
-    chats: '#f97316',
-    radio: '#0d9488',
-    iptv: '#be123c',
+    social: '#55ddff',
+    chats: '#ffbc5b',
+    radio: '#4df0bf',
+    iptv: '#ff71ad',
 }
 
 function resolveMessage(messages, key, fallback = '') {
@@ -963,6 +1372,91 @@ function buildEmptyDashboardPayload(year = new Date().getFullYear()) {
             subscriptions_peak_month: 1,
             activity_peak_month: 1,
             activity_peak_value: 0,
+        },
+        retention: {
+            dau: 0,
+            wau: 0,
+            mau: 0,
+            stickiness_percent: 0,
+            new_active_users_30d: 0,
+            returning_users_30d: 0,
+            cohorts: [],
+        },
+        content: {
+            posts_total: 0,
+            public_posts: 0,
+            private_posts: 0,
+            carousel_posts: 0,
+            engagement_total: 0,
+            views_total: 0,
+            likes_total: 0,
+            comments_total: 0,
+            reposts_total: 0,
+            engagement_per_post: 0,
+            avg_views_per_post: 0,
+            view_to_engagement_rate_percent: 0,
+            top_posts: [],
+            top_authors: [],
+        },
+        chats: {
+            messages_total: 0,
+            active_chatters: 0,
+            attachments_total: 0,
+            attachment_breakdown: [],
+            reply_samples: 0,
+            avg_reply_minutes: 0,
+            median_reply_minutes: 0,
+        },
+        media: {
+            uploads_total: 0,
+            post_media_uploads: 0,
+            chat_attachments_uploads: 0,
+            images_uploaded: 0,
+            videos_uploaded: 0,
+            avg_upload_size_kb: 0,
+            failed_uploads: 0,
+            upload_failure_rate_percent: 0,
+            video_sessions: 0,
+            video_completed_sessions: 0,
+            video_completion_rate_percent: 0,
+            video_watch_seconds: 0,
+            avg_video_completion_percent: 0,
+            theater_opens: 0,
+            fullscreen_entries: 0,
+        },
+        radio: {
+            active_users_period: 0,
+            favorite_additions_period: 0,
+            sessions_started: 0,
+            failures_total: 0,
+            failure_rate_percent: 0,
+            top_stations: [],
+        },
+        iptv: {
+            active_users_period: 0,
+            saved_channels_period: 0,
+            saved_playlists_period: 0,
+            sessions_started: 0,
+            failures_total: 0,
+            failure_rate_percent: 0,
+            mode_split: [
+                { key: 'direct', started: 0, failed: 0, share: 0 },
+                { key: 'proxy', started: 0, failed: 0, share: 0 },
+                { key: 'relay', started: 0, failed: 0, share: 0 },
+                { key: 'ffmpeg', started: 0, failed: 0, share: 0 },
+            ],
+            top_channels: [],
+        },
+        errors_and_moderation: {
+            media_upload_failures: 0,
+            radio_failures: 0,
+            iptv_failures: 0,
+            total_tracked_failures: 0,
+            active_blocks_total: 0,
+            feedback_new_total: 0,
+            feedback_in_progress_total: 0,
+            feedback_resolved_total: 0,
+            feedback_created_period: 0,
         },
     }
 }
@@ -1158,6 +1652,303 @@ export default {
                 : []
 
             return Math.max(...values, 1)
+        },
+
+        dashboardActivityChartMaxValue() {
+            const series = Array.isArray(this.dashboard?.activity_by_month)
+                ? this.dashboard.activity_by_month
+                : []
+            const values = series.flatMap((item) => ([
+                Math.max(0, Number(item?.social ?? 0)),
+                Math.max(0, Number(item?.chats ?? 0)),
+                Math.max(0, Number(item?.radio ?? 0)),
+                Math.max(0, Number(item?.iptv ?? 0)),
+            ]))
+
+            return Math.max(...values, 1)
+        },
+
+        dashboardActivityChartMonths() {
+            const series = Array.isArray(this.dashboard?.activity_by_month)
+                ? this.dashboard.activity_by_month
+                : []
+
+            if (series.length === 0) {
+                return []
+            }
+
+            const innerWidth = DASHBOARD_ACTIVITY_CHART_WIDTH - (DASHBOARD_ACTIVITY_CHART_PADDING_X * 2)
+            const divisor = Math.max(series.length - 1, 1)
+
+            return series.map((item, index) => ({
+                month: Number(item?.month ?? (index + 1)),
+                x: Number((DASHBOARD_ACTIVITY_CHART_PADDING_X + ((innerWidth * index) / divisor)).toFixed(2)),
+            }))
+        },
+
+        dashboardActivityChartGridLines() {
+            const innerHeight = DASHBOARD_ACTIVITY_CHART_HEIGHT - DASHBOARD_ACTIVITY_CHART_PADDING_TOP - DASHBOARD_ACTIVITY_CHART_PADDING_BOTTOM
+            const totalLines = Math.max(DASHBOARD_ACTIVITY_CHART_GRID_LINES, 2)
+
+            return Array.from({ length: totalLines }, (_, index) => ({
+                index,
+                y: Number((DASHBOARD_ACTIVITY_CHART_PADDING_TOP + ((innerHeight * index) / (totalLines - 1))).toFixed(2)),
+            }))
+        },
+
+        dashboardActivityChartSeries() {
+            const series = Array.isArray(this.dashboard?.activity_by_month)
+                ? this.dashboard.activity_by_month
+                : []
+            const monthPoints = this.dashboardActivityChartMonths
+            if (series.length === 0 || monthPoints.length === 0) {
+                return []
+            }
+
+            const maxValue = Math.max(Number(this.dashboardActivityChartMaxValue ?? 1), 1)
+            const innerHeight = DASHBOARD_ACTIVITY_CHART_HEIGHT - DASHBOARD_ACTIVITY_CHART_PADDING_TOP - DASHBOARD_ACTIVITY_CHART_PADDING_BOTTOM
+            const baselineY = DASHBOARD_ACTIVITY_CHART_HEIGHT - DASHBOARD_ACTIVITY_CHART_PADDING_BOTTOM
+
+            return ['social', 'chats', 'radio', 'iptv'].map((key) => {
+                const points = monthPoints.map((monthPoint, index) => {
+                    const source = series[index] ?? {}
+                    const value = Math.max(0, Number(source?.[key] ?? 0))
+                    const y = baselineY - ((value / maxValue) * innerHeight)
+
+                    return {
+                        month: monthPoint.month,
+                        value,
+                        x: monthPoint.x,
+                        y: Number(y.toFixed(2)),
+                    }
+                })
+
+                return {
+                    key,
+                    color: this.dashboardFeatureColor(key),
+                    path: points
+                        .map((point, index) => `${index === 0 ? 'M' : 'L'} ${point.x} ${point.y}`)
+                        .join(' '),
+                    points,
+                }
+            })
+        },
+
+        dashboardActivityTotalPeriod() {
+            const series = Array.isArray(this.dashboard?.activity_by_month)
+                ? this.dashboard.activity_by_month
+                : []
+
+            return series.reduce((sum, item) => sum + Math.max(0, Number(item?.total ?? 0)), 0)
+        },
+
+        dashboardActivityPeakItem() {
+            const series = Array.isArray(this.dashboard?.activity_by_month)
+                ? this.dashboard.activity_by_month
+                : []
+
+            return series.reduce((best, item, index) => {
+                const candidate = {
+                    month: Number(item?.month ?? (index + 1)),
+                    social: Math.max(0, Number(item?.social ?? 0)),
+                    chats: Math.max(0, Number(item?.chats ?? 0)),
+                    radio: Math.max(0, Number(item?.radio ?? 0)),
+                    iptv: Math.max(0, Number(item?.iptv ?? 0)),
+                    total: Math.max(0, Number(item?.total ?? 0)),
+                }
+
+                if (!best || candidate.total > best.total) {
+                    return candidate
+                }
+
+                return best
+            }, null) ?? {
+                month: 1,
+                social: 0,
+                chats: 0,
+                radio: 0,
+                iptv: 0,
+                total: 0,
+            }
+        },
+
+        dashboardActivityPeakSharePercent() {
+            const totalPeriod = Math.max(0, Number(this.dashboardActivityTotalPeriod ?? 0))
+            if (totalPeriod <= 0) {
+                return '0.0'
+            }
+
+            const peakValue = Math.max(0, Number(this.dashboardActivityPeakItem?.total ?? 0))
+            return ((peakValue / totalPeriod) * 100).toFixed(1)
+        },
+
+        dashboardActivityModuleItems() {
+            const series = Array.isArray(this.dashboard?.activity_by_month)
+                ? this.dashboard.activity_by_month
+                : []
+            const totals = {
+                social: 0,
+                chats: 0,
+                radio: 0,
+                iptv: 0,
+            }
+
+            series.forEach((item) => {
+                totals.social += Math.max(0, Number(item?.social ?? 0))
+                totals.chats += Math.max(0, Number(item?.chats ?? 0))
+                totals.radio += Math.max(0, Number(item?.radio ?? 0))
+                totals.iptv += Math.max(0, Number(item?.iptv ?? 0))
+            })
+
+            const periodTotal = Math.max(0, Number(this.dashboardActivityTotalPeriod ?? 0))
+
+            return ['social', 'chats', 'radio', 'iptv'].map((key) => {
+                const value = Math.max(0, Number(totals[key] ?? 0))
+
+                return {
+                    key,
+                    label: this.dashboardFeatureLabel(key),
+                    color: this.dashboardFeatureColor(key),
+                    value,
+                    share: periodTotal > 0 ? (value / periodTotal) * 100 : 0,
+                }
+            })
+        },
+
+        dashboardActivityLeaderItem() {
+            const items = this.dashboardActivityModuleItems
+            if (!Array.isArray(items) || items.length === 0) {
+                return {
+                    key: 'social',
+                    value: 0,
+                }
+            }
+
+            return items.reduce((best, item) => {
+                if (!best || Number(item?.value ?? 0) > Number(best?.value ?? 0)) {
+                    return item
+                }
+
+                return best
+            }, items[0])
+        },
+
+        dashboardActivitySummaryCards() {
+            return [
+                {
+                    key: 'users-30d',
+                    label: this.$t('admin.dashboardEngagementUsers30d'),
+                    value: this.dashboard?.engagement?.active_users_30d ?? 0,
+                    color: this.dashboardFeatureColor('social'),
+                },
+                {
+                    key: 'creators-30d',
+                    label: this.$t('admin.dashboardEngagementCreators30d'),
+                    value: this.dashboard?.engagement?.creators_30d ?? 0,
+                    color: '#7dd3fc',
+                },
+                {
+                    key: 'chatters-30d',
+                    label: this.$t('admin.dashboardEngagementChatters30d'),
+                    value: this.dashboard?.engagement?.chatters_30d ?? 0,
+                    color: this.dashboardFeatureColor('chats'),
+                },
+                {
+                    key: 'social-30d',
+                    label: this.$t('admin.dashboardEngagementSocial30d'),
+                    value: this.dashboard?.engagement?.social_active_users_30d ?? 0,
+                    color: this.dashboardFeatureColor('social'),
+                },
+                {
+                    key: 'radio-30d',
+                    label: this.$t('admin.dashboardEngagementRadio30d'),
+                    value: this.dashboard?.engagement?.radio_active_users_30d ?? 0,
+                    color: this.dashboardFeatureColor('radio'),
+                },
+                {
+                    key: 'iptv-30d',
+                    label: this.$t('admin.dashboardEngagementIptv30d'),
+                    value: this.dashboard?.engagement?.iptv_active_users_30d ?? 0,
+                    color: this.dashboardFeatureColor('iptv'),
+                },
+            ]
+        },
+
+        dashboardRetentionCards() {
+            return [
+                { key: 'dau', label: this.$t('admin.dashboardRetentionDau'), value: this.dashboard?.retention?.dau ?? 0 },
+                { key: 'wau', label: this.$t('admin.dashboardRetentionWau'), value: this.dashboard?.retention?.wau ?? 0 },
+                { key: 'mau', label: this.$t('admin.dashboardRetentionMau'), value: this.dashboard?.retention?.mau ?? 0 },
+                { key: 'stickiness', label: this.$t('admin.dashboardRetentionStickiness'), value: this.dashboard?.retention?.stickiness_percent ?? 0, suffix: '%' },
+                { key: 'new-active', label: this.$t('admin.dashboardRetentionNewActive30d'), value: this.dashboard?.retention?.new_active_users_30d ?? 0 },
+                { key: 'returning', label: this.$t('admin.dashboardRetentionReturning30d'), value: this.dashboard?.retention?.returning_users_30d ?? 0 },
+            ]
+        },
+
+        dashboardContentMetricCards() {
+            return [
+                { key: 'posts', label: this.$t('admin.dashboardContentPosts'), value: this.dashboard?.content?.posts_total ?? 0 },
+                { key: 'public', label: this.$t('admin.dashboardContentPublicPosts'), value: this.dashboard?.content?.public_posts ?? 0 },
+                { key: 'engagement', label: this.$t('admin.dashboardContentEngagementTotal'), value: this.dashboard?.content?.engagement_total ?? 0 },
+                { key: 'engagement-per-post', label: this.$t('admin.dashboardContentEngagementPerPost'), value: this.dashboard?.content?.engagement_per_post ?? 0 },
+                { key: 'avg-views', label: this.$t('admin.dashboardContentAvgViewsPerPost'), value: this.dashboard?.content?.avg_views_per_post ?? 0 },
+                { key: 'view-rate', label: this.$t('admin.dashboardContentViewRate'), value: this.dashboard?.content?.view_to_engagement_rate_percent ?? 0, suffix: '%' },
+            ]
+        },
+
+        dashboardChatMetricCards() {
+            return [
+                { key: 'messages', label: this.$t('admin.dashboardChatsMessages'), value: this.dashboard?.chats?.messages_total ?? 0 },
+                { key: 'chatters', label: this.$t('admin.dashboardChatsActiveUsers'), value: this.dashboard?.chats?.active_chatters ?? 0 },
+                { key: 'attachments', label: this.$t('admin.dashboardChatsAttachments'), value: this.dashboard?.chats?.attachments_total ?? 0 },
+                { key: 'reply-avg', label: this.$t('admin.dashboardChatsAvgReplyMinutes'), value: this.dashboard?.chats?.avg_reply_minutes ?? 0 },
+                { key: 'reply-median', label: this.$t('admin.dashboardChatsMedianReplyMinutes'), value: this.dashboard?.chats?.median_reply_minutes ?? 0 },
+            ]
+        },
+
+        dashboardMediaMetricCards() {
+            return [
+                { key: 'uploads', label: this.$t('admin.dashboardMediaUploads'), value: this.dashboard?.media?.uploads_total ?? 0 },
+                { key: 'failed', label: this.$t('admin.dashboardMediaFailedUploads'), value: this.dashboard?.media?.failed_uploads ?? 0 },
+                { key: 'failure-rate', label: this.$t('admin.dashboardMediaFailureRate'), value: this.dashboard?.media?.upload_failure_rate_percent ?? 0, suffix: '%' },
+                { key: 'video-sessions', label: this.$t('admin.dashboardMediaVideoSessions'), value: this.dashboard?.media?.video_sessions ?? 0 },
+                { key: 'completion-rate', label: this.$t('admin.dashboardMediaCompletionRate'), value: this.dashboard?.media?.video_completion_rate_percent ?? 0, suffix: '%' },
+                { key: 'watch-seconds', label: this.$t('admin.dashboardMediaWatchSeconds'), value: this.dashboard?.media?.video_watch_seconds ?? 0 },
+                { key: 'theater', label: this.$t('admin.dashboardMediaTheaterOpens'), value: this.dashboard?.media?.theater_opens ?? 0 },
+                { key: 'fullscreen', label: this.$t('admin.dashboardMediaFullscreenEntries'), value: this.dashboard?.media?.fullscreen_entries ?? 0 },
+            ]
+        },
+
+        dashboardRadioMetricCards() {
+            return [
+                { key: 'sessions', label: this.$t('admin.dashboardRadioSessions'), value: this.dashboard?.radio?.sessions_started ?? 0 },
+                { key: 'failures', label: this.$t('admin.dashboardRadioFailures'), value: this.dashboard?.radio?.failures_total ?? 0 },
+                { key: 'failure-rate', label: this.$t('admin.dashboardRadioFailureRate'), value: this.dashboard?.radio?.failure_rate_percent ?? 0, suffix: '%' },
+                { key: 'favorites', label: this.$t('admin.dashboardRadioFavorites'), value: this.dashboard?.radio?.favorite_additions_period ?? 0 },
+            ]
+        },
+
+        dashboardIptvMetricCards() {
+            return [
+                { key: 'sessions', label: this.$t('admin.dashboardIptvSessions'), value: this.dashboard?.iptv?.sessions_started ?? 0 },
+                { key: 'failures', label: this.$t('admin.dashboardIptvFailures'), value: this.dashboard?.iptv?.failures_total ?? 0 },
+                { key: 'failure-rate', label: this.$t('admin.dashboardIptvFailureRate'), value: this.dashboard?.iptv?.failure_rate_percent ?? 0, suffix: '%' },
+                { key: 'saved-channels', label: this.$t('admin.dashboardIptvSavedChannels'), value: this.dashboard?.iptv?.saved_channels_period ?? 0 },
+                { key: 'saved-playlists', label: this.$t('admin.dashboardIptvSavedPlaylists'), value: this.dashboard?.iptv?.saved_playlists_period ?? 0 },
+            ]
+        },
+
+        dashboardHealthMetricCards() {
+            return [
+                { key: 'tracked', label: this.$t('admin.dashboardErrorsTracked'), value: this.dashboard?.errors_and_moderation?.total_tracked_failures ?? 0 },
+                { key: 'radio', label: this.$t('admin.dashboardErrorsRadio'), value: this.dashboard?.errors_and_moderation?.radio_failures ?? 0 },
+                { key: 'iptv', label: this.$t('admin.dashboardErrorsIptv'), value: this.dashboard?.errors_and_moderation?.iptv_failures ?? 0 },
+                { key: 'upload', label: this.$t('admin.dashboardErrorsUploads'), value: this.dashboard?.errors_and_moderation?.media_upload_failures ?? 0 },
+                { key: 'blocks', label: this.$t('admin.dashboardModerationBlocks'), value: this.dashboard?.errors_and_moderation?.active_blocks_total ?? 0 },
+                { key: 'feedback-new', label: this.$t('admin.dashboardModerationFeedbackNew'), value: this.dashboard?.errors_and_moderation?.feedback_new_total ?? 0 },
+                { key: 'feedback-progress', label: this.$t('admin.dashboardModerationFeedbackProgress'), value: this.dashboard?.errors_and_moderation?.feedback_in_progress_total ?? 0 },
+                { key: 'feedback-resolved', label: this.$t('admin.dashboardModerationFeedbackResolved'), value: this.dashboard?.errors_and_moderation?.feedback_resolved_total ?? 0 },
+            ]
         },
 
         dashboardExporting() {
@@ -1357,6 +2148,43 @@ export default {
                     ...fallback.highlights,
                     ...(payload?.highlights ?? {}),
                 },
+                retention: {
+                    ...fallback.retention,
+                    ...(payload?.retention ?? {}),
+                    cohorts: Array.isArray(payload?.retention?.cohorts) ? payload.retention.cohorts : fallback.retention.cohorts,
+                },
+                content: {
+                    ...fallback.content,
+                    ...(payload?.content ?? {}),
+                    top_posts: Array.isArray(payload?.content?.top_posts) ? payload.content.top_posts : fallback.content.top_posts,
+                    top_authors: Array.isArray(payload?.content?.top_authors) ? payload.content.top_authors : fallback.content.top_authors,
+                },
+                chats: {
+                    ...fallback.chats,
+                    ...(payload?.chats ?? {}),
+                    attachment_breakdown: Array.isArray(payload?.chats?.attachment_breakdown)
+                        ? payload.chats.attachment_breakdown
+                        : fallback.chats.attachment_breakdown,
+                },
+                media: {
+                    ...fallback.media,
+                    ...(payload?.media ?? {}),
+                },
+                radio: {
+                    ...fallback.radio,
+                    ...(payload?.radio ?? {}),
+                    top_stations: Array.isArray(payload?.radio?.top_stations) ? payload.radio.top_stations : fallback.radio.top_stations,
+                },
+                iptv: {
+                    ...fallback.iptv,
+                    ...(payload?.iptv ?? {}),
+                    mode_split: Array.isArray(payload?.iptv?.mode_split) ? payload.iptv.mode_split : fallback.iptv.mode_split,
+                    top_channels: Array.isArray(payload?.iptv?.top_channels) ? payload.iptv.top_channels : fallback.iptv.top_channels,
+                },
+                errors_and_moderation: {
+                    ...fallback.errors_and_moderation,
+                    ...(payload?.errors_and_moderation ?? {}),
+                },
             }
         },
 
@@ -1514,12 +2342,15 @@ export default {
             this.dashboardExportingFormat = safeFormat
 
             try {
+                const exportLocale = this.$locale?.value === 'en' ? 'en' : 'ru'
+
                 const response = await axios.get('/api/admin/dashboard/export', {
                     params: {
                         year: yearParam,
                         date_from: range.from,
                         date_to: range.to,
                         format: safeFormat,
+                        locale: exportLocale,
                     },
                     responseType: 'blob',
                 })

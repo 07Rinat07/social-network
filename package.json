@@ -3,7 +3,7 @@
     "scripts": {
         "dev": "vite",
         "build": "vite build",
-        "test:js": "node --test tests/js/radioSession.test.mjs tests/js/iptvSession.test.mjs"
+        "test:js": "node --test tests/js/radioSession.test.mjs tests/js/iptvSession.test.mjs tests/js/avatarCarouselSearch.test.mjs tests/js/sectionTopButtonState.test.mjs"
     },
     "devDependencies": {
         "@tailwindcss/postcss": "^4.1.18",

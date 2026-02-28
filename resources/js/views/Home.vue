@@ -160,6 +160,95 @@
             </div>
         </section>
 
+        <section class="section-card home-avatar-ribbon-card" v-if="isVerifiedUser">
+            <div class="home-avatar-ribbon-head">
+                <div>
+                    <h2 class="section-title">{{ $t('home.avatarCarouselTitle') }}</h2>
+                    <p class="section-subtitle">{{ $t('home.avatarCarouselSubtitle') }}</p>
+                </div>
+                <span class="badge home-avatar-ribbon-badge">
+                    {{ $t('home.avatarCarouselCount', { count: filteredAvatarCarouselUsers.length }) }}
+                </span>
+            </div>
+
+            <div class="home-avatar-ribbon-search-row">
+                <input
+                    v-model.trim="avatarCarouselSearchQuery"
+                    class="input-field home-avatar-ribbon-search-input"
+                    type="search"
+                    :placeholder="$t('home.avatarCarouselSearchPlaceholder')"
+                    @keydown.enter.prevent="applyAvatarCarouselSearch"
+                >
+                <button
+                    type="button"
+                    class="btn btn-primary btn-sm home-avatar-ribbon-search-submit"
+                    @click="applyAvatarCarouselSearch"
+                >
+                    {{ $t('home.avatarCarouselSearchFind') }}
+                </button>
+                <button
+                    v-if="avatarCarouselSearchQuery !== '' || avatarCarouselSearchAppliedQuery !== ''"
+                    type="button"
+                    class="btn btn-outline btn-sm home-avatar-ribbon-search-reset"
+                    @click="clearAvatarCarouselSearch"
+                >
+                    {{ $t('home.avatarCarouselSearchReset') }}
+                </button>
+            </div>
+            <p v-if="avatarCarouselSearchUsesSimilarResults" class="muted home-avatar-carousel-tip">
+                {{ $t('home.avatarCarouselSearchSimilar') }}
+            </p>
+            <p v-else-if="avatarCarouselSearchHasNoResults" class="muted home-avatar-carousel-tip">
+                {{ $t('home.avatarCarouselSearchNoResults') }}
+            </p>
+
+            <div
+                v-if="avatarCarouselUsers.length > 0"
+                class="home-avatar-carousel"
+                @mouseenter="pauseAvatarCarousel"
+                @mouseleave="resumeAvatarCarousel"
+                @focusin="pauseAvatarCarousel"
+                @focusout="resumeAvatarCarousel"
+            >
+                <template v-if="filteredAvatarCarouselUsers.length > 0">
+                    <div class="home-avatar-carousel-marquee" :class="{ 'is-static': !shouldLoopAvatarCarousel }">
+                        <div
+                            class="home-avatar-carousel-track"
+                            :class="{
+                                'is-paused': isAvatarCarouselPaused || !shouldLoopAvatarCarousel,
+                                'is-static': !shouldLoopAvatarCarousel,
+                            }"
+                            :style="avatarCarouselTrackStyle"
+                        >
+                            <router-link
+                                v-for="entry in avatarCarouselConveyorItems"
+                                :key="entry._avatarTrackKey"
+                                class="home-avatar-carousel-card"
+                                :to="localizedUserRoute(entry)"
+                            >
+                                <div class="home-avatar-carousel-avatar-ring">
+                                    <img
+                                        v-if="avatarUrl(entry)"
+                                        :src="avatarUrl(entry)"
+                                        :alt="displayName(entry)"
+                                        class="avatar home-avatar-carousel-image"
+                                        @error="onAvatarImageError"
+                                    >
+                                    <span v-else class="avatar home-avatar-carousel-placeholder">{{ initials(entry) }}</span>
+                                </div>
+                                <strong class="home-avatar-carousel-name">{{ displayName(entry) }}</strong>
+                                <small v-if="entry.nickname" class="home-avatar-carousel-nickname">@{{ entry.nickname }}</small>
+                            </router-link>
+                        </div>
+                    </div>
+                    <p class="muted home-avatar-carousel-tip">{{ $t('home.avatarCarouselTip') }}</p>
+                </template>
+                <p v-else class="muted home-avatar-carousel-tip">{{ $t('home.avatarCarouselSearchNoResults') }}</p>
+            </div>
+
+            <p v-else class="muted">{{ $t('home.avatarCarouselEmpty') }}</p>
+        </section>
+
         <section class="section-card" v-if="isVerifiedUser">
             <h2 class="section-title">{{ $t('home.carouselTitle') }}</h2>
             <p class="section-subtitle">{{ $t('home.carouselSubtitle') }}</p>
@@ -327,6 +416,7 @@
 import MediaLightbox from '../components/MediaLightbox.vue'
 import Post from '../components/Post.vue'
 import { applyImagePreviewFallback, resetImagePreviewFallback } from '../utils/mediaPreview'
+import { resolveAvatarCarouselSearch } from '../utils/avatarCarouselSearch.mjs'
 import enMessages from '../i18n/messages/en'
 import ruMessages from '../i18n/messages/ru'
 
@@ -374,6 +464,9 @@ export default {
             user: null,
             isAuthenticated: false,
             homeContent: defaultHomeContent('ru'),
+            avatarCarouselUsers: [],
+            avatarCarouselSearchQuery: '',
+            avatarCarouselSearchAppliedQuery: '',
             carouselItems: [],
             activeCarouselIndex: 0,
             discoverSort: 'popular',
@@ -389,6 +482,7 @@ export default {
             isSending: false,
             feedbackDeliveryState: 'idle',
             lastFeedbackMeta: null,
+            isAvatarCarouselPaused: false,
             isCarouselAutoplayPaused: false,
             isCarouselPostModalOpen: false,
             carouselModalPost: null,
@@ -400,6 +494,7 @@ export default {
             worldClockTick: Date.now(),
             worldClockTimerId: null,
             worldOverviewRefreshTimerId: null,
+            failedAvatarUrls: {},
         }
     },
 
@@ -410,6 +505,56 @@ export default {
 
         isEnglishLocale() {
             return this.resolveHomeContentLocale() === 'en'
+        },
+
+        avatarCarouselSearchLocale() {
+            return this.isEnglishLocale ? 'en-US' : 'ru-RU'
+        },
+
+        avatarCarouselSearchResult() {
+            return resolveAvatarCarouselSearch(
+                this.avatarCarouselUsers,
+                this.avatarCarouselSearchAppliedQuery,
+                this.avatarCarouselSearchLocale,
+            )
+        },
+
+        filteredAvatarCarouselUsers() {
+            return Array.isArray(this.avatarCarouselSearchResult?.items)
+                ? this.avatarCarouselSearchResult.items
+                : []
+        },
+
+        avatarCarouselSearchHasNoResults() {
+            return this.avatarCarouselSearchResult?.mode === 'none'
+        },
+
+        avatarCarouselSearchUsesSimilarResults() {
+            return this.avatarCarouselSearchResult?.mode === 'similar'
+        },
+
+        shouldLoopAvatarCarousel() {
+            return this.avatarCarouselSearchResult?.mode === 'all' && this.filteredAvatarCarouselUsers.length > 1
+        },
+
+        avatarCarouselConveyorItems() {
+            if (!Array.isArray(this.filteredAvatarCarouselUsers) || this.filteredAvatarCarouselUsers.length === 0) {
+                return []
+            }
+
+            const loops = this.shouldLoopAvatarCarousel ? [0, 1] : [0]
+            return loops.flatMap((loop) => this.filteredAvatarCarouselUsers.map((entry, index) => ({
+                ...entry,
+                _sourceIndex: index,
+                _avatarTrackKey: `avatar-carousel-track-${loop}-${entry.id ?? 'user'}-${index}`,
+            })))
+        },
+
+        avatarCarouselTrackStyle() {
+            const baseDuration = Math.max(14, Math.round(this.filteredAvatarCarouselUsers.length * 2.4))
+            return {
+                '--home-avatar-carousel-duration': `${baseDuration}s`,
+            }
         },
 
         carouselConveyorItems() {
@@ -604,6 +749,71 @@ export default {
             return this.$route?.params?.locale === 'en' ? 'en' : 'ru'
         },
 
+        localizedUserRoute(user) {
+            return {
+                name: 'user.show',
+                params: {
+                    id: user.id,
+                    locale: this.resolveHomeContentLocale(),
+                },
+            }
+        },
+
+        displayName(user) {
+            return user?.display_name || user?.name || this.$t('common.user')
+        },
+
+        initials(user) {
+            const source = this.displayName(user).trim()
+            return source ? source.slice(0, 1).toUpperCase() : 'U'
+        },
+
+        normalizeAvatarUrl(value) {
+            const raw = String(value || '').trim()
+            if (raw === '') {
+                return ''
+            }
+
+            if (typeof window === 'undefined') {
+                return raw
+            }
+
+            try {
+                return new URL(raw, window.location.origin).href
+            } catch (_error) {
+                return raw
+            }
+        },
+
+        onAvatarImageError(event) {
+            const target = event?.target
+            const sources = [
+                target?.getAttribute?.('src') || '',
+                target?.currentSrc || '',
+                target?.src || '',
+            ]
+
+            const next = { ...this.failedAvatarUrls }
+            for (const source of sources) {
+                const normalized = this.normalizeAvatarUrl(source)
+                if (normalized !== '') {
+                    next[normalized] = true
+                }
+            }
+
+            this.failedAvatarUrls = next
+        },
+
+        avatarUrl(user) {
+            const raw = String(user?.avatar_url || '').trim()
+            if (raw === '') {
+                return null
+            }
+
+            const normalized = this.normalizeAvatarUrl(raw)
+            return this.failedAvatarUrls[normalized] ? null : raw
+        },
+
         handlePreviewError(event, label = 'Preview unavailable') {
             applyImagePreviewFallback(event, label)
         },
@@ -621,10 +831,13 @@ export default {
 
             if (this.isVerifiedUser) {
                 await Promise.all([
+                    this.loadAvatarCarouselUsers(),
                     this.loadCarousel(),
                     this.loadDiscover(this.discoverSort),
                 ])
             } else {
+                this.avatarCarouselUsers = []
+                this.isAvatarCarouselPaused = false
                 this.isCarouselAutoplayPaused = false
             }
 
@@ -770,6 +983,69 @@ export default {
             }
         },
 
+        normalizeAvatarCarouselUsers(users) {
+            const entries = []
+
+            if (this.user?.id && !this.user?.is_admin) {
+                entries.push({
+                    ...this.user,
+                    is_followed: false,
+                })
+            }
+
+            if (Array.isArray(users)) {
+                entries.push(...users)
+            }
+
+            const seenIds = new Set()
+            const locale = this.isEnglishLocale ? 'en' : 'ru'
+
+            return entries
+                .filter((entry) => Number.isFinite(Number(entry?.id)))
+                .filter((entry) => !Boolean(entry?.is_admin))
+                .filter((entry) => {
+                    const normalizedId = Number(entry.id)
+                    if (seenIds.has(normalizedId)) {
+                        return false
+                    }
+
+                    seenIds.add(normalizedId)
+                    return true
+                })
+                .sort((first, second) => this.displayName(first).localeCompare(this.displayName(second), locale))
+        },
+
+        async loadAvatarCarouselUsers() {
+            const collectedUsers = []
+            let page = 1
+            let lastPage = 1
+
+            try {
+                do {
+                    const response = await axios.get('/api/users', {
+                        params: {
+                            per_page: 50,
+                            page,
+                        },
+                    })
+
+                    const chunk = Array.isArray(response.data?.data) ? response.data.data : []
+                    collectedUsers.push(...chunk)
+
+                    const reportedLastPage = Number(response.data?.meta?.last_page)
+                    lastPage = Number.isFinite(reportedLastPage) && reportedLastPage > 0
+                        ? reportedLastPage
+                        : page
+                    page += 1
+                } while (page <= lastPage)
+            } catch (_error) {
+                this.avatarCarouselUsers = this.normalizeAvatarCarouselUsers([])
+                return
+            }
+
+            this.avatarCarouselUsers = this.normalizeAvatarCarouselUsers(collectedUsers)
+        },
+
         async loadCarousel() {
             const response = await axios.get('/api/posts/carousel', { params: { limit: 40 } })
             this.carouselItems = response.data.data ?? []
@@ -843,6 +1119,23 @@ export default {
 
         resumeCarouselAutoplay() {
             this.isCarouselAutoplayPaused = false
+        },
+
+        pauseAvatarCarousel() {
+            this.isAvatarCarouselPaused = true
+        },
+
+        resumeAvatarCarousel() {
+            this.isAvatarCarouselPaused = false
+        },
+
+        clearAvatarCarouselSearch() {
+            this.avatarCarouselSearchQuery = ''
+            this.avatarCarouselSearchAppliedQuery = ''
+        },
+
+        applyAvatarCarouselSearch() {
+            this.avatarCarouselSearchAppliedQuery = this.avatarCarouselSearchQuery
         },
 
         buildCarouselModalPost(item) {

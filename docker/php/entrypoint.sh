@@ -3,6 +3,9 @@ set -e
 
 cd /var/www/html
 
+TARGET_ENV_FILE="${LARAVEL_ENV_FILE:-.env}"
+DEFAULT_DOCKER_ENV_FILE=".env.docker.example"
+
 run_with_retry() {
     max_attempts="$1"
     delay_seconds="$2"
@@ -67,11 +70,11 @@ try {
 PHP
 }
 
-if [ ! -f .env ]; then
-    if [ -f .env.docker.example ]; then
-        cp .env.docker.example .env
+if [ ! -f "${TARGET_ENV_FILE}" ]; then
+    if [ -f "${DEFAULT_DOCKER_ENV_FILE}" ]; then
+        cp "${DEFAULT_DOCKER_ENV_FILE}" "${TARGET_ENV_FILE}"
     else
-        cp .env.example .env
+        cp .env.example "${TARGET_ENV_FILE}"
     fi
 fi
 
@@ -83,7 +86,7 @@ if [ -f composer.lock ] && [ composer.lock -nt vendor/autoload.php ]; then
     run_with_retry 5 5 composer install --no-interaction --prefer-dist --optimize-autoloader
 fi
 
-if ! grep -Eq '^APP_KEY=base64:' .env; then
+if ! grep -Eq '^APP_KEY=base64:' "${TARGET_ENV_FILE}"; then
     php artisan key:generate --force --no-interaction
 fi
 

@@ -132,7 +132,7 @@ class DemoSocialContentSeeder extends Seeder
             return;
         }
 
-        $asset = $this->resolvePlaceholderAsset('portrait', 6000 + (($index - 1) % 12) + 1, 320, 320, 'avatars');
+        $asset = $this->resolveClothedAvatarAsset($index);
 
         if ($avatarPath === $asset['path']) {
             return;
@@ -329,7 +329,7 @@ class DemoSocialContentSeeder extends Seeder
 
                 $createdAt = now()->subDays(($userIndex + 1) + $offset);
 
-                DB::table('subscriber_followings')->updateOrInsert(
+        DB::table('subscriber_followings')->updateOrInsert(
                     [
                         'subscriber_id' => $subscriber->id,
                         'following_id' => $following->id,
@@ -341,6 +341,34 @@ class DemoSocialContentSeeder extends Seeder
                 );
             }
         }
+    }
+
+    /**
+     * @return array{path: string, mime: string, size: int}
+     */
+    protected function resolveClothedAvatarAsset(int $index): array
+    {
+        $normalizedIndex = max(1, $index);
+        $cacheKey = 'avatar-svg:' . $normalizedIndex;
+
+        if (isset($this->assetCache[$cacheKey])) {
+            return $this->assetCache[$cacheKey];
+        }
+
+        $path = sprintf('seed/avatars/clothed-avatar-%02d.svg', (($normalizedIndex - 1) % 24) + 1);
+        $svg = $this->buildClothedAvatarSvg($normalizedIndex);
+
+        Storage::disk('public')->put($path, $svg);
+
+        $asset = [
+            'path' => $path,
+            'mime' => 'image/svg+xml',
+            'size' => strlen($svg),
+        ];
+
+        $this->assetCache[$cacheKey] = $asset;
+
+        return $asset;
     }
 
     /**
@@ -462,6 +490,63 @@ class DemoSocialContentSeeder extends Seeder
   <text x="50%" y="50%" dominant-baseline="middle" text-anchor="middle" fill="#1f365c" font-family="Arial, sans-serif" font-size="36" font-weight="700">
     {$safeLabel}
   </text>
+</svg>
+SVG;
+    }
+
+    protected function buildClothedAvatarSvg(int $index): string
+    {
+        $backgrounds = [
+            ['#d9edff', '#fce7f3'],
+            ['#dff7ec', '#dbeafe'],
+            ['#fef3c7', '#fde2e4'],
+            ['#e0f2fe', '#ede9fe'],
+            ['#dcfce7', '#fef9c3'],
+            ['#ffe4e6', '#dbeafe'],
+        ];
+        $hairColors = ['#1f2937', '#4b5563', '#7c2d12', '#854d0e', '#0f172a', '#5b3a29'];
+        $skinColors = ['#f7d7c4', '#edc4a3', '#d9a77c', '#f2cbb2', '#c98f62', '#8f5b3a'];
+        $shirtColors = ['#2563eb', '#0f766e', '#9333ea', '#dc2626', '#ea580c', '#1d4ed8'];
+        $jacketColors = ['#ffffff', '#e2e8f0', '#dbeafe', '#ecfeff', '#f8fafc', '#ede9fe'];
+
+        $background = $backgrounds[($index - 1) % count($backgrounds)];
+        $hairColor = $hairColors[($index - 1) % count($hairColors)];
+        $skinColor = $skinColors[($index - 1) % count($skinColors)];
+        $shirtColor = $shirtColors[($index - 1) % count($shirtColors)];
+        $jacketColor = $jacketColors[($index - 1) % count($jacketColors)];
+        $accentColor = $shirtColors[$index % count($shirtColors)];
+        $accessoryColor = $hairColors[($index + 2) % count($hairColors)];
+
+        return <<<SVG
+<svg xmlns="http://www.w3.org/2000/svg" width="320" height="320" viewBox="0 0 320 320" role="img" aria-label="Seed avatar {$index}">
+  <defs>
+    <linearGradient id="bg{$index}" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="{$background[0]}"/>
+      <stop offset="100%" stop-color="{$background[1]}"/>
+    </linearGradient>
+    <linearGradient id="shirt{$index}" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="{$shirtColor}"/>
+      <stop offset="100%" stop-color="{$accentColor}"/>
+    </linearGradient>
+  </defs>
+  <rect width="320" height="320" rx="48" fill="url(#bg{$index})"/>
+  <circle cx="160" cy="118" r="56" fill="{$skinColor}"/>
+  <path d="M92 104c8-43 45-70 86-70 41 0 75 23 88 68-11-10-24-19-43-22-12 25-37 40-66 40-24 0-46-8-64-16-1 8-1 17-1 25 0 16 5 29 14 43-19-10-26-36-14-68Z" fill="{$hairColor}"/>
+  <path d="M124 110c0-8 6-14 14-14h44c8 0 14 6 14 14v5c0 8-6 14-14 14h-44c-8 0-14-6-14-14Z" fill="rgba(255,255,255,0.14)"/>
+  <circle cx="142" cy="118" r="5" fill="#1f2937"/>
+  <circle cx="178" cy="118" r="5" fill="#1f2937"/>
+  <path d="M145 143c8 7 22 7 30 0" fill="none" stroke="#8a4b35" stroke-width="5" stroke-linecap="round"/>
+  <path d="M127 167c7 11 17 19 33 19 16 0 26-8 33-19v29h-66Z" fill="{$skinColor}"/>
+  <path d="M76 278c9-58 46-94 84-94 38 0 75 36 84 94" fill="url(#shirt{$index})"/>
+  <path d="M108 215c12 24 31 37 52 37s40-13 52-37l18 63H90Z" fill="{$jacketColor}" fill-opacity="0.92"/>
+  <path d="M139 190h42l10 21-31 28-31-28Z" fill="#ffffff" fill-opacity="0.9"/>
+  <path d="M152 211h16l8 67h-32Z" fill="{$accessoryColor}" fill-opacity="0.95"/>
+  <circle cx="101" cy="212" r="12" fill="{$skinColor}"/>
+  <circle cx="219" cy="212" r="12" fill="{$skinColor}"/>
+  <path d="M87 223c6-17 17-31 34-41l15 18c-18 7-31 19-42 35Z" fill="{$jacketColor}" fill-opacity="0.96"/>
+  <path d="M233 223c-6-17-17-31-34-41l-15 18c18 7 31 19 42 35Z" fill="{$jacketColor}" fill-opacity="0.96"/>
+  <path d="M120 69c14-16 31-24 49-24 20 0 38 10 53 27-12-3-23-4-33-4-24 0-47 8-69 24 0-8 0-15 0-23Z" fill="{$hairColor}" fill-opacity="0.9"/>
+  <circle cx="252" cy="70" r="12" fill="#ffffff" fill-opacity="0.42"/>
 </svg>
 SVG;
     }

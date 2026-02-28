@@ -3,12 +3,14 @@ import assert from 'node:assert/strict'
 
 import {
     buildPersistedIptvState,
+    isPersistedIptvStateOwnedBy,
     IPTV_RECENT_LIMIT,
     parsePersistedIptvState,
 } from '../../resources/js/utils/iptvSession.mjs'
 
 test('buildPersistedIptvState preserves playlist context and current channel', () => {
     const payload = buildPersistedIptvState({
+        ownerScope: 'user:42',
         viewMode: 'favorites',
         playlistUrl: 'https://iptv.example.com/playlist.m3u8',
         currentPlaylistUrl: 'https://iptv.example.com/playlist.m3u8',
@@ -47,6 +49,7 @@ test('buildPersistedIptvState preserves playlist context and current channel', (
         ],
     })
 
+    assert.equal(payload.ownerScope, 'user:42')
     assert.equal(payload.viewMode, 'favorites')
     assert.equal(payload.playlistUrl, 'https://iptv.example.com/playlist.m3u8')
     assert.equal(payload.currentPlaylistUrl, 'https://iptv.example.com/playlist.m3u8')
@@ -114,6 +117,7 @@ test('parsePersistedIptvState rejects broken payloads and sanitizes valid JSON',
     assert.equal(parsePersistedIptvState('{broken json}'), null)
 
     const payload = parsePersistedIptvState(JSON.stringify({
+        ownerScope: ' user:99 ',
         viewMode: 'recent',
         currentChannelId: 'channel-9',
         channelsSnapshot: [
@@ -126,6 +130,7 @@ test('parsePersistedIptvState rejects broken payloads and sanitizes valid JSON',
         ],
     }))
 
+    assert.equal(payload.ownerScope, 'user:99')
     assert.equal(payload.viewMode, 'recent')
     assert.equal(payload.currentChannelId, 'channel-9')
     assert.equal(payload.channelsSnapshot.length, 1)
@@ -146,4 +151,16 @@ test('buildPersistedIptvState trims snapshot when payload becomes too large', ()
 
     assert.ok(payload.channelsSnapshot.length < oversizedChannels.length)
     assert.ok(payload.channelsSnapshot.length > 0)
+})
+
+test('isPersistedIptvStateOwnedBy matches only the same user scope', () => {
+    const payload = buildPersistedIptvState({
+        ownerScope: 'user:77',
+        currentChannelId: 'channel-4',
+    })
+
+    assert.equal(isPersistedIptvStateOwnedBy(payload, 'user:77'), true)
+    assert.equal(isPersistedIptvStateOwnedBy(payload, ' user:77 '), true)
+    assert.equal(isPersistedIptvStateOwnedBy(payload, 'user:78'), false)
+    assert.equal(isPersistedIptvStateOwnedBy(payload, ''), false)
 })

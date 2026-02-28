@@ -272,6 +272,7 @@ import Post from '../../components/Post.vue'
 import Stat from '../../components/Stat.vue'
 import StickerPicker from '../../components/stickers/StickerPicker.vue'
 import { applyImagePreviewFallback, resetImagePreviewFallback } from '../../utils/mediaPreview'
+import { ANALYTICS_EVENTS, ANALYTICS_FEATURES, reportAnalyticsEvent } from '../../utils/analyticsTracker.mjs'
 import {
     replaceMarkedEmojiWithStickerTokens,
     replaceStickerTokensWithMarkedEmoji,
@@ -703,6 +704,26 @@ export default {
             return [this.$t('personal.uploadServerRejected', {name: file?.name || this.$t('chats.file')})]
         },
 
+        async reportPostMediaUploadFailure(file, reason, source = 'client') {
+            const fileName = String(file?.name || '').trim()
+            const extension = this.extractFileExtension(fileName)
+
+            await reportAnalyticsEvent({
+                feature: ANALYTICS_FEATURES.MEDIA,
+                event_name: ANALYTICS_EVENTS.MEDIA_UPLOAD_FAILED,
+                entity_type: 'post_media_upload',
+                entity_key: fileName || null,
+                context: {
+                    source,
+                    reason: String(reason || '').trim() || 'unknown',
+                    file_name: fileName || this.$t('chats.file'),
+                    extension,
+                    mime_type: String(file?.type || '').trim(),
+                    size_bytes: Number(file?.size || 0),
+                },
+            })
+        },
+
         async saveProfile(removeAvatar = false) {
             this.profileErrors = {}
             this.isSavingProfile = true
@@ -814,6 +835,7 @@ export default {
                 const localValidationError = this.validatePostMediaFile(file)
                 if (localValidationError) {
                     uploadErrors.push(localValidationError)
+                    await this.reportPostMediaUploadFailure(file, localValidationError, 'client_validation')
                     if (queueKey) {
                         this.updateUploadQueueItem(queueKey, {
                             status: 'failed',
@@ -871,6 +893,7 @@ export default {
                     URL.revokeObjectURL(localPreviewUrl)
                     const resolvedErrors = this.resolveUploadErrorMessages(error, file)
                     uploadErrors.push(...resolvedErrors)
+                    await this.reportPostMediaUploadFailure(file, resolvedErrors[0] ?? this.$t('personal.uploadError'), 'server')
 
                     if (queueKey) {
                         this.updateUploadQueueItem(queueKey, {

@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use App\Models\AnalyticsEvent;
 use Carbon\CarbonImmutable;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection;
@@ -25,6 +26,7 @@ class AdminDashboardService
         $end = $period['end'];
         $startDate = $start->toDateString();
         $endDate = $end->toDateString();
+        $referenceEnd = $this->resolveReferenceMoment($end);
 
         $subscriptionsByMonth = $this->monthlyCounts('subscriber_followings', 'created_at', $start, $end);
         $registrationsByMonth = $this->monthlyCounts('users', 'created_at', $start, $end);
@@ -134,7 +136,7 @@ class AdminDashboardService
             ->values()
             ->first()['key'] ?? null;
 
-        $cutoffDateTime = now()->subDays(30);
+        $cutoffDateTime = $referenceEnd->subDays(30)->startOfDay();
         $cutoffDate = $cutoffDateTime->toDateString();
 
         $socialUserIds = collect();
@@ -182,6 +184,14 @@ class AdminDashboardService
             ->merge($iptvUserIds)
             ->unique()
             ->count();
+
+        $retention = $this->buildRetentionAnalytics($start, $end, $referenceEnd);
+        $content = $this->buildContentAnalytics($start, $end, $startDate, $endDate);
+        $chats = $this->buildChatAnalytics($start, $end);
+        $media = $this->buildMediaAnalytics($start, $end);
+        $radio = $this->buildRadioAnalytics($start, $end, $radioUserIds);
+        $iptv = $this->buildIptvAnalytics($start, $end, $iptvUserIds);
+        $errorsAndModeration = $this->buildErrorsAndModeration($start, $end);
 
         return [
             'selected_year' => $selectedYear,
@@ -237,7 +247,21 @@ class AdminDashboardService
                 'activity_peak_month' => $activityPeak['month'],
                 'activity_peak_value' => $activityPeak['value'],
             ],
+            'retention' => $retention,
+            'content' => $content,
+            'chats' => $chats,
+            'media' => $media,
+            'radio' => $radio,
+            'iptv' => $iptv,
+            'errors_and_moderation' => $errorsAndModeration,
         ];
+    }
+
+    protected function resolveReferenceMoment(CarbonImmutable $end): CarbonImmutable
+    {
+        $now = CarbonImmutable::instance(now());
+
+        return $end->greaterThan($now) ? $now : $end;
     }
 
     protected function availableYears(int $currentYear): array
@@ -468,6 +492,18 @@ class AdminDashboardService
         };
     }
 
+    protected function dateKeyExpression(string $column): string
+    {
+        $driver = DB::connection()->getDriverName();
+
+        return match ($driver) {
+            'sqlite' => "strftime('%Y-%m-%d', {$column})",
+            'pgsql' => "to_char({$column}, 'YYYY-MM-DD')",
+            'sqlsrv' => "FORMAT({$column}, 'yyyy-MM-dd')",
+            default => "DATE_FORMAT({$column}, '%Y-%m-%d')",
+        };
+    }
+
     protected function extractMonth(string $monthKey): ?int
     {
         if (!preg_match('/-(\d{2})$/', $monthKey, $matches)) {
@@ -586,6 +622,38 @@ class AdminDashboardService
             ->values();
     }
 
+    protected function collectDistinctUserIdsWithinRange(array $definitions): Collection
+    {
+        $ids = collect();
+
+        foreach ($definitions as $definition) {
+            $table = (string) ($definition['table'] ?? '');
+            $column = (string) ($definition['column'] ?? '');
+            $start = $definition['start'] ?? null;
+            $end = $definition['end'] ?? null;
+
+            if ($table === '' || $column === '' || $start === null || $end === null) {
+                continue;
+            }
+
+            if (!Schema::hasTable($table) || !Schema::hasColumn($table, $column) || !Schema::hasColumn($table, 'user_id')) {
+                continue;
+            }
+
+            $ids = $ids->merge(
+                DB::table($table)
+                    ->whereBetween($column, [$start, $end])
+                    ->pluck('user_id')
+            );
+        }
+
+        return $ids
+            ->filter(fn ($id): bool => is_numeric($id) && (int) $id > 0)
+            ->map(fn ($id): int => (int) $id)
+            ->unique()
+            ->values();
+    }
+
     protected function trackedDistinctUsers(string $feature, string $cutoffDate): Collection
     {
         if (!Schema::hasTable('user_activity_daily_stats')) {
@@ -601,6 +669,708 @@ class AdminDashboardService
             ->map(fn ($id): int => (int) $id)
             ->unique()
             ->values();
+    }
+
+    protected function trackedDistinctUsersBetween(string $feature, string $startDate, string $endDate): Collection
+    {
+        if (!Schema::hasTable('user_activity_daily_stats')) {
+            return collect();
+        }
+
+        return DB::table('user_activity_daily_stats')
+            ->where('feature', $feature)
+            ->whereBetween('activity_date', [$startDate, $endDate])
+            ->where('seconds_total', '>', 0)
+            ->pluck('user_id')
+            ->filter(fn ($id): bool => is_numeric($id) && (int) $id > 0)
+            ->map(fn ($id): int => (int) $id)
+            ->unique()
+            ->values();
+    }
+
+    protected function activeUserIdsBetween(CarbonImmutable $start, CarbonImmutable $end): Collection
+    {
+        $startDate = $start->toDateString();
+        $endDate = $end->toDateString();
+
+        if ($this->activityTrackingEnabled()) {
+            $trackedIds = DB::table('user_activity_daily_stats')
+                ->whereBetween('activity_date', [$startDate, $endDate])
+                ->where('seconds_total', '>', 0)
+                ->pluck('user_id')
+                ->filter(fn ($id): bool => is_numeric($id) && (int) $id > 0)
+                ->map(fn ($id): int => (int) $id)
+                ->unique()
+                ->values();
+
+            if ($trackedIds->isNotEmpty()) {
+                return $trackedIds;
+            }
+        }
+
+        return $this->collectDistinctUserIdsWithinRange([
+            ['table' => 'posts', 'column' => 'created_at', 'start' => $start, 'end' => $end],
+            ['table' => 'comments', 'column' => 'created_at', 'start' => $start, 'end' => $end],
+            ['table' => 'liked_posts', 'column' => 'created_at', 'start' => $start, 'end' => $end],
+            ['table' => 'post_views', 'column' => 'viewed_on', 'start' => $startDate, 'end' => $endDate],
+            ['table' => 'conversation_messages', 'column' => 'created_at', 'start' => $start, 'end' => $end],
+            ['table' => 'radio_favorites', 'column' => 'created_at', 'start' => $start, 'end' => $end],
+            ['table' => 'iptv_saved_channels', 'column' => 'created_at', 'start' => $start, 'end' => $end],
+            ['table' => 'iptv_saved_playlists', 'column' => 'created_at', 'start' => $start, 'end' => $end],
+        ]);
+    }
+
+    protected function buildRetentionAnalytics(CarbonImmutable $start, CarbonImmutable $end, CarbonImmutable $referenceEnd): array
+    {
+        $dauIds = $this->activeUserIdsBetween($referenceEnd->startOfDay(), $referenceEnd->endOfDay());
+        $wauIds = $this->activeUserIdsBetween($referenceEnd->subDays(6)->startOfDay(), $referenceEnd->endOfDay());
+        $mauStart = $referenceEnd->subDays(29)->startOfDay();
+        $mauIds = $this->activeUserIdsBetween($mauStart, $referenceEnd->endOfDay());
+
+        $newActiveUsers30d = DB::table('users')
+            ->whereIn('id', $mauIds)
+            ->whereBetween('created_at', [$mauStart, $referenceEnd->endOfDay()])
+            ->count();
+        $returningUsers30d = $mauIds->count() - (int) $newActiveUsers30d;
+
+        return [
+            'dau' => $dauIds->count(),
+            'wau' => $wauIds->count(),
+            'mau' => $mauIds->count(),
+            'stickiness_percent' => $mauIds->count() > 0
+                ? round(($dauIds->count() / max($mauIds->count(), 1)) * 100, 1)
+                : 0.0,
+            'new_active_users_30d' => (int) $newActiveUsers30d,
+            'returning_users_30d' => max(0, (int) $returningUsers30d),
+            'cohorts' => $this->buildRetentionCohorts($start, $end, $referenceEnd),
+        ];
+    }
+
+    protected function buildRetentionCohorts(CarbonImmutable $start, CarbonImmutable $end, CarbonImmutable $referenceEnd): array
+    {
+        $users = DB::table('users')
+            ->select(['id', 'created_at'])
+            ->whereBetween('created_at', [$start, $end])
+            ->orderBy('created_at')
+            ->get();
+
+        if ($users->isEmpty()) {
+            return [];
+        }
+
+        $activityDatesByUser = $this->collectUserActivityDateMap(
+            $users->pluck('id')->map(fn ($id): int => (int) $id)->all(),
+            $start->toDateString(),
+            $referenceEnd->addDays(30)->toDateString()
+        );
+
+        $cohorts = [];
+        foreach ($users as $user) {
+            $registeredAt = CarbonImmutable::parse((string) $user->created_at);
+            $month = (int) $registeredAt->month;
+            $bucket = $cohorts[$month] ?? [
+                'month' => $month,
+                'new_users' => 0,
+                'retained_users' => 0,
+                'partial' => false,
+            ];
+
+            $bucket['new_users']++;
+
+            $windowStart = $registeredAt->addDay()->startOfDay();
+            $fullWindowEnd = $registeredAt->addDays(30)->endOfDay();
+            $effectiveWindowEnd = $fullWindowEnd->greaterThan($referenceEnd->endOfDay())
+                ? $referenceEnd->endOfDay()
+                : $fullWindowEnd;
+
+            if ($effectiveWindowEnd->lessThan($fullWindowEnd)) {
+                $bucket['partial'] = true;
+            }
+
+            $activityDates = $activityDatesByUser[(int) $user->id] ?? [];
+            foreach ($activityDates as $activityDate) {
+                if ($activityDate < $windowStart->toDateString() || $activityDate > $effectiveWindowEnd->toDateString()) {
+                    continue;
+                }
+
+                $bucket['retained_users']++;
+                break;
+            }
+
+            $cohorts[$month] = $bucket;
+        }
+
+        ksort($cohorts);
+
+        return collect($cohorts)
+            ->map(function (array $item): array {
+                $newUsers = (int) ($item['new_users'] ?? 0);
+                $retainedUsers = min($newUsers, (int) ($item['retained_users'] ?? 0));
+
+                return [
+                    'month' => (int) ($item['month'] ?? 1),
+                    'new_users' => $newUsers,
+                    'retained_users' => $retainedUsers,
+                    'retention_percent' => $newUsers > 0
+                        ? round(($retainedUsers / $newUsers) * 100, 1)
+                        : 0.0,
+                    'partial' => (bool) ($item['partial'] ?? false),
+                ];
+            })
+            ->values()
+            ->all();
+    }
+
+    protected function collectUserActivityDateMap(array $userIds, string $startDate, string $endDate): array
+    {
+        $normalizedUserIds = collect($userIds)
+            ->filter(fn ($id): bool => is_numeric($id) && (int) $id > 0)
+            ->map(fn ($id): int => (int) $id)
+            ->unique()
+            ->values();
+
+        if ($normalizedUserIds->isEmpty()) {
+            return [];
+        }
+
+        $map = [];
+
+        if ($this->activityTrackingEnabled()) {
+            $rows = DB::table('user_activity_daily_stats')
+                ->select(['user_id', 'activity_date'])
+                ->whereIn('user_id', $normalizedUserIds)
+                ->whereBetween('activity_date', [$startDate, $endDate])
+                ->where('seconds_total', '>', 0)
+                ->get();
+
+            foreach ($rows as $row) {
+                $userId = (int) ($row->user_id ?? 0);
+                $date = (string) ($row->activity_date ?? '');
+                if ($userId <= 0 || $date === '') {
+                    continue;
+                }
+
+                $map[$userId][$date] = true;
+            }
+
+            if ($map !== []) {
+                return array_map(fn (array $dates): array => array_keys($dates), $map);
+            }
+        }
+
+        foreach ([
+            ['table' => 'posts', 'column' => 'created_at'],
+            ['table' => 'comments', 'column' => 'created_at'],
+            ['table' => 'liked_posts', 'column' => 'created_at'],
+            ['table' => 'conversation_messages', 'column' => 'created_at'],
+            ['table' => 'radio_favorites', 'column' => 'created_at'],
+            ['table' => 'iptv_saved_channels', 'column' => 'created_at'],
+            ['table' => 'iptv_saved_playlists', 'column' => 'created_at'],
+            ['table' => 'post_views', 'column' => 'viewed_on'],
+        ] as $definition) {
+            $table = $definition['table'];
+            $column = $definition['column'];
+
+            if (!Schema::hasTable($table) || !Schema::hasColumn($table, 'user_id') || !Schema::hasColumn($table, $column)) {
+                continue;
+            }
+
+            $expression = $this->dateKeyExpression($column);
+
+            $rows = DB::table($table)
+                ->selectRaw("user_id, {$expression} as activity_day")
+                ->whereIn('user_id', $normalizedUserIds)
+                ->whereBetween($column, [$startDate, $endDate])
+                ->groupBy('user_id', DB::raw($expression))
+                ->get();
+
+            foreach ($rows as $row) {
+                $userId = (int) ($row->user_id ?? 0);
+                $date = (string) ($row->activity_day ?? '');
+                if ($userId <= 0 || $date === '') {
+                    continue;
+                }
+
+                $map[$userId][$date] = true;
+            }
+        }
+
+        return array_map(fn (array $dates): array => array_keys($dates), $map);
+    }
+
+    protected function buildContentAnalytics(CarbonImmutable $start, CarbonImmutable $end, string $startDate, string $endDate): array
+    {
+        $postsTotal = (int) DB::table('posts')
+            ->whereBetween('created_at', [$start, $end])
+            ->count();
+        $publicPosts = (int) DB::table('posts')
+            ->whereBetween('created_at', [$start, $end])
+            ->where('is_public', true)
+            ->count();
+        $carouselPosts = (int) DB::table('posts')
+            ->whereBetween('created_at', [$start, $end])
+            ->where('show_in_carousel', true)
+            ->count();
+        $likesTotal = (int) DB::table('liked_posts')
+            ->whereBetween('created_at', [$start, $end])
+            ->count();
+        $commentsTotal = (int) DB::table('comments')
+            ->whereBetween('created_at', [$start, $end])
+            ->count();
+        $viewsTotal = (int) DB::table('post_views')
+            ->whereBetween('viewed_on', [$startDate, $endDate])
+            ->count();
+        $repostsTotal = (int) DB::table('posts')
+            ->whereNotNull('reposted_id')
+            ->whereBetween('created_at', [$start, $end])
+            ->count();
+        $engagementTotal = $likesTotal + $commentsTotal + $repostsTotal;
+
+        $likesSub = DB::table('liked_posts')
+            ->selectRaw('post_id, COUNT(*) as likes_count')
+            ->whereBetween('created_at', [$start, $end])
+            ->groupBy('post_id');
+        $commentsSub = DB::table('comments')
+            ->selectRaw('post_id, COUNT(*) as comments_count')
+            ->whereBetween('created_at', [$start, $end])
+            ->groupBy('post_id');
+        $viewsSub = DB::table('post_views')
+            ->selectRaw('post_id, COUNT(*) as views_count')
+            ->whereBetween('viewed_on', [$startDate, $endDate])
+            ->groupBy('post_id');
+        $repostsSub = DB::table('posts')
+            ->selectRaw('reposted_id as post_id, COUNT(*) as reposts_count')
+            ->whereNotNull('reposted_id')
+            ->whereBetween('created_at', [$start, $end])
+            ->groupBy('reposted_id');
+
+        $topPosts = DB::table('posts')
+            ->join('users', 'users.id', '=', 'posts.user_id')
+            ->leftJoinSub($likesSub, 'likes_stats', fn ($join) => $join->on('likes_stats.post_id', '=', 'posts.id'))
+            ->leftJoinSub($commentsSub, 'comments_stats', fn ($join) => $join->on('comments_stats.post_id', '=', 'posts.id'))
+            ->leftJoinSub($viewsSub, 'views_stats', fn ($join) => $join->on('views_stats.post_id', '=', 'posts.id'))
+            ->leftJoinSub($repostsSub, 'reposts_stats', fn ($join) => $join->on('reposts_stats.post_id', '=', 'posts.id'))
+            ->whereBetween('posts.created_at', [$start, $end])
+            ->selectRaw('
+                posts.id,
+                posts.title,
+                posts.is_public,
+                posts.show_in_carousel,
+                users.name as author_name,
+                users.nickname as author_nickname,
+                COALESCE(views_stats.views_count, 0) as views_count,
+                COALESCE(likes_stats.likes_count, 0) as likes_count,
+                COALESCE(comments_stats.comments_count, 0) as comments_count,
+                COALESCE(reposts_stats.reposts_count, 0) as reposts_count,
+                (COALESCE(likes_stats.likes_count, 0) + COALESCE(comments_stats.comments_count, 0) + COALESCE(reposts_stats.reposts_count, 0)) as engagement_score
+            ')
+            ->orderByDesc('engagement_score')
+            ->orderByDesc('views_count')
+            ->orderByDesc('posts.id')
+            ->limit(5)
+            ->get()
+            ->map(fn ($row): array => [
+                'id' => (int) $row->id,
+                'title' => (string) ($row->title ?? ''),
+                'author_name' => (string) ($row->author_name ?? ''),
+                'author_nickname' => (string) ($row->author_nickname ?? ''),
+                'is_public' => (bool) ($row->is_public ?? false),
+                'show_in_carousel' => (bool) ($row->show_in_carousel ?? false),
+                'views_count' => (int) ($row->views_count ?? 0),
+                'likes_count' => (int) ($row->likes_count ?? 0),
+                'comments_count' => (int) ($row->comments_count ?? 0),
+                'reposts_count' => (int) ($row->reposts_count ?? 0),
+                'engagement_score' => (int) ($row->engagement_score ?? 0),
+            ])
+            ->all();
+
+        $topAuthors = DB::table('posts')
+            ->join('users', 'users.id', '=', 'posts.user_id')
+            ->leftJoinSub($likesSub, 'likes_stats', fn ($join) => $join->on('likes_stats.post_id', '=', 'posts.id'))
+            ->leftJoinSub($commentsSub, 'comments_stats', fn ($join) => $join->on('comments_stats.post_id', '=', 'posts.id'))
+            ->leftJoinSub($viewsSub, 'views_stats', fn ($join) => $join->on('views_stats.post_id', '=', 'posts.id'))
+            ->leftJoinSub($repostsSub, 'reposts_stats', fn ($join) => $join->on('reposts_stats.post_id', '=', 'posts.id'))
+            ->whereBetween('posts.created_at', [$start, $end])
+            ->groupBy('posts.user_id', 'users.name', 'users.nickname')
+            ->selectRaw('
+                posts.user_id,
+                users.name,
+                users.nickname,
+                COUNT(posts.id) as posts_count,
+                SUM(COALESCE(views_stats.views_count, 0)) as views_count,
+                SUM(COALESCE(likes_stats.likes_count, 0) + COALESCE(comments_stats.comments_count, 0) + COALESCE(reposts_stats.reposts_count, 0)) as engagement_total
+            ')
+            ->orderByDesc('engagement_total')
+            ->orderByDesc('views_count')
+            ->orderByDesc('posts_count')
+            ->limit(5)
+            ->get()
+            ->map(function ($row): array {
+                $postsCount = (int) ($row->posts_count ?? 0);
+                $engagementTotalByAuthor = (int) ($row->engagement_total ?? 0);
+
+                return [
+                    'user_id' => (int) $row->user_id,
+                    'name' => (string) ($row->name ?? ''),
+                    'nickname' => (string) ($row->nickname ?? ''),
+                    'posts_count' => $postsCount,
+                    'views_count' => (int) ($row->views_count ?? 0),
+                    'engagement_total' => $engagementTotalByAuthor,
+                    'engagement_per_post' => $postsCount > 0
+                        ? $this->normalizeMetric($engagementTotalByAuthor / $postsCount)
+                        : 0,
+                ];
+            })
+            ->all();
+
+        return [
+            'posts_total' => $postsTotal,
+            'public_posts' => $publicPosts,
+            'private_posts' => max(0, $postsTotal - $publicPosts),
+            'carousel_posts' => $carouselPosts,
+            'engagement_total' => $engagementTotal,
+            'views_total' => $viewsTotal,
+            'likes_total' => $likesTotal,
+            'comments_total' => $commentsTotal,
+            'reposts_total' => $repostsTotal,
+            'engagement_per_post' => $postsTotal > 0
+                ? $this->normalizeMetric($engagementTotal / $postsTotal)
+                : 0,
+            'avg_views_per_post' => $postsTotal > 0
+                ? $this->normalizeMetric($viewsTotal / $postsTotal)
+                : 0,
+            'view_to_engagement_rate_percent' => $viewsTotal > 0
+                ? round(($engagementTotal / $viewsTotal) * 100, 1)
+                : 0.0,
+            'top_posts' => $topPosts,
+            'top_authors' => $topAuthors,
+        ];
+    }
+
+    protected function buildChatAnalytics(CarbonImmutable $start, CarbonImmutable $end): array
+    {
+        $messagesTotal = (int) DB::table('conversation_messages')
+            ->whereBetween('created_at', [$start, $end])
+            ->count();
+        $activeChatters = (int) DB::table('conversation_messages')
+            ->whereBetween('created_at', [$start, $end])
+            ->distinct()
+            ->count('user_id');
+
+        $attachmentsBreakdown = collect(
+            DB::table('conversation_message_attachments')
+                ->selectRaw('type, COUNT(*) as aggregate')
+                ->whereBetween('created_at', [$start, $end])
+                ->groupBy('type')
+                ->get()
+        )
+            ->map(fn ($row): array => [
+                'type' => (string) ($row->type ?? 'file'),
+                'value' => (int) ($row->aggregate ?? 0),
+            ])
+            ->values()
+            ->all();
+
+        $replySamples = [];
+        $messages = DB::table('conversation_messages')
+            ->join('conversations', 'conversations.id', '=', 'conversation_messages.conversation_id')
+            ->where('conversations.type', 'direct')
+            ->whereBetween('conversation_messages.created_at', [$start, $end])
+            ->orderBy('conversation_messages.conversation_id')
+            ->orderBy('conversation_messages.created_at')
+            ->get([
+                'conversation_messages.conversation_id',
+                'conversation_messages.user_id',
+                'conversation_messages.created_at',
+            ]);
+
+        $lastMessageByConversation = [];
+        foreach ($messages as $message) {
+            $conversationId = (int) ($message->conversation_id ?? 0);
+            $userId = (int) ($message->user_id ?? 0);
+            $createdAt = CarbonImmutable::parse((string) $message->created_at);
+            $previous = $lastMessageByConversation[$conversationId] ?? null;
+
+            if ($previous && $previous['user_id'] !== $userId) {
+                $diffMinutes = $previous['created_at']->diffInRealMinutes($createdAt);
+                if ($diffMinutes >= 0 && $diffMinutes <= 10080) {
+                    $replySamples[] = $diffMinutes;
+                }
+            }
+
+            $lastMessageByConversation[$conversationId] = [
+                'user_id' => $userId,
+                'created_at' => $createdAt,
+            ];
+        }
+
+        sort($replySamples);
+        $replySamplesCount = count($replySamples);
+        $medianReplyMinutes = 0;
+        if ($replySamplesCount > 0) {
+            $middle = (int) floor($replySamplesCount / 2);
+            $medianReplyMinutes = $replySamplesCount % 2 === 0
+                ? round((($replySamples[$middle - 1] ?? 0) + ($replySamples[$middle] ?? 0)) / 2, 1)
+                : round((float) ($replySamples[$middle] ?? 0), 1);
+        }
+
+        return [
+            'messages_total' => $messagesTotal,
+            'active_chatters' => $activeChatters,
+            'attachments_total' => array_sum(array_map(fn (array $item): int => (int) ($item['value'] ?? 0), $attachmentsBreakdown)),
+            'attachment_breakdown' => $attachmentsBreakdown,
+            'reply_samples' => $replySamplesCount,
+            'avg_reply_minutes' => $replySamplesCount > 0
+                ? round(array_sum($replySamples) / $replySamplesCount, 1)
+                : 0.0,
+            'median_reply_minutes' => $medianReplyMinutes,
+        ];
+    }
+
+    protected function buildMediaAnalytics(CarbonImmutable $start, CarbonImmutable $end): array
+    {
+        $postMedia = collect(
+            DB::table('post_images')
+                ->select(['id', 'type', 'size'])
+                ->whereBetween('created_at', [$start, $end])
+                ->get()
+        );
+        $chatAttachments = collect(
+            DB::table('conversation_message_attachments')
+                ->select(['id', 'type', 'size'])
+                ->whereBetween('created_at', [$start, $end])
+                ->get()
+        );
+
+        $successfulUploads = $postMedia->count() + $chatAttachments->count();
+        $totalUploadedBytes = $postMedia->sum('size') + $chatAttachments->sum('size');
+        $failedUploads = $this->analyticsEventsEnabled()
+            ? (int) DB::table('analytics_events')
+                ->where('event_name', AnalyticsEvent::EVENT_MEDIA_UPLOAD_FAILED)
+                ->whereBetween('created_at', [$start, $end])
+                ->count()
+            : 0;
+
+        $videoSessions = $this->analyticsEventsEnabled()
+            ? DB::table('analytics_events')
+                ->where('event_name', AnalyticsEvent::EVENT_VIDEO_SESSION)
+                ->whereBetween('created_at', [$start, $end])
+                ->get(['duration_seconds', 'metric_value', 'context'])
+            : collect();
+
+        $completedSessions = 0;
+        foreach ($videoSessions as $session) {
+            $context = is_string($session->context) ? json_decode($session->context, true) : $session->context;
+            if (is_array($context) && !empty($context['completed'])) {
+                $completedSessions++;
+            }
+        }
+
+        return [
+            'uploads_total' => $successfulUploads,
+            'post_media_uploads' => $postMedia->count(),
+            'chat_attachments_uploads' => $chatAttachments->count(),
+            'images_uploaded' => $postMedia->where('type', 'image')->count() + $chatAttachments->where('type', 'image')->count(),
+            'videos_uploaded' => $postMedia->where('type', 'video')->count() + $chatAttachments->where('type', 'video')->count(),
+            'avg_upload_size_kb' => $successfulUploads > 0
+                ? $this->normalizeMetric(($totalUploadedBytes / $successfulUploads) / 1024)
+                : 0,
+            'failed_uploads' => $failedUploads,
+            'upload_failure_rate_percent' => ($successfulUploads + $failedUploads) > 0
+                ? round(($failedUploads / ($successfulUploads + $failedUploads)) * 100, 1)
+                : 0.0,
+            'video_sessions' => $videoSessions->count(),
+            'video_completed_sessions' => $completedSessions,
+            'video_completion_rate_percent' => $videoSessions->count() > 0
+                ? round(($completedSessions / $videoSessions->count()) * 100, 1)
+                : 0.0,
+            'video_watch_seconds' => (int) $videoSessions->sum('duration_seconds'),
+            'avg_video_completion_percent' => $videoSessions->count() > 0
+                ? round($videoSessions->avg('metric_value') ?? 0, 1)
+                : 0.0,
+            'theater_opens' => $this->collectNamedAnalyticsEvents(AnalyticsEvent::EVENT_VIDEO_THEATER_OPEN, $start, $end)->count(),
+            'fullscreen_entries' => $this->collectNamedAnalyticsEvents(AnalyticsEvent::EVENT_VIDEO_FULLSCREEN_ENTER, $start, $end)->count(),
+        ];
+    }
+
+    protected function buildRadioAnalytics(CarbonImmutable $start, CarbonImmutable $end, Collection $radioUserIds): array
+    {
+        $started = $this->collectNamedAnalyticsEvents(AnalyticsEvent::EVENT_RADIO_PLAY_STARTED, $start, $end);
+        $failed = $this->collectNamedAnalyticsEvents(AnalyticsEvent::EVENT_RADIO_PLAY_FAILED, $start, $end);
+
+        return [
+            'active_users_period' => $radioUserIds->count(),
+            'favorite_additions_period' => (int) DB::table('radio_favorites')
+                ->whereBetween('created_at', [$start, $end])
+                ->count(),
+            'sessions_started' => $started->count(),
+            'failures_total' => $failed->count(),
+            'failure_rate_percent' => ($started->count() + $failed->count()) > 0
+                ? round(($failed->count() / ($started->count() + $failed->count())) * 100, 1)
+                : 0.0,
+            'top_stations' => $this->groupAnalyticsEventsByEntity($started, 'station_name'),
+        ];
+    }
+
+    protected function buildIptvAnalytics(CarbonImmutable $start, CarbonImmutable $end, Collection $iptvUserIds): array
+    {
+        $modeItems = [
+            ['key' => 'direct', 'started' => AnalyticsEvent::EVENT_IPTV_DIRECT_STARTED, 'failed' => AnalyticsEvent::EVENT_IPTV_DIRECT_FAILED],
+            ['key' => 'proxy', 'started' => AnalyticsEvent::EVENT_IPTV_PROXY_STARTED, 'failed' => AnalyticsEvent::EVENT_IPTV_PROXY_FAILED],
+            ['key' => 'relay', 'started' => AnalyticsEvent::EVENT_IPTV_RELAY_STARTED, 'failed' => AnalyticsEvent::EVENT_IPTV_RELAY_FAILED],
+            ['key' => 'ffmpeg', 'started' => AnalyticsEvent::EVENT_IPTV_FFMPEG_STARTED, 'failed' => AnalyticsEvent::EVENT_IPTV_FFMPEG_FAILED],
+        ];
+
+        $totalStarted = 0;
+        $totalFailed = 0;
+        $split = [];
+        $topChannelsSource = collect();
+
+        foreach ($modeItems as $item) {
+            $started = $this->collectNamedAnalyticsEvents($item['started'], $start, $end);
+            $failed = $this->collectNamedAnalyticsEvents($item['failed'], $start, $end);
+            $startedCount = $started->count();
+            $failedCount = $failed->count();
+
+            $totalStarted += $startedCount;
+            $totalFailed += $failedCount;
+            $topChannelsSource = $topChannelsSource->concat($started);
+
+            $split[] = [
+                'key' => $item['key'],
+                'started' => $startedCount,
+                'failed' => $failedCount,
+            ];
+        }
+
+        $split = collect($split)
+            ->map(function (array $item) use ($totalStarted): array {
+                return [
+                    ...$item,
+                    'share' => $totalStarted > 0
+                        ? round(((int) $item['started'] / $totalStarted) * 100, 1)
+                        : 0.0,
+                ];
+            })
+            ->values()
+            ->all();
+
+        return [
+            'active_users_period' => $iptvUserIds->count(),
+            'saved_channels_period' => (int) DB::table('iptv_saved_channels')
+                ->whereBetween('created_at', [$start, $end])
+                ->count(),
+            'saved_playlists_period' => (int) DB::table('iptv_saved_playlists')
+                ->whereBetween('created_at', [$start, $end])
+                ->count(),
+            'sessions_started' => $totalStarted,
+            'failures_total' => $totalFailed,
+            'failure_rate_percent' => ($totalStarted + $totalFailed) > 0
+                ? round(($totalFailed / ($totalStarted + $totalFailed)) * 100, 1)
+                : 0.0,
+            'mode_split' => $split,
+            'top_channels' => $this->groupAnalyticsEventsByEntity($topChannelsSource, 'channel_name'),
+        ];
+    }
+
+    protected function buildErrorsAndModeration(CarbonImmutable $start, CarbonImmutable $end): array
+    {
+        $radioFailures = $this->collectNamedAnalyticsEvents(AnalyticsEvent::EVENT_RADIO_PLAY_FAILED, $start, $end)->count();
+        $iptvFailures = $this->collectNamedAnalyticsEvents([
+            AnalyticsEvent::EVENT_IPTV_DIRECT_FAILED,
+            AnalyticsEvent::EVENT_IPTV_PROXY_FAILED,
+            AnalyticsEvent::EVENT_IPTV_RELAY_FAILED,
+            AnalyticsEvent::EVENT_IPTV_FFMPEG_FAILED,
+        ], $start, $end)->count();
+        $uploadFailures = $this->collectNamedAnalyticsEvents(AnalyticsEvent::EVENT_MEDIA_UPLOAD_FAILED, $start, $end)->count();
+
+        return [
+            'media_upload_failures' => $uploadFailures,
+            'radio_failures' => $radioFailures,
+            'iptv_failures' => $iptvFailures,
+            'total_tracked_failures' => $uploadFailures + $radioFailures + $iptvFailures,
+            'active_blocks_total' => (int) DB::table('user_blocks')
+                ->where(function ($query): void {
+                    $query
+                        ->whereNull('expires_at')
+                        ->orWhere('expires_at', '>', now());
+                })
+                ->count(),
+            'feedback_new_total' => (int) DB::table('feedback_messages')
+                ->where('status', 'new')
+                ->count(),
+            'feedback_in_progress_total' => (int) DB::table('feedback_messages')
+                ->where('status', 'in_progress')
+                ->count(),
+            'feedback_resolved_total' => (int) DB::table('feedback_messages')
+                ->where('status', 'resolved')
+                ->count(),
+            'feedback_created_period' => (int) DB::table('feedback_messages')
+                ->whereBetween('created_at', [$start, $end])
+                ->count(),
+        ];
+    }
+
+    protected function collectNamedAnalyticsEvents(string|array $eventNames, CarbonImmutable $start, CarbonImmutable $end): Collection
+    {
+        if (!$this->analyticsEventsEnabled()) {
+            return collect();
+        }
+
+        $names = is_array($eventNames) ? $eventNames : [$eventNames];
+
+        return DB::table('analytics_events')
+            ->whereIn('event_name', $names)
+            ->whereBetween('created_at', [$start, $end])
+            ->get(['entity_id', 'entity_key', 'context', 'duration_seconds', 'metric_value', 'event_name']);
+    }
+
+    protected function groupAnalyticsEventsByEntity(Collection $events, string $labelContextKey): array
+    {
+        if ($events->isEmpty()) {
+            return [];
+        }
+
+        $grouped = [];
+        foreach ($events as $event) {
+            $entityKey = (string) ($event->entity_key ?? '');
+            $entityId = (int) ($event->entity_id ?? 0);
+            $bucketKey = $entityKey !== '' ? $entityKey : ($entityId > 0 ? (string) $entityId : '');
+            if ($bucketKey === '') {
+                continue;
+            }
+
+            $context = is_string($event->context) ? json_decode($event->context, true) : $event->context;
+            $label = is_array($context) ? trim((string) ($context[$labelContextKey] ?? '')) : '';
+
+            if (!isset($grouped[$bucketKey])) {
+                $grouped[$bucketKey] = [
+                    'entity_key' => $entityKey,
+                    'entity_id' => $entityId > 0 ? $entityId : null,
+                    'label' => $label,
+                    'value' => 0,
+                ];
+            }
+
+            if ($grouped[$bucketKey]['label'] === '' && $label !== '') {
+                $grouped[$bucketKey]['label'] = $label;
+            }
+
+            $grouped[$bucketKey]['value']++;
+        }
+
+        uasort($grouped, function (array $left, array $right): int {
+            if ((int) $left['value'] === (int) $right['value']) {
+                return strcmp((string) $left['label'], (string) $right['label']);
+            }
+
+            return ((int) $right['value']) <=> ((int) $left['value']);
+        });
+
+        return collect($grouped)
+            ->take(5)
+            ->values()
+            ->all();
     }
 
     protected function normalizeMetric(float|int $value): float|int
@@ -624,6 +1394,19 @@ class AdminDashboardService
         }
 
         $enabled = Schema::hasTable('user_activity_daily_stats');
+
+        return (bool) $enabled;
+    }
+
+    protected function analyticsEventsEnabled(): bool
+    {
+        static $enabled = null;
+
+        if ($enabled !== null) {
+            return (bool) $enabled;
+        }
+
+        $enabled = Schema::hasTable('analytics_events');
 
         return (bool) $enabled;
     }

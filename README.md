@@ -12,6 +12,7 @@ SPA-социальная сеть на `Laravel + Vue` с realtime-чатами,
 - [Ключевая функциональность](#ключевая-функциональность)
 - [Скриншоты интерфейса](#скриншоты-интерфейса)
 - [Архитектура](#архитектура)
+- [Методика аналитики](#методика-аналитики)
 - [Безопасность](#безопасность)
 - [Технологический стек](#технологический-стек)
 - [Быстрый старт](#быстрый-старт)
@@ -31,6 +32,7 @@ SPA-социальная сеть на `Laravel + Vue` с realtime-чатами,
 - радио и IPTV-плеер (direct/proxy/transcode/relay режимы);
 - админ-панель для модерации, настройки и аналитического дашборда;
 - серверный heartbeat-трекинг пользовательской активности по модулям;
+- клиентский event-трекинг для видео, upload-failure, радио и IPTV;
 - мультиязычный интерфейс `RU/EN` с SEO URL (`/ru/...`, `/en/...`).
 
 ## Ключевая функциональность
@@ -73,18 +75,25 @@ SPA-социальная сеть на `Laravel + Vue` с realtime-чатами,
 
 ### Главная страница и контент
 - Медиа-карусель.
+- Компактная карусель авторов с поиском по имени и никнейму.
+- Глобальная кнопка `В начало` на длинных экранах разделов с адаптивным положением для планшетов и телефонов.
 - Виджет времени и погоды для городов (Нью-Йорк, Москва, Минск, Астана, Анкара, Уральск).
 - Источник погоды: `Open-Meteo` через серверный запрос.
 - В админке редактирование контента главной отдельно для `RU` и `EN`.
 
 ### Админ-аналитика и heartbeat
 - Админ-дашборд с KPI, графиками подписок/активности и выбором периода `date_from/date_to` (в рамках выбранного года).
+- Отдельные аналитические секции по удержанию и stickiness, эффективности контента, чатам, медиа/видео, радио, IPTV и ошибкам/модерации.
+- Cohort-retention по месяцам регистрации, top posts/authors, reply-time по direct chat, mode split для IPTV и failure rate по transport/media.
 - Сравнение предпочтений пользователей по `social/chats/radio/iptv`.
 - Выгрузка фактической аналитики за выбранный диапазон в `Excel (.xls)` и `JSON` (скачивание на локальный компьютер/смартфон через браузер).
+- Excel-выгрузка теперь включает блоки `Summary`, `Retention`, `Retention Cohorts`, `Content`, `Top Posts`, `Top Authors`, `Chats`, `Media`, `Radio`, `IPTV`, `Errors / Moderation`, а также пользовательскую сводку за период.
 - Серверный endpoint heartbeat: `POST /api/activity/heartbeat` (auth + verified).
+- Серверный endpoint client analytics: `POST /api/analytics/events` (auth + verified).
 - Агрегация активности в таблицы:
   - `user_activity_sessions` (сессии пользователя по feature),
-  - `user_activity_daily_stats` (дневная агрегированная статистика).
+  - `user_activity_daily_stats` (дневная агрегированная статистика),
+  - `analytics_events` (клиентские события радио/IPTV/видео/upload-failure).
 - Для дашборда автоматически выбирается модель аналитики:
   - `actions` (fallback по действиям),
   - `time_minutes` (если доступны heartbeat-данные за период).
@@ -164,7 +173,7 @@ SPA-социальная сеть на `Laravel + Vue` с realtime-чатами,
 | IPTV | Загрузка плейлистов, proxy/transcode/relay сессии | `app/Http/Controllers/IptvController.php`, `app/Services/Iptv*` |
 | Radio | Поиск, подборки, воспроизведение, избранное и их распределение | `app/Http/Controllers/RadioController.php`, `app/Console/Commands/DistributeAdminRadioFavorites.php` |
 | Админка | Модерация пользователей/контента/обращений, настройки сайта | `/api/admin/*`, `app/Http/Controllers/AdminController.php` |
-| Аналитика активности | Heartbeat трекинг сессий и агрегаты по feature | `app/Http/Controllers/ActivityHeartbeatController.php`, `app/Services/AdminDashboardService.php` |
+| Аналитика активности | Heartbeat + client analytics events, дашборд и Excel/JSON export | `app/Http/Controllers/ActivityHeartbeatController.php`, `app/Http/Controllers/AnalyticsEventController.php`, `app/Services/AdminDashboardService.php`, `app/Services/AdminDashboardExportService.php` |
 | Контент главной | RU/EN контент, world overview (время/погода) | `app/Http/Controllers/SiteSettingController.php`, `app/Services/WorldOverviewService.php` |
 | i18n + SEO | RU/EN маршруты, runtime перевод, SEO мета | `resources/js/router/index.js`, `resources/js/i18n` |
 
@@ -196,6 +205,35 @@ flowchart LR
   - валидация/безопасность: `app/Rules`, `app/Http/Middleware`
 - **Realtime:** `Laravel Reverb` (сервис `websocket` в Docker).
 - **Storage/DB:** MySQL + файловое хранилище `storage`.
+
+## Методика аналитики
+
+Подробная спецификация аналитики вынесена в отдельный документ:
+
+- [docs/analytics-metrics.md](docs/analytics-metrics.md)
+
+Что в нём зафиксировано:
+
+- точные таблицы-источники и endpoint-источники;
+- формулы всех KPI и блоков `summary`, `dashboard`, `retention`, `content`, `chats`, `media`, `radio`, `iptv`, `errors_and_moderation`;
+- логика fallback между heartbeat-метриками и action-based расчётом;
+- правила `DAU/WAU/MAU`, `stickiness`, cohort retention, `engagement per post`, `failure rate`, `mode split`;
+- команды для ручной проверки цифр через `php artisan tinker`.
+
+Короткая карта:
+
+- `GET /api/admin/summary` считает прямые `COUNT(*)` из БД.
+- `GET /api/admin/dashboard` строит единый payload через `app/Services/AdminDashboardService.php`.
+- `GET /api/admin/dashboard/export` экспортирует тот же payload через `app/Services/AdminDashboardExportService.php`, поэтому экран и Excel/JSON должны совпадать.
+- Heartbeat хранится в `user_activity_sessions` и `user_activity_daily_stats`.
+- Client analytics events для media/radio/IPTV/video хранятся в `analytics_events`.
+
+Важно:
+
+- при наличии heartbeat-данных дашборд переключается на `time_minutes`;
+- без heartbeat включается fallback по действиям;
+- transport/media/video блоки зависят от реально отправленных `analytics_events`;
+- demo/seed-данные могут смещать пики по месяцам и retention-картины.
 
 ### Ключевые директории
 ```text
@@ -250,6 +288,7 @@ docker/
   - IPTV segment/playlist delivery (public relay/proxy/transcode): `throttle:1200,1`.
 - Отправка email verification notification: `throttle:6,1`.
 - Heartbeat endpoint: `throttle:120,1` на `POST /api/activity/heartbeat`.
+- Client analytics endpoint: `throttle:240,1` на `POST /api/analytics/events`.
 - IPTV сессии ограничены по количеству и TTL (proxy/transcode).
 
 ## Технологический стек
@@ -282,6 +321,7 @@ docker/
 
 ### 2) Docker режим
 1. Запуск:
+   - Рекомендуется создать отдельный Docker env: `.env.docker` из `.env.docker.example`
    - `docker compose up -d --build`
    - Если порты заняты, задайте forward-порты перед запуском (PowerShell):
      `$env:WEB_FORWARD_PORT=8081; $env:DB_FORWARD_PORT=3308; $env:VITE_FORWARD_PORT=5174; $env:REVERB_FORWARD_PORT=6002; docker compose up -d --build`
@@ -319,7 +359,7 @@ docker/
 
 ### Важно
 - Локальный режим: используйте `.env` (из `.env.example`).
-- Docker режим: сервисы используют `.env.docker.example`.
+- Docker режим: сервисы используют `${DOCKER_ENV_FILE}`; рекомендуемый рабочий файл `.env.docker`, шаблон `.env.docker.example`.
 - Не смешивайте local и docker cookies/домены в одном браузерном контексте.
 
 ### Ключевые env-переменные
@@ -330,6 +370,7 @@ docker/
 - IPTV: `IPTV_FFMPEG_BIN`
 - Radio API: `RADIO_BROWSER_BASE_URL`
 - Docker Compose (host only): `WEB_FORWARD_PORT`, `DB_FORWARD_PORT`, `VITE_FORWARD_PORT`, `REVERB_FORWARD_PORT`, `APP_HEALTHCHECK_START_PERIOD`, `RUN_MIGRATIONS`, `RUN_SEEDERS_ON_EMPTY_DB`, `DEMO_SEED_USE_REMOTE_IMAGES`
+- Docker env selector: `DOCKER_ENV_FILE` (например `.env.docker`)
 
 ## Тестирование
 Локально:
@@ -345,8 +386,9 @@ docker/
 - IPTV Админка (Сидеры): `php artisan test tests/Feature/AdminIptvSeedFeatureTest.php`
 - Чаты и realtime: `php artisan test tests/Feature/ChatFeatureTest.php`
 - Broadcast channels: `php artisan test tests/Feature/BroadcastChannelsFeatureTest.php`
+- Swagger/OpenAPI: `php artisan test tests/Feature/SwaggerDocumentationFeatureTest.php`
 - Админка: `php artisan test tests/Feature/AdminPanelFeatureTest.php`, `php artisan test tests/Feature/AdminAndChatFeatureTest.php`
-- JS unit-тесты helper-логики: `npm run test:js`
+- JS unit-тесты helper-логики (`radio`, `iptv`, `avatar search`, `section top button`): `npm run test:js`
 - Фронт-билд: `npm run build`
 
 В Docker:
@@ -367,13 +409,13 @@ docker/
 - `npm run build`
 
 Последний полный прогон (28 февраля 2026):
-- `php artisan test`: `187 passed` (`1491 assertions`).
-- `npm run test:js`: `12 passed`.
+- `php artisan test`: `196 passed` (`1681 assertions`).
+- `npm run test:js`: `33 passed`.
 
 Проверка зависимостей (28 февраля 2026):
 - `npm audit`: `0 vulnerabilities`.
-- `composer audit`: `0 advisories`.
-- `doctrine/annotations` помечен как `abandoned` транзитивно через `l5-swagger`, но это maintenance-вопрос, а не security advisory.
+- `composer audit --format=json`: `0 advisories`.
+- `doctrine/annotations` помечен как `abandoned` транзитивно через `l5-swagger`; это maintenance-вопрос без security advisory, но `composer audit` из-за этого может завершаться с non-zero exit code.
 
 ## API ориентиры
 
@@ -383,6 +425,13 @@ docker/
 - `GET /api/site/world-overview?locale=ru|en`
 
 ### Авторизованные + verified
+- Пользователи и профиль:
+  - `GET /api/users`, `GET /api/users/{user}/posts`, `GET /api/users/following_posts`
+  - `POST /api/users/profile`, `POST /api/users/{user}/toggle_following`
+- Посты и медиа:
+  - `POST /api/post_media`, `GET /api/media/post-images/{postImage}`
+  - `GET /api/posts`, `POST /api/posts`, `GET /api/posts/discover`, `GET /api/posts/carousel`
+  - `POST /api/posts/{post}/view`, `POST /api/posts/{post}/comment`
 - Чаты:
   - `GET /api/chats`, `GET /api/chats/unread-summary`, `GET /api/chats/users`
   - `POST /api/chats/direct/{user}`, `GET /api/chats/{conversation}`, `POST /api/chats/{conversation}/read`
@@ -399,22 +448,28 @@ docker/
 - `POST /api/iptv/proxy/start`, `DELETE /api/iptv/proxy/{session}`
 - `POST /api/iptv/transcode/start`, `DELETE /api/iptv/transcode/{session}`
 - `POST /api/iptv/relay/start`, `DELETE /api/iptv/relay/{session}`
-- Activity tracking: `POST /api/activity/heartbeat`
+- Activity tracking: `POST /api/activity/heartbeat`, `POST /api/analytics/events`
 
 ### Админские (`/api/admin/*`)
 - Пользователи, посты, комментарии, обращения, диалоги, блокировки, настройки сайта.
 - Дашборд аналитики:
   - `GET /api/admin/summary`
   - `GET /api/admin/dashboard?year=YYYY&date_from=YYYY-MM-DD&date_to=YYYY-MM-DD`
-  - `GET /api/admin/dashboard/export?format=xls|json&year=YYYY&date_from=YYYY-MM-DD&date_to=YYYY-MM-DD`
+- `GET /api/admin/dashboard/export?format=xls|json&locale=ru|en&year=YYYY&date_from=YYYY-MM-DD&date_to=YYYY-MM-DD`
 - Экспорт запускается из админки и возвращает поток файла (`Content-Disposition`) для прямого скачивания.
+- JSON/XLS payload синхронизирован с блоками `retention`, `content`, `chats`, `media`, `radio`, `iptv`, `errors_and_moderation`.
+- Формулы и источники данных описаны в [docs/analytics-metrics.md](docs/analytics-metrics.md).
 
 ## Swagger / OpenAPI
 - Swagger UI: `GET /api/documentation`
-- OpenAPI JSON: `GET /docs/api-docs.json`
+- Docs route для JSON, который использует Swagger UI: `GET /docs?api-docs.json`
+- Сгенерированный JSON-файл на диске: `storage/api-docs/api-docs.json`
 - Генерация документации: `php artisan l5-swagger:generate`
 - Базовые аннотации: `app/OpenApi/OpenApiSpec.php`
-- В актуальной спецификации дополнительно покрыты `POST /api/activity/heartbeat`, `GET /api/admin/summary`, `GET /api/admin/dashboard`, `GET /api/admin/dashboard/export`.
+- Актуальная версия спецификации: `1.2.1`
+- Спецификация синхронизирована с ключевыми маршрутами `users`, `posts`, `post_media`, `chat settings/archives`, `IPTV library/playback sessions`, `activity heartbeat`, `client analytics events`, `admin analytics/export`.
+- Для блока админ-аналитики Swagger синхронизирован с проектной методикой расчётов из [docs/analytics-metrics.md](docs/analytics-metrics.md).
+- Генерация и доступность Swagger UI дополнительно проверяются тестом `tests/Feature/SwaggerDocumentationFeatureTest.php`.
 
 ## Тестовые аккаунты
 Доступны после `php artisan db:seed`:

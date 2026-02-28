@@ -275,6 +275,7 @@ ffmpeg -version
 php artisan about
 php artisan route:list | grep broadcasting
 php artisan route:list | grep activity/heartbeat
+php artisan route:list | grep analytics/events
 php artisan route:list | grep admin/dashboard
 php artisan route:list | grep admin/dashboard/export
 sudo supervisorctl status
@@ -284,8 +285,21 @@ sudo supervisorctl status
 
 ```bash
 curl -I http://your-domain.com/api/documentation
-curl -I http://your-domain.com/docs/api-docs.json
+curl -I "http://your-domain.com/docs?api-docs.json"
 curl -I "http://your-domain.com/api/admin/dashboard/export?format=json&date_from=2026-01-01&date_to=2026-01-31"
+```
+
+Методика расчёта аналитики, формулы и источники данных описаны в:
+
+- [docs/analytics-metrics.md](docs/analytics-metrics.md)
+
+Для ручной сверки аналитики после деплоя:
+
+```bash
+php artisan tinker --execute="dump(app(\App\Http\Controllers\AdminController::class)->summary()->getData(true)['data']);"
+php artisan tinker --execute="dump(app(\App\Services\AdminDashboardService::class)->build(now()->year));"
+php artisan tinker --execute="dump(DB::table('user_activity_daily_stats')->sum('seconds_total'));"
+php artisan tinker --execute="dump(DB::table('analytics_events')->selectRaw('event_name, COUNT(*) as total')->groupBy('event_name')->pluck('total','event_name')->all());"
 ```
 
 Проверьте в браузере:
@@ -293,6 +307,7 @@ curl -I "http://your-domain.com/api/admin/dashboard/export?format=json&date_from
 - чаты realtime (онлайн/typing);
 - IPTV;
 - создание поста с видео, очередь загрузки и отображение ошибок;
+- аналитический дашборд админа, включая блоки retention/content/chats/media/radio/IPTV и Excel/JSON export;
 - скачивание `mkv` и воспроизведение файлов, которые браузер реально поддерживает по кодекам.
 
 Дополнительно для виджета времени/погоды на главной:
@@ -311,11 +326,17 @@ curl -I "http://your-domain.com/api/admin/dashboard/export?format=json&date_from
 composer install
 npm ci
 php artisan test
+php artisan test tests/Feature/SwaggerDocumentationFeatureTest.php
 npm run test:js
 npm run build
-composer audit
+composer audit --format=json
 npm audit
 ```
+
+Примечание:
+- `composer audit` сейчас показывает `0 advisories`, но может вернуть non-zero exit code из-за `abandoned` транзитивной зависимости `doctrine/annotations` через `l5-swagger`.
+- `npm run test:js` покрывает frontend helper-логику радио, IPTV, поиска по карусели авторов и глобальной кнопки возврата в начало.
+- `php artisan test` дополнительно покрывает admin analytics/export, client analytics endpoint и Swagger/OpenAPI генерацию.
 
 На production-сервере выполняйте только сам rollout:
 

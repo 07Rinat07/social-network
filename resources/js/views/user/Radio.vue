@@ -218,6 +218,7 @@
                 :src="playableCurrentStationStreamUrl"
                 player-class="media-audio"
                 :mime-type="resolveStationMimeType(currentStation)"
+                @playererror="handleRadioPlayerError"
             ></MediaPlayer>
 
             <p v-else class="muted radio-sync-note">
@@ -388,6 +389,7 @@
 <script>
 import MediaPlayer from '../../components/MediaPlayer.vue'
 import { RADIO_PRESET_CATALOG } from '../../data/radioPresetCatalog'
+import { ANALYTICS_EVENTS, ANALYTICS_FEATURES, reportAnalyticsEvent } from '../../utils/analyticsTracker.mjs'
 import {
     formatPlaybackTime as formatPlaybackTimeHelper,
     isMobileViewport,
@@ -1294,6 +1296,24 @@ export default {
             return meta.length > 0 ? meta.join(' · ') : this.$t('radio.noMetadata')
         },
 
+        async reportRadioAnalytics(eventName, station, extraContext = {}) {
+            const normalizedStation = this.normalizeStationPayload(station)
+
+            await reportAnalyticsEvent({
+                feature: ANALYTICS_FEATURES.RADIO,
+                event_name: eventName,
+                entity_type: 'radio_station',
+                entity_key: normalizedStation.station_uuid || normalizedStation.stream_url || null,
+                context: {
+                    station_name: normalizedStation.name || this.$t('radio.untitled'),
+                    country: normalizedStation.country || '',
+                    language: normalizedStation.language || '',
+                    codec: normalizedStation.codec || '',
+                    ...extraContext,
+                },
+            })
+        },
+
         hideBrokenIcon(event) {
             const image = event?.target
             if (!(image instanceof HTMLImageElement)) {
@@ -1532,6 +1552,13 @@ export default {
             this.setRadioNotice('')
         },
 
+        async handleRadioPlayerError(payload = {}) {
+            await this.reportRadioAnalytics(ANALYTICS_EVENTS.RADIO_PLAY_FAILED, this.currentStation, {
+                reason: String(payload?.message || '').trim() || 'player-error',
+                code: Number(payload?.code || 0),
+            })
+        },
+
         async playStation(station) {
             const normalizedStation = this.normalizeStationPayload(station)
             if (!normalizedStation.stream_url) {
@@ -1570,6 +1597,13 @@ export default {
             const started = await player.play()
             if (!started) {
                 this.autoplayNotice = this.$t('radio.autoplayBlocked')
+                await this.reportRadioAnalytics(ANALYTICS_EVENTS.RADIO_PLAY_FAILED, normalizedStation, {
+                    reason: 'autoplay-blocked',
+                })
+            } else {
+                await this.reportRadioAnalytics(ANALYTICS_EVENTS.RADIO_PLAY_STARTED, normalizedStation, {
+                    source: 'radio-page',
+                })
             }
 
             this.updatePlaybackStateFromPlayer()

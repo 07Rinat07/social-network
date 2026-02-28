@@ -554,8 +554,10 @@
 
 <script>
 import IptvPlayer from '../../components/IptvPlayer.vue'
+import { ANALYTICS_EVENTS, ANALYTICS_FEATURES, reportAnalyticsEvent } from '../../utils/analyticsTracker.mjs'
 import {
     buildPersistedIptvState,
+    isPersistedIptvStateOwnedBy,
     IPTV_RECENT_LIMIT,
     IPTV_STATE_STORAGE_KEY,
     parsePersistedIptvState,
@@ -669,9 +671,13 @@ export default {
             favoriteChannelIds: [],
             recentChannelIds: [],
             copiedChannelId: '',
+            iptvAnalyticsStartedSignature: '',
+            iptvAnalyticsFailedSignature: '',
             exitCleanupDone: false,
             isSwitchingSource: false,
             dynamicBuiltinSeeds: [],
+            storageOwnerScope: '',
+            persistHydrationComplete: false,
         }
     },
 
@@ -1234,6 +1240,7 @@ export default {
     },
 
     async mounted() {
+        await this.resolveStorageOwnerScope()
         this.preferHttpsUpgrade = this.isPageHttps
         this.hideListLogosOnMobile = this.isMobileViewport()
         window.addEventListener('pagehide', this.handlePageHide)
@@ -1246,6 +1253,8 @@ export default {
         const transcodeCapabilitiesPromise = this.loadTranscodeCapabilities()
         await Promise.allSettled([builtinSeedsPromise, transcodeCapabilitiesPromise])
         await this.loadPersistedState()
+        this.persistHydrationComplete = true
+        this.persistPlayerState()
         void savedLibraryPromise
     },
 
@@ -1266,6 +1275,26 @@ export default {
     },
 
     methods: {
+        async resolveStorageOwnerScope() {
+            const rootUserId = Number(this.$root?.user?.id || 0)
+            if (Number.isInteger(rootUserId) && rootUserId > 0) {
+                this.storageOwnerScope = `user:${rootUserId}`
+                return this.storageOwnerScope
+            }
+
+            try {
+                const response = await axios.get('/api/user')
+                const userId = Number(response.data?.id || 0)
+                this.storageOwnerScope = Number.isInteger(userId) && userId > 0
+                    ? `user:${userId}`
+                    : ''
+            } catch (_error) {
+                this.storageOwnerScope = ''
+            }
+
+            return this.storageOwnerScope
+        },
+
         handlePageHide() {
             this.teardownPlaybackOnExit({ useKeepalive: true })
         },
@@ -1503,12 +1532,12 @@ export default {
         },
 
         async loadPersistedState() {
-            if (typeof window === 'undefined' || !window.localStorage) {
+            if (typeof window === 'undefined' || !window.localStorage || this.storageOwnerScope === '') {
                 return
             }
 
             const payload = parsePersistedIptvState(window.localStorage.getItem(IPTV_STATE_STORAGE_KEY))
-            if (!payload) {
+            if (!payload || !isPersistedIptvStateOwnedBy(payload, this.storageOwnerScope)) {
                 return
             }
 
@@ -1544,8 +1573,8 @@ export default {
                     resolvedSourceLabel,
                     payload.activeSeedId,
                     {
-                        preferredChannelId: payload.currentChannelId,
                         preserveSelectedGroup: true,
+                        restorePlayback: false,
                     },
                 )
 
@@ -1555,19 +1584,25 @@ export default {
             }
 
             this.restoreChannelsFromSnapshot(payload.channelsSnapshot, {
-                preferredChannelId: payload.currentChannelId,
                 sourceLabel: resolvedSourceLabel,
                 activeSeedId: payload.activeSeedId,
                 currentPlaylistUrl: payload.currentPlaylistUrl,
+                restorePlayback: false,
             })
         },
 
         persistPlayerState() {
-            if (typeof window === 'undefined' || !window.localStorage) {
+            if (
+                typeof window === 'undefined'
+                || !window.localStorage
+                || !this.persistHydrationComplete
+                || this.storageOwnerScope === ''
+            ) {
                 return
             }
 
             const payload = buildPersistedIptvState({
+                ownerScope: this.storageOwnerScope,
                 viewMode: this.viewMode,
                 playlistUrl: this.playlistUrl,
                 searchQuery: this.searchQuery,
@@ -1622,9 +1657,14 @@ export default {
             this.ensureSelectedGroupExists()
             this.syncSavedIdsWithPlaylist()
 
-            const preferredChannelId = this.resolvePreferredChannelId(restoredChannels, options?.preferredChannelId)
+            const shouldRestorePlayback = options?.restorePlayback !== false
+            const preferredChannelId = shouldRestorePlayback
+                ? this.resolvePreferredChannelId(restoredChannels, options?.preferredChannelId)
+                : ''
             if (preferredChannelId !== '') {
                 this.playChannel(preferredChannelId)
+            } else {
+                this.currentChannelId = ''
             }
 
             return true
@@ -1904,6 +1944,10 @@ export default {
                 this.proxyPlaybackUrl = ''
                 this.proxyModeEnabled = false
                 this.proxyError = error.response?.data?.message || this.$t('iptv.proxyStartFailed')
+                await this.reportCurrentIptvAnalytics(ANALYTICS_EVENTS.IPTV_PROXY_FAILED, {
+                    reason: this.proxyError,
+                    stage: 'session-start',
+                })
                 return false
             } finally {
                 this.proxyBusy = false
@@ -1980,6 +2024,10 @@ export default {
                 this.relayPlaybackUrl = ''
                 this.relayModeEnabled = false
                 this.relayError = error.response?.data?.message || this.$t('iptv.relayStartFailed')
+                await this.reportCurrentIptvAnalytics(ANALYTICS_EVENTS.IPTV_RELAY_FAILED, {
+                    reason: this.relayError,
+                    stage: 'session-start',
+                })
                 return false
             } finally {
                 this.relayBusy = false
@@ -2102,6 +2150,11 @@ export default {
                 } else {
                     this.transcodeError = error.response?.data?.message || this.$t('iptv.compatStartFailed')
                 }
+                await this.reportCurrentIptvAnalytics(ANALYTICS_EVENTS.IPTV_FFMPEG_FAILED, {
+                    reason: this.transcodeError,
+                    stage: 'session-start',
+                    profile: this.compatProfile,
+                })
                 return false
             } finally {
                 this.transcodeBusy = false
@@ -3106,6 +3159,8 @@ export default {
                 sourceUrl: String(this.playbackUrl || ''),
                 attempts: 0,
             }
+            this.iptvAnalyticsStartedSignature = ''
+            this.iptvAnalyticsFailedSignature = ''
         },
 
         playNextChannel() {
@@ -3140,6 +3195,15 @@ export default {
             if (this.playerStatus !== 'error') {
                 this.playerError = ''
             }
+
+            if (this.playerStatus === 'playing') {
+                const signature = this.currentIptvAnalyticsSignature()
+                if (signature !== '' && signature !== this.iptvAnalyticsStartedSignature) {
+                    this.iptvAnalyticsStartedSignature = signature
+                    this.iptvAnalyticsFailedSignature = ''
+                    void this.reportCurrentIptvAnalytics(this.currentIptvAnalyticsEventName('started'))
+                }
+            }
         },
 
         handleQualityOptions(options) {
@@ -3156,6 +3220,17 @@ export default {
             const errorDetails = String(payload?.details || '')
             const errorType = String(payload?.type || '')
             const sourceUrl = String(this.playbackUrl || '').trim()
+            const failureSignature = `${this.currentIptvAnalyticsSignature()}::${errorType || errorMessage || this.playerError}`
+
+            if (failureSignature !== this.iptvAnalyticsFailedSignature) {
+                this.iptvAnalyticsFailedSignature = failureSignature
+                await this.reportCurrentIptvAnalytics(this.currentIptvAnalyticsEventName('failed'), {
+                    reason: this.playerError,
+                    error_type: errorType,
+                    error_details: errorDetails,
+                    stage: 'playback',
+                })
+            }
 
             const isCorsLikeError = this.isCorsLikeError(errorMessage)
                 || this.isCorsLikeError(errorDetails)
@@ -3344,6 +3419,59 @@ export default {
             }
         },
 
+        currentIptvAnalyticsMode() {
+            return String(this.playbackMode || 'direct').toLowerCase()
+        },
+
+        currentIptvAnalyticsEventName(kind = 'started', mode = this.currentIptvAnalyticsMode()) {
+            const normalizedKind = kind === 'failed' ? 'failed' : 'started'
+            const dictionary = {
+                direct: {
+                    started: ANALYTICS_EVENTS.IPTV_DIRECT_STARTED,
+                    failed: ANALYTICS_EVENTS.IPTV_DIRECT_FAILED,
+                },
+                proxy: {
+                    started: ANALYTICS_EVENTS.IPTV_PROXY_STARTED,
+                    failed: ANALYTICS_EVENTS.IPTV_PROXY_FAILED,
+                },
+                relay: {
+                    started: ANALYTICS_EVENTS.IPTV_RELAY_STARTED,
+                    failed: ANALYTICS_EVENTS.IPTV_RELAY_FAILED,
+                },
+                ffmpeg: {
+                    started: ANALYTICS_EVENTS.IPTV_FFMPEG_STARTED,
+                    failed: ANALYTICS_EVENTS.IPTV_FFMPEG_FAILED,
+                },
+            }
+
+            return dictionary[mode]?.[normalizedKind] || ANALYTICS_EVENTS.IPTV_DIRECT_STARTED
+        },
+
+        currentIptvAnalyticsSignature(mode = this.currentIptvAnalyticsMode()) {
+            const channelKey = String(this.currentChannel?.id || this.currentChannelId || 'no-channel')
+            const playbackUrl = String(this.activePlaybackUrl || this.playbackUrl || '').trim()
+            return `${mode}::${channelKey}::${playbackUrl}`
+        },
+
+        async reportCurrentIptvAnalytics(eventName, extraContext = {}) {
+            const channel = this.currentChannel
+
+            await reportAnalyticsEvent({
+                feature: ANALYTICS_FEATURES.IPTV,
+                event_name: eventName,
+                entity_type: 'iptv_channel',
+                entity_key: String(channel?.id || channel?.url || '').trim() || null,
+                context: {
+                    channel_name: String(channel?.name || '').trim(),
+                    group: String(channel?.group || '').trim(),
+                    domain: String(channel?.domain || '').trim(),
+                    mode: this.currentIptvAnalyticsMode(),
+                    source_label: String(this.sourceLabel || '').trim(),
+                    ...extraContext,
+                },
+            })
+        },
+
         shouldUpgradeToHttps(url) {
             return this.preferHttpsUpgrade && this.isPageHttps && this.isHttpUrl(url)
         },
@@ -3527,9 +3655,14 @@ export default {
 
             this.syncSavedIdsWithPlaylist()
 
-            const preferredChannelId = this.resolvePreferredChannelId(parsedChannels, options?.preferredChannelId)
+            const shouldRestorePlayback = options?.restorePlayback !== false
+            const preferredChannelId = shouldRestorePlayback
+                ? this.resolvePreferredChannelId(parsedChannels, options?.preferredChannelId)
+                : ''
             if (preferredChannelId !== '') {
                 this.playChannel(preferredChannelId)
+            } else {
+                this.currentChannelId = ''
             }
         },
 

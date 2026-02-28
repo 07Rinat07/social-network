@@ -25,7 +25,7 @@ import 'plyr/dist/plyr.css'
 export default {
     name: 'MediaPlayer',
 
-    emits: ['enterfullscreen', 'exitfullscreen'],
+    emits: ['enterfullscreen', 'exitfullscreen', 'playbackstate', 'playererror', 'loadedmetadata'],
 
     props: {
         src: {
@@ -76,6 +76,7 @@ export default {
             videoWrapperElement: null,
             overlayPlayButtonElement: null,
             pendingSurfaceClickTimer: null,
+            boundMediaElement: null,
         }
     },
 
@@ -147,11 +148,13 @@ export default {
 
             this.updateSource()
             this.bindInteractiveElements()
+            this.bindMediaElementEvents()
         },
 
         destroyPlayer() {
             this.clearPendingSurfaceClick()
             this.unbindInteractiveElements()
+            this.unbindMediaElementEvents()
 
             if (!this.player) {
                 return
@@ -192,6 +195,7 @@ export default {
 
             nextTick(() => {
                 this.bindInteractiveElements()
+                this.bindMediaElementEvents()
             })
         },
 
@@ -388,6 +392,92 @@ export default {
 
         handlePlayerExitFullscreen() {
             this.$emit('exitfullscreen')
+        },
+
+        emitPlaybackState(state, extra = {}) {
+            const mediaElement = this.$refs.mediaElement
+            if (!mediaElement) {
+                return
+            }
+
+            this.$emit('playbackstate', {
+                state,
+                currentTime: Number(mediaElement.currentTime || 0),
+                duration: Number(mediaElement.duration || 0),
+                paused: Boolean(mediaElement.paused),
+                ended: Boolean(mediaElement.ended),
+                muted: Boolean(mediaElement.muted),
+                volume: Number(mediaElement.volume || 0),
+                ...extra,
+            })
+        },
+
+        handleMediaPlay() {
+            this.emitPlaybackState('play')
+        },
+
+        handleMediaPause() {
+            this.emitPlaybackState('pause')
+        },
+
+        handleMediaEnded() {
+            this.emitPlaybackState('ended')
+        },
+
+        handleMediaTimeUpdate() {
+            this.emitPlaybackState('timeupdate')
+        },
+
+        handleMediaLoadedMetadata() {
+            const mediaElement = this.$refs.mediaElement
+            this.$emit('loadedmetadata', {
+                duration: Number(mediaElement?.duration || 0),
+                width: Number(mediaElement?.videoWidth || 0),
+                height: Number(mediaElement?.videoHeight || 0),
+            })
+            this.emitPlaybackState('loadedmetadata')
+        },
+
+        handleMediaError() {
+            const mediaElement = this.$refs.mediaElement
+            const mediaError = mediaElement?.error
+
+            this.$emit('playererror', {
+                code: Number(mediaError?.code || 0),
+                message: String(mediaError?.message || '').trim(),
+            })
+        },
+
+        bindMediaElementEvents() {
+            this.unbindMediaElementEvents()
+
+            const mediaElement = this.$refs.mediaElement
+            if (!(mediaElement instanceof HTMLMediaElement)) {
+                return
+            }
+
+            mediaElement.addEventListener('play', this.handleMediaPlay)
+            mediaElement.addEventListener('pause', this.handleMediaPause)
+            mediaElement.addEventListener('ended', this.handleMediaEnded)
+            mediaElement.addEventListener('timeupdate', this.handleMediaTimeUpdate)
+            mediaElement.addEventListener('loadedmetadata', this.handleMediaLoadedMetadata)
+            mediaElement.addEventListener('error', this.handleMediaError)
+            this.boundMediaElement = mediaElement
+        },
+
+        unbindMediaElementEvents() {
+            if (!(this.boundMediaElement instanceof HTMLMediaElement)) {
+                this.boundMediaElement = null
+                return
+            }
+
+            this.boundMediaElement.removeEventListener('play', this.handleMediaPlay)
+            this.boundMediaElement.removeEventListener('pause', this.handleMediaPause)
+            this.boundMediaElement.removeEventListener('ended', this.handleMediaEnded)
+            this.boundMediaElement.removeEventListener('timeupdate', this.handleMediaTimeUpdate)
+            this.boundMediaElement.removeEventListener('loadedmetadata', this.handleMediaLoadedMetadata)
+            this.boundMediaElement.removeEventListener('error', this.handleMediaError)
+            this.boundMediaElement = null
         },
 
         bindInteractiveElements() {
