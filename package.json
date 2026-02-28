@@ -3,7 +3,7 @@
     "scripts": {
         "dev": "vite",
         "build": "vite build",
-        "test:js": "node tests/js/radioSession.test.mjs"
+        "test:js": "node --test tests/js/radioSession.test.mjs tests/js/iptvSession.test.mjs"
     },
     "devDependencies": {
         "@tailwindcss/postcss": "^4.1.18",
@@ -25,5 +25,8 @@
         "pusher-js": "^8.4.0",
         "vue": "^3.5.28",
         "vue-router": "^5.0.2"
+    },
+    "overrides": {
+        "rollup": "^4.59.0"
     }
 }

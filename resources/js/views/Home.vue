@@ -304,18 +304,18 @@
 
         <div
             v-if="isCarouselPostModalOpen && carouselModalPost"
-            class="home-post-modal"
+            :class="carouselPostModalClasses"
             role="dialog"
             aria-modal="true"
             :aria-label="$t('home.carouselPostModalAria')"
             @click.self="closeCarouselPostModal"
         >
-            <div class="home-post-modal-dialog">
+            <div :class="carouselPostModalDialogClasses">
                 <div class="home-post-modal-head">
                     <strong>{{ $t('home.carouselPostModalTitle') }}</strong>
                     <button class="btn btn-outline btn-sm" type="button" @click="closeCarouselPostModal">{{ $t('common.close') }}</button>
                 </div>
-                <Post :post="carouselModalPost"></Post>
+                <Post :post="carouselModalPost" display-mode="carousel-modal"></Post>
             </div>
         </div>
 
@@ -442,6 +442,28 @@ export default {
 
         canOpenCurrentCarouselPost() {
             return Boolean(this.currentCarouselItem?.post?.id && this.currentCarouselItem?.post?.user?.id)
+        },
+
+        isCarouselModalVideo() {
+            if (!this.carouselModalPost || !Array.isArray(this.carouselModalPost.media)) {
+                return false
+            }
+
+            return this.carouselModalPost.media.some((item) => item?.type === 'video')
+        },
+
+        carouselPostModalDialogClasses() {
+            return {
+                'home-post-modal-dialog': true,
+                'home-post-modal-dialog--video': this.isCarouselModalVideo,
+            }
+        },
+
+        carouselPostModalClasses() {
+            return {
+                'home-post-modal': true,
+                'home-post-modal--video': this.isCarouselModalVideo,
+            }
         },
 
         quickTitle() {

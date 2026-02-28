@@ -155,7 +155,7 @@ server {
     root /var/www/social-network/public;
     index index.php index.html;
 
-    client_max_body_size 64M;
+    client_max_body_size 200M;
 
     location / {
         try_files $uri $uri/ /index.php?$query_string;
@@ -191,6 +191,8 @@ server {
     }
 }
 ```
+
+Если сайт стоит за CDN, ingress или внешним балансировщиком, выставьте лимит запроса не ниже `200 MB` и там тоже. Иначе большие видео для постов будут отбрасываться до Laravel-валидации.
 
 Включите сайт:
 
@@ -290,6 +292,8 @@ curl -I "http://your-domain.com/api/admin/dashboard/export?format=json&date_from
 - логин/регистрация;
 - чаты realtime (онлайн/typing);
 - IPTV;
+- создание поста с видео, очередь загрузки и отображение ошибок;
+- скачивание `mkv` и воспроизведение файлов, которые браузер реально поддерживает по кодекам.
 
 Дополнительно для виджета времени/погоды на главной:
 - сервер должен иметь исходящий HTTPS-доступ к `api.open-meteo.com:443`;
@@ -301,19 +305,25 @@ curl -I "http://your-domain.com/api/admin/dashboard/export?format=json&date_from
 
 ## 9. Обновление проекта
 
+Перед production-обновлением прогоните проверки в CI, staging или локально с dev-зависимостями:
+
+```bash
+composer install
+npm ci
+php artisan test
+npm run test:js
+npm run build
+composer audit
+npm audit
+```
+
+На production-сервере выполняйте только сам rollout:
+
 ```bash
 cd /var/www/social-network
 git pull
 composer install --no-dev --optimize-autoloader
 npm ci && npm run build
-npm run test:js
-php artisan test --testsuite=Feature
-php artisan test tests/Feature/ApiRateLimitFeatureTest.php
-php artisan test tests/Feature/LoginThrottleFeatureTest.php
-php artisan test tests/Feature/MediaPostFeatureTest.php
-php artisan test tests/Feature/ActivityHeartbeatFeatureTest.php
-php artisan test tests/Feature/AdminAndChatFeatureTest.php
-php artisan test tests/Feature/DemoSocialContentSeederFeatureTest.php
 php artisan migrate --force
 php artisan optimize:clear
 php artisan config:cache

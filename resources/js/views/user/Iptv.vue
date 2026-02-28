@@ -554,10 +554,14 @@
 
 <script>
 import IptvPlayer from '../../components/IptvPlayer.vue'
+import {
+    buildPersistedIptvState,
+    IPTV_RECENT_LIMIT,
+    IPTV_STATE_STORAGE_KEY,
+    parsePersistedIptvState,
+} from '../../utils/iptvSession.mjs'
 
-const IPTV_STATE_STORAGE_KEY = 'solid-social:iptv-player-state:v3'
 const IPTV_CUSTOM_SEEDS_STORAGE_KEY = 'solid-social:iptv-custom-seeds:v1'
-const IPTV_RECENT_LIMIT = 40
 const IPTV_CUSTOM_SEEDS_LIMIT = 60
 const IPTV_MAX_PLAYLIST_TEXT_BYTES = 10 * 1024 * 1024
 const IPTV_MAX_PLAYLIST_LINES = 250000
@@ -1116,6 +1120,12 @@ export default {
         viewMode() {
             this.persistPlayerState()
         },
+        playlistUrl() {
+            this.persistPlayerState()
+        },
+        searchQuery() {
+            this.persistPlayerState()
+        },
         selectedGroup() {
             this.persistPlayerState()
         },
@@ -1160,6 +1170,18 @@ export default {
             this.persistPlayerState()
         },
         activeSeedId() {
+            this.persistPlayerState()
+        },
+        currentPlaylistUrl() {
+            this.persistPlayerState()
+        },
+        sourceLabel() {
+            this.persistPlayerState()
+        },
+        currentChannelId() {
+            this.persistPlayerState()
+        },
+        channels() {
             this.persistPlayerState()
         },
         favoriteChannelIds: {
@@ -1211,19 +1233,20 @@ export default {
         },
     },
 
-    mounted() {
+    async mounted() {
         this.preferHttpsUpgrade = this.isPageHttps
         this.hideListLogosOnMobile = this.isMobileViewport()
-        this.loadBuiltinSeeds()
-        this.loadCustomSeedSources()
-        this.loadSavedLibrarySources()
-        this.loadPersistedState()
-
-        this.loadTranscodeCapabilities()
         window.addEventListener('pagehide', this.handlePageHide)
         window.addEventListener('beforeunload', this.handleBeforeUnload)
         window.addEventListener('keydown', this.handleGlobalKeydown)
         window.addEventListener('resize', this.handleViewportChange)
+        this.loadCustomSeedSources()
+        const builtinSeedsPromise = this.loadBuiltinSeeds()
+        const savedLibraryPromise = this.loadSavedLibrarySources()
+        const transcodeCapabilitiesPromise = this.loadTranscodeCapabilities()
+        await Promise.allSettled([builtinSeedsPromise, transcodeCapabilitiesPromise])
+        await this.loadPersistedState()
+        void savedLibraryPromise
     },
 
     beforeUnmount() {
@@ -1263,7 +1286,6 @@ export default {
                 player.destroyPlayer()
             }
 
-            this.currentChannelId = ''
             this.selectedQuality = -1
             this.qualityOptions = []
             this.playerError = ''
@@ -1276,12 +1298,15 @@ export default {
             }
 
             this.stopServerTranscodeSession({
+                preserveMode: true,
                 useKeepalive: Boolean(options?.useKeepalive),
             })
             this.stopServerProxySession({
+                preserveMode: true,
                 useKeepalive: Boolean(options?.useKeepalive),
             })
             this.stopServerRelaySession({
+                preserveMode: true,
                 useKeepalive: Boolean(options?.useKeepalive),
             })
         },
@@ -1477,74 +1502,64 @@ export default {
             this.viewMode = mode
         },
 
-        loadPersistedState() {
+        async loadPersistedState() {
             if (typeof window === 'undefined' || !window.localStorage) {
                 return
             }
 
-            try {
-                const raw = window.localStorage.getItem(IPTV_STATE_STORAGE_KEY)
-                if (!raw) {
+            const payload = parsePersistedIptvState(window.localStorage.getItem(IPTV_STATE_STORAGE_KEY))
+            if (!payload) {
+                return
+            }
+
+            this.viewMode = payload.viewMode
+            this.playlistUrl = payload.playlistUrl
+            this.searchQuery = payload.searchQuery
+            this.selectedGroup = payload.selectedGroup
+            this.sortMode = payload.sortMode
+            this.secureOnly = payload.secureOnly
+            this.preferHttpsUpgrade = payload.preferHttpsUpgrade
+            this.fitMode = payload.fitMode
+            this.bufferingMode = payload.bufferingMode
+            this.autoStability = payload.autoStability
+            this.compatModeEnabled = payload.compatModeEnabled
+            this.compatProfile = payload.compatProfile
+            this.autoCompatOnCodecError = payload.autoCompatOnCodecError
+            this.keyboardEnabled = payload.keyboardEnabled
+            this.activeSeedId = this.findSeedById(payload.activeSeedId)?.id || ''
+            this.favoriteChannelIds = payload.favoriteChannelIds
+            this.recentChannelIds = payload.recentChannelIds
+            this.volumeLevel = this.normalizeVolume(payload.volumeLevel)
+            this.muted = payload.muted
+
+            const hasRemotePlaylist = this.isHttpUrl(payload.currentPlaylistUrl) || this.isHttpsUrl(payload.currentPlaylistUrl)
+            const resolvedSourceLabel = payload.sourceLabel || this.$t('iptv.sourceNotSelected')
+
+            if (hasRemotePlaylist) {
+                this.currentPlaylistUrl = payload.currentPlaylistUrl
+                this.sourceLabel = resolvedSourceLabel
+
+                const restored = await this.fetchPlaylistByUrl(
+                    payload.currentPlaylistUrl,
+                    resolvedSourceLabel,
+                    payload.activeSeedId,
+                    {
+                        preferredChannelId: payload.currentChannelId,
+                        preserveSelectedGroup: true,
+                    },
+                )
+
+                if (restored) {
                     return
                 }
-
-                const payload = JSON.parse(raw)
-
-                if (['all', 'favorites', 'recent'].includes(payload?.viewMode)) {
-                    this.viewMode = payload.viewMode
-                }
-                if (typeof payload?.selectedGroup === 'string') {
-                    this.selectedGroup = payload.selectedGroup
-                }
-                if (['group', 'name'].includes(payload?.sortMode)) {
-                    this.sortMode = payload.sortMode
-                }
-                if (typeof payload?.secureOnly === 'boolean') {
-                    this.secureOnly = payload.secureOnly
-                }
-                if (typeof payload?.preferHttpsUpgrade === 'boolean') {
-                    this.preferHttpsUpgrade = payload.preferHttpsUpgrade
-                }
-                if (['contain', 'cover', 'fill'].includes(payload?.fitMode)) {
-                    this.fitMode = payload.fitMode
-                }
-                if (['auto', 'fast', 'balanced', 'stable'].includes(payload?.bufferingMode)) {
-                    this.bufferingMode = payload.bufferingMode
-                }
-                if (typeof payload?.autoStability === 'boolean') {
-                    this.autoStability = payload.autoStability
-                }
-                if (typeof payload?.compatModeEnabled === 'boolean') {
-                    this.compatModeEnabled = payload.compatModeEnabled
-                }
-                if (['fast', 'balanced', 'stable'].includes(payload?.compatProfile)) {
-                    this.compatProfile = payload.compatProfile
-                }
-                if (typeof payload?.autoCompatOnCodecError === 'boolean') {
-                    this.autoCompatOnCodecError = payload.autoCompatOnCodecError
-                }
-                if (typeof payload?.keyboardEnabled === 'boolean') {
-                    this.keyboardEnabled = payload.keyboardEnabled
-                }
-                if (typeof payload?.activeSeedId === 'string' && this.findSeedById(payload.activeSeedId)) {
-                    this.activeSeedId = payload.activeSeedId
-                }
-                if (Array.isArray(payload?.favoriteChannelIds)) {
-                    this.favoriteChannelIds = payload.favoriteChannelIds.map((id) => String(id)).slice(0, 500)
-                }
-                if (Array.isArray(payload?.recentChannelIds)) {
-                    this.recentChannelIds = payload.recentChannelIds.map((id) => String(id)).slice(0, IPTV_RECENT_LIMIT)
-                }
-
-                const normalizedVolume = this.normalizeVolume(payload?.volumeLevel)
-                this.volumeLevel = normalizedVolume
-
-                if (typeof payload?.muted === 'boolean') {
-                    this.muted = payload.muted
-                }
-            } catch (_error) {
-                // ignore broken local state
             }
+
+            this.restoreChannelsFromSnapshot(payload.channelsSnapshot, {
+                preferredChannelId: payload.currentChannelId,
+                sourceLabel: resolvedSourceLabel,
+                activeSeedId: payload.activeSeedId,
+                currentPlaylistUrl: payload.currentPlaylistUrl,
+            })
         },
 
         persistPlayerState() {
@@ -1552,8 +1567,10 @@ export default {
                 return
             }
 
-            const payload = {
+            const payload = buildPersistedIptvState({
                 viewMode: this.viewMode,
+                playlistUrl: this.playlistUrl,
+                searchQuery: this.searchQuery,
                 selectedGroup: this.selectedGroup,
                 sortMode: this.sortMode,
                 secureOnly: this.secureOnly,
@@ -1568,14 +1585,67 @@ export default {
                 volumeLevel: this.normalizeVolume(this.volumeLevel),
                 muted: this.muted,
                 activeSeedId: this.activeSeedId,
-                favoriteChannelIds: this.favoriteChannelIds.slice(0, 500),
-                recentChannelIds: this.recentChannelIds.slice(0, IPTV_RECENT_LIMIT),
-            }
+                currentPlaylistUrl: this.currentPlaylistUrl,
+                sourceLabel: this.sourceLabel,
+                currentChannelId: this.currentChannelId,
+                favoriteChannelIds: this.favoriteChannelIds,
+                recentChannelIds: this.recentChannelIds,
+                channels: this.channels,
+            })
 
             try {
                 window.localStorage.setItem(IPTV_STATE_STORAGE_KEY, JSON.stringify(payload))
             } catch (_error) {
                 // ignore storage write failures
+            }
+        },
+
+        restoreChannelsFromSnapshot(snapshot, options = {}) {
+            if (!Array.isArray(snapshot) || snapshot.length === 0) {
+                return false
+            }
+
+            const restoredChannels = snapshot
+                .map((channel, index) => this.createChannel(channel, index))
+                .filter((channel) => this.isHttpUrl(channel.url) || this.isHttpsUrl(channel.url))
+
+            if (restoredChannels.length === 0) {
+                return false
+            }
+
+            this.channels = restoredChannels
+            this.sourceLabel = String(options?.sourceLabel || this.$t('iptv.unknownSource')).trim() || this.$t('iptv.unknownSource')
+            this.activeSeedId = this.findSeedById(options?.activeSeedId)?.id || ''
+            this.currentPlaylistUrl = this.isHttpUrl(options?.currentPlaylistUrl) || this.isHttpsUrl(options?.currentPlaylistUrl)
+                ? String(options.currentPlaylistUrl).trim()
+                : ''
+            this.ensureSelectedGroupExists()
+            this.syncSavedIdsWithPlaylist()
+
+            const preferredChannelId = this.resolvePreferredChannelId(restoredChannels, options?.preferredChannelId)
+            if (preferredChannelId !== '') {
+                this.playChannel(preferredChannelId)
+            }
+
+            return true
+        },
+
+        resolvePreferredChannelId(channels, preferredChannelId = '') {
+            const normalizedPreferredChannelId = String(preferredChannelId || '').trim()
+            const resolvedChannel = channels.find((channel) => channel.id === normalizedPreferredChannelId)
+                || channels.find((channel) => this.recentIdSet.has(channel.id))
+                || channels[0]
+
+            return resolvedChannel ? resolvedChannel.id : ''
+        },
+
+        ensureSelectedGroupExists() {
+            if (this.selectedGroup === 'all') {
+                return
+            }
+
+            if (!this.groupOptions.includes(this.selectedGroup)) {
+                this.selectedGroup = 'all'
             }
         },
 
@@ -1593,6 +1663,18 @@ export default {
                 if (!this.transcodeCapabilities.ffmpegAvailable && this.compatModeEnabled) {
                     this.compatModeEnabled = false
                     this.transcodeError = this.$t('iptv.compatDisabledNoFfmpeg')
+                } else if (this.transcodeCapabilities.ffmpegAvailable && this.playbackUrl !== '') {
+                    if (this.proxyModeEnabled) {
+                        this.startServerProxyForCurrentChannel()
+                    }
+
+                    if (this.relayModeEnabled) {
+                        this.startServerRelayForCurrentChannel()
+                    }
+
+                    if (this.compatModeEnabled) {
+                        this.startServerTranscodeForCurrentChannel()
+                    }
                 }
             } catch (_error) {
                 this.transcodeCapabilities = {
@@ -3275,16 +3357,16 @@ export default {
             return `https://${normalized.slice('http://'.length)}`
         },
 
-        async fetchPlaylistByUrl(url, sourceLabel = '', seedId = '') {
+        async fetchPlaylistByUrl(url, sourceLabel = '', seedId = '', options = {}) {
             const normalizedUrl = String(url || '').trim()
             if (normalizedUrl === '') {
                 this.playlistError = this.$t('iptv.playlistUrlRequired')
-                return
+                return false
             }
 
             if (!this.isHttpUrl(normalizedUrl) && !this.isHttpsUrl(normalizedUrl)) {
                 this.playlistError = this.$t('iptv.playlistUrlInvalid')
-                return
+                return false
             }
 
             await this.stopPlaybackForSourceSwitch()
@@ -3301,10 +3383,12 @@ export default {
 
                 this.activeSeedId = matchedSeed?.id || ''
                 const resolvedSourceLabel = String(sourceLabel || matchedSeed?.name || normalizedUrl)
-                this.applyParsedChannels(playlist, resolvedSourceLabel)
+                this.applyParsedChannels(playlist, resolvedSourceLabel, options)
                 this.currentPlaylistUrl = normalizedUrl
+                return true
             } catch (error) {
                 this.playlistError = error.response?.data?.message || this.$t('iptv.playlistLoadFailed')
+                return false
             } finally {
                 this.isLoadingPlaylist = false
             }
@@ -3408,7 +3492,7 @@ export default {
             }
         },
 
-        applyParsedChannels(playlistText, sourceLabel) {
+        applyParsedChannels(playlistText, sourceLabel, options = {}) {
             const validationError = this.validatePlaylistPayload(playlistText)
             if (validationError !== '') {
                 this.channels = []
@@ -3430,7 +3514,11 @@ export default {
 
             this.channels = parsedChannels
             this.sourceLabel = sourceLabel || this.$t('iptv.unknownSource')
-            this.selectedGroup = 'all'
+            if (!options?.preserveSelectedGroup) {
+                this.selectedGroup = 'all'
+            } else {
+                this.ensureSelectedGroupExists()
+            }
             this.selectedQuality = -1
             this.playerError = ''
             this.playerStatus = 'idle'
@@ -3439,8 +3527,10 @@ export default {
 
             this.syncSavedIdsWithPlaylist()
 
-            const preferredChannel = parsedChannels.find((channel) => this.recentIdSet.has(channel.id)) || parsedChannels[0]
-            this.playChannel(preferredChannel.id)
+            const preferredChannelId = this.resolvePreferredChannelId(parsedChannels, options?.preferredChannelId)
+            if (preferredChannelId !== '') {
+                this.playChannel(preferredChannelId)
+            }
         },
 
         parseM3uPlaylist(playlistText) {

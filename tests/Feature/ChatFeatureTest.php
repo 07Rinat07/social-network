@@ -12,6 +12,7 @@ use App\Models\ConversationMessageReaction;
 use App\Models\User;
 use App\Models\UserChatSetting;
 use App\Models\UserBlock;
+use App\Services\UploadedVideoTranscodeService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Event;
@@ -546,6 +547,63 @@ class ChatFeatureTest extends TestCase
         foreach ($attachments as $attachment) {
             Storage::disk($attachment->storage_disk ?: 'public')->assertExists($attachment->path);
         }
+    }
+
+    public function test_user_can_send_chat_video_attachment_using_transcoded_mp4_output(): void
+    {
+        Storage::fake('public');
+        Storage::fake('s3');
+
+        $firstUser = User::factory()->create();
+        $secondUser = User::factory()->create();
+
+        Sanctum::actingAs($firstUser);
+        $conversationId = (int) $this->postJson("/api/chats/direct/{$secondUser->id}")->json('data.id');
+
+        $convertedPath = tempnam(sys_get_temp_dir(), 'chat-transcoded-');
+        $this->assertIsString($convertedPath);
+        @unlink($convertedPath);
+        $convertedPath .= '.mp4';
+        file_put_contents($convertedPath, str_repeat('optimized-chat-video-frame', 32));
+        $convertedSize = (int) (filesize($convertedPath) ?: 0);
+
+        $this->partialMock(UploadedVideoTranscodeService::class, function ($mock) use ($convertedPath, $convertedSize): void {
+            $mock->shouldReceive('maybeConvertToBrowserFriendlyMp4')
+                ->once()
+                ->andReturn([
+                    'path' => $convertedPath,
+                    'original_name' => 'camera.mp4',
+                    'size' => $convertedSize,
+                    'mime_type' => 'video/mp4',
+                ]);
+        });
+
+        $response = $this->post("/api/chats/{$conversationId}/messages", [
+            'files' => [
+                UploadedFile::fake()->create('camera.webm', 4096, 'video/webm'),
+            ],
+        ], [
+            'Accept' => 'application/json',
+        ]);
+
+        $response
+            ->assertStatus(201)
+            ->assertJsonPath('data.attachments.0.type', ConversationMessageAttachment::TYPE_VIDEO)
+            ->assertJsonPath('data.attachments.0.mime_type', 'video/mp4')
+            ->assertJsonPath('data.attachments.0.original_name', 'camera.mp4');
+
+        $attachmentId = (int) $response->json('data.attachments.0.id');
+
+        $this->assertDatabaseHas('conversation_message_attachments', [
+            'id' => $attachmentId,
+            'type' => ConversationMessageAttachment::TYPE_VIDEO,
+            'mime_type' => 'video/mp4',
+            'original_name' => 'camera.mp4',
+            'size' => $convertedSize,
+        ]);
+
+        $attachment = ConversationMessageAttachment::query()->findOrFail($attachmentId);
+        Storage::disk($attachment->storage_disk ?: 'public')->assertExists($attachment->path);
     }
 
     public function test_user_can_send_voice_message_attachment_without_text(): void

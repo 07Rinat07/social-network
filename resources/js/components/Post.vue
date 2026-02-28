@@ -1,5 +1,5 @@
 <template>
-    <article class="post-card">
+    <article :class="postCardClasses">
         <header class="post-head">
             <div class="post-author-row">
                 <router-link class="post-avatar-link" :to="{name: 'user.show', params: {id: post.user.id}}">
@@ -33,7 +33,7 @@
             :text="post.content"
         ></StickerRichText>
 
-        <div class="media-grid" v-if="normalizedMedia.length > 0">
+        <div :class="mediaGridClasses" v-if="normalizedMedia.length > 0">
             <template v-for="media in normalizedMedia" :key="`post-media-${post.id}-${media.id ?? media.url}`">
                 <div class="post-media-item">
                     <button
@@ -52,11 +52,28 @@
                             @load="handlePreviewLoad"
                         >
                     </button>
-                    <div v-else class="media-video-container">
-                        <MediaPlayer type="video" :src="media.url" player-class="media-video"></MediaPlayer>
-                        <a :href="media.url" :download="`video-${media.id || 'download'}.mp4`" class="btn btn-outline btn-sm media-download-btn" target="_blank">
-                            📥 Скачать MP4
-                        </a>
+                    <div v-else :class="mediaVideoContainerClasses">
+                        <div class="media-video-actions">
+                            <button
+                                type="button"
+                                class="btn btn-outline btn-sm media-video-action-btn"
+                                @click="openVideoTheater(media, post.title)"
+                            >
+                                {{ $t('common.openTheater') }}
+                            </button>
+                            <a :href="media.url" :download="mediaDownloadName(media)" class="btn btn-outline btn-sm media-video-action-btn" target="_blank">
+                                {{ mediaDownloadLabel(media) }}
+                            </a>
+                        </div>
+                        <MediaPlayer
+                            ref="postMediaPlayers"
+                            type="video"
+                            :src="media.url"
+                            :mime-type="media.mime_type"
+                            :preload="mediaPlayerPreload(media)"
+                            player-class="media-video"
+                            :shell-class="mediaPlayerShellClass(media)"
+                        ></MediaPlayer>
                     </div>
                     <button
                         v-if="media.can_delete"
@@ -82,7 +99,7 @@
                 :text="post.reposted_post.content"
             ></StickerRichText>
 
-            <div class="media-grid" v-if="normalizedRepostMedia.length > 0">
+            <div :class="mediaGridClasses" v-if="normalizedRepostMedia.length > 0">
                 <template v-for="media in normalizedRepostMedia" :key="`repost-media-${post.id}-${media.id ?? media.url}`">
                     <button
                         v-if="media.type === 'image'"
@@ -100,11 +117,28 @@
                             @load="handlePreviewLoad"
                         >
                     </button>
-                    <div v-else class="media-video-container">
-                        <MediaPlayer type="video" :src="media.url" player-class="media-video"></MediaPlayer>
-                        <a :href="media.url" :download="`video-${media.id || 'download'}.mp4`" class="btn btn-outline btn-sm media-download-btn" target="_blank">
-                            📥 Скачать MP4
-                        </a>
+                    <div v-else :class="mediaVideoContainerClasses">
+                        <div class="media-video-actions">
+                            <button
+                                type="button"
+                                class="btn btn-outline btn-sm media-video-action-btn"
+                                @click="openVideoTheater(media, post.reposted_post.title)"
+                            >
+                                {{ $t('common.openTheater') }}
+                            </button>
+                            <a :href="media.url" :download="mediaDownloadName(media)" class="btn btn-outline btn-sm media-video-action-btn" target="_blank">
+                                {{ mediaDownloadLabel(media) }}
+                            </a>
+                        </div>
+                        <MediaPlayer
+                            ref="postMediaPlayers"
+                            type="video"
+                            :src="media.url"
+                            :mime-type="media.mime_type"
+                            :preload="mediaPlayerPreload(media)"
+                            player-class="media-video"
+                            :shell-class="mediaPlayerShellClass(media)"
+                        ></MediaPlayer>
                     </div>
                 </template>
             </div>
@@ -207,11 +241,13 @@
         </div>
 
         <MediaLightbox ref="mediaLightbox"></MediaLightbox>
+        <PostMediaTheater ref="postMediaTheater"></PostMediaTheater>
     </article>
 </template>
 
 <script>
 import MediaLightbox from './MediaLightbox.vue'
+import PostMediaTheater from './PostMediaTheater.vue'
 import MediaPlayer from './MediaPlayer.vue'
 import StickerPicker from './stickers/StickerPicker.vue'
 import StickerRichText from './stickers/StickerRichText.vue'
@@ -226,10 +262,23 @@ import {
 export default {
     name: 'Post',
 
-    props: ['post'],
+    props: {
+        post: {
+            type: Object,
+            required: true,
+        },
+        displayMode: {
+            type: String,
+            default: 'default',
+            validator(value) {
+                return ['default', 'carousel-modal'].includes(value)
+            },
+        },
+    },
 
     components: {
         MediaLightbox,
+        PostMediaTheater,
         MediaPlayer,
         StickerPicker,
         StickerRichText,
@@ -253,6 +302,31 @@ export default {
     },
 
     computed: {
+        isCarouselModalDisplay() {
+            return this.displayMode === 'carousel-modal'
+        },
+
+        postCardClasses() {
+            return {
+                'post-card': true,
+                'post-card--carousel-modal': this.isCarouselModalDisplay,
+            }
+        },
+
+        mediaGridClasses() {
+            return {
+                'media-grid': true,
+                'media-grid--carousel-modal': this.isCarouselModalDisplay,
+            }
+        },
+
+        mediaVideoContainerClasses() {
+            return {
+                'media-video-container': true,
+                'media-video-container--carousel-modal': this.isCarouselModalDisplay,
+            }
+        },
+
         normalizedMedia() {
             if (Array.isArray(this.post.media) && this.post.media.length > 0) {
                 return this.post.media
@@ -301,6 +375,115 @@ export default {
 
         openMedia(url, alt = 'Фото') {
             this.$refs.mediaLightbox?.open(url, alt)
+        },
+
+        mediaPlayerPreload(media) {
+            if (this.isCarouselModalDisplay && media?.type === 'video') {
+                return 'auto'
+            }
+
+            return 'none'
+        },
+
+        mediaPlayerShellClass(media) {
+            if (this.isCarouselModalDisplay && media?.type === 'video') {
+                return 'media-player-shell--carousel-modal'
+            }
+
+            return ''
+        },
+
+        pauseAllInlineMediaPlayers() {
+            const refs = Array.isArray(this.$refs.postMediaPlayers)
+                ? this.$refs.postMediaPlayers
+                : [this.$refs.postMediaPlayers].filter(Boolean)
+
+            for (const player of refs) {
+                player?.pause?.()
+            }
+        },
+
+        openVideoTheater(media, title = '') {
+            if (!media?.url) {
+                return
+            }
+
+            this.pauseAllInlineMediaPlayers()
+            this.$refs.postMediaTheater?.open({
+                source: media.url,
+                mimeType: media.mime_type,
+                title: String(title || this.post?.title || this.$t('common.video')).trim() || this.$t('common.video'),
+                downloadHref: media.url,
+                downloadName: this.mediaDownloadName(media),
+                downloadLabel: this.mediaDownloadLabel(media),
+            })
+        },
+
+        extractFileExtension(fileName) {
+            const normalized = String(fileName || '').trim().toLowerCase()
+            const lastDotIndex = normalized.lastIndexOf('.')
+
+            if (lastDotIndex === -1 || lastDotIndex === normalized.length - 1) {
+                return ''
+            }
+
+            return normalized.slice(lastDotIndex + 1)
+        },
+
+        mediaFileExtension(media) {
+            const originalName = String(media?.original_name || '').trim()
+            const extensionFromName = this.extractFileExtension(originalName)
+            if (extensionFromName !== '') {
+                return extensionFromName
+            }
+
+            const mimeType = String(media?.mime_type || '').trim().toLowerCase()
+            if (mimeType.includes('matroska')) {
+                return 'mkv'
+            }
+            if (mimeType.includes('webm')) {
+                return 'webm'
+            }
+            if (mimeType.includes('quicktime')) {
+                return 'mov'
+            }
+            if (mimeType.includes('m4v')) {
+                return 'm4v'
+            }
+            if (mimeType.includes('avi') || mimeType.includes('x-msvideo')) {
+                return 'avi'
+            }
+            if (mimeType.includes('mp4')) {
+                return 'mp4'
+            }
+            if (mimeType.includes('jpeg')) {
+                return 'jpg'
+            }
+            if (mimeType.includes('png')) {
+                return 'png'
+            }
+            if (mimeType.includes('webp')) {
+                return 'webp'
+            }
+            if (mimeType.includes('gif')) {
+                return 'gif'
+            }
+
+            return media?.type === 'video' ? 'mp4' : 'bin'
+        },
+
+        mediaDownloadName(media) {
+            const originalName = String(media?.original_name || '').trim()
+            if (originalName !== '') {
+                return originalName
+            }
+
+            return `media-${media?.id || 'download'}.${this.mediaFileExtension(media)}`
+        },
+
+        mediaDownloadLabel(media) {
+            const extension = this.mediaFileExtension(media).toUpperCase()
+            return extension !== '' ? `📥 Скачать ${extension}` : '📥 Скачать файл'
         },
 
         normalizeAvatarUrl(value) {

@@ -6,6 +6,7 @@ use App\Models\Comment;
 use App\Models\Post;
 use App\Models\PostImage;
 use App\Models\User;
+use App\Services\UploadedVideoTranscodeService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Http;
@@ -226,6 +227,117 @@ class MediaPostFeatureTest extends TestCase
         ]);
 
         Storage::disk('public')->assertExists($path);
+    }
+
+    public function test_authenticated_user_can_upload_mkv_video_media_with_octet_stream_fallback(): void
+    {
+        Storage::fake('public');
+
+        $user = User::factory()->create();
+        Sanctum::actingAs($user);
+
+        $response = $this->post('/api/post_media', [
+            'file' => UploadedFile::fake()->create('clip.mkv', 1024, 'application/octet-stream'),
+        ], [
+            'Accept' => 'application/json',
+        ]);
+
+        $response
+            ->assertCreated()
+            ->assertJsonPath('data.type', PostImage::TYPE_VIDEO)
+            ->assertJsonPath('data.mime_type', 'video/x-matroska')
+            ->assertJsonPath('data.original_name', 'clip.mkv');
+
+        $mediaId = (int) $response->json('data.id');
+        $path = (string) $response->json('data.path');
+
+        $this->assertDatabaseHas('post_images', [
+            'id' => $mediaId,
+            'user_id' => $user->id,
+            'type' => PostImage::TYPE_VIDEO,
+            'mime_type' => 'video/x-matroska',
+            'original_name' => 'clip.mkv',
+            'post_id' => null,
+        ]);
+
+        $this->assertStringStartsWith('media/videos/', $path);
+        Storage::disk('public')->assertExists($path);
+    }
+
+    public function test_authenticated_user_can_store_transcoded_mp4_output_for_post_video_upload(): void
+    {
+        Storage::fake('public');
+
+        $user = User::factory()->create();
+        Sanctum::actingAs($user);
+
+        $convertedPath = tempnam(sys_get_temp_dir(), 'post-transcoded-');
+        $this->assertIsString($convertedPath);
+        @unlink($convertedPath);
+        $convertedPath .= '.mp4';
+        file_put_contents($convertedPath, str_repeat('optimized-video-frame', 32));
+        $convertedSize = (int) (filesize($convertedPath) ?: 0);
+
+        $this->partialMock(UploadedVideoTranscodeService::class, function ($mock) use ($convertedPath, $convertedSize): void {
+            $mock->shouldReceive('maybeConvertToBrowserFriendlyMp4')
+                ->once()
+                ->andReturn([
+                    'path' => $convertedPath,
+                    'original_name' => 'heavy-source.mp4',
+                    'size' => $convertedSize,
+                    'mime_type' => 'video/mp4',
+                ]);
+        });
+
+        $response = $this->post('/api/post_media', [
+            'file' => UploadedFile::fake()->create('heavy-source.mkv', 4096, 'video/x-matroska'),
+        ], [
+            'Accept' => 'application/json',
+        ]);
+
+        $response
+            ->assertCreated()
+            ->assertJsonPath('data.type', PostImage::TYPE_VIDEO)
+            ->assertJsonPath('data.mime_type', 'video/mp4')
+            ->assertJsonPath('data.original_name', 'heavy-source.mp4');
+
+        $mediaId = (int) $response->json('data.id');
+        $path = (string) $response->json('data.path');
+
+        $this->assertDatabaseHas('post_images', [
+            'id' => $mediaId,
+            'user_id' => $user->id,
+            'type' => PostImage::TYPE_VIDEO,
+            'mime_type' => 'video/mp4',
+            'original_name' => 'heavy-source.mp4',
+            'size' => $convertedSize,
+        ]);
+
+        $this->assertStringStartsWith('media/videos/', $path);
+        Storage::disk('public')->assertExists($path);
+    }
+
+    public function test_authenticated_user_cannot_upload_mkv_with_non_media_mime_type(): void
+    {
+        Storage::fake('public');
+
+        $user = User::factory()->create();
+        Sanctum::actingAs($user);
+
+        $response = $this->post('/api/post_media', [
+            'file' => UploadedFile::fake()->create('fake-video.mkv', 256, 'application/pdf'),
+        ], [
+            'Accept' => 'application/json',
+        ]);
+
+        $response
+            ->assertStatus(422)
+            ->assertJsonValidationErrors(['file']);
+
+        $this->assertDatabaseMissing('post_images', [
+            'user_id' => $user->id,
+            'original_name' => 'fake-video.mkv',
+        ]);
     }
 
     public function test_authenticated_user_can_upload_image_media_through_legacy_route_alias(): void

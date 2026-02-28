@@ -153,13 +153,61 @@
                 </div>
 
                 <div style="display: flex; gap: 0.6rem; flex-wrap: wrap; align-items: center;">
-                    <input @change="uploadMedia" ref="file" type="file" class="hidden" multiple accept="image/*,video/*">
+                    <input @change="uploadMedia" ref="file" type="file" class="hidden" multiple accept=".jpg,.jpeg,.png,.webp,.gif,.mp4,.webm,.mov,.m4v,.avi,.mkv,image/*,video/*">
                     <button class="btn btn-outline" @click.prevent="selectFile">{{ $t('personal.uploadMedia') }}</button>
                     <span class="muted" style="font-size: 0.84rem;">{{ $t('personal.uploadHint') }}</span>
                 </div>
 
-                <div class="media-grid" v-if="uploadedMedia.length > 0">
-                    <div v-for="media in uploadedMedia" :key="`new-media-${media.id}`" class="section-card" style="padding: 0.5rem; box-shadow: none;">
+                <div
+                    v-if="uploadQueue.length > 0"
+                    style="display: grid; gap: 0.65rem; background: #fff; border: 1px solid var(--line); border-radius: 12px; padding: 0.75rem;"
+                >
+                    <div style="display: flex; align-items: center; justify-content: space-between; gap: 0.75rem; flex-wrap: wrap;">
+                        <strong>{{ $t('personal.uploadQueueTitle') }}</strong>
+                        <span class="muted" style="font-size: 0.82rem;">{{ $t('personal.uploadOverallProgress', {progress: overallUploadProgress}) }}</span>
+                    </div>
+
+                    <div style="height: 8px; background: #e5e7eb; border-radius: 999px; overflow: hidden;">
+                        <div
+                            :style="{
+                                width: `${overallUploadProgress}%`,
+                                height: '100%',
+                                borderRadius: '999px',
+                                background: 'linear-gradient(90deg, var(--accent), var(--accent-strong))',
+                                transition: 'width 0.2s ease',
+                            }"
+                        ></div>
+                    </div>
+
+                    <div
+                        v-for="item in uploadQueue"
+                        :key="item.key"
+                        style="display: grid; gap: 0.35rem;"
+                    >
+                        <div style="display: flex; align-items: center; justify-content: space-between; gap: 0.75rem;">
+                            <strong style="font-size: 0.92rem; word-break: break-word;">{{ item.name }}</strong>
+                            <span class="muted" style="font-size: 0.78rem; white-space: nowrap;">{{ uploadStatusLabel(item) }}</span>
+                        </div>
+
+                        <div style="height: 8px; background: #e5e7eb; border-radius: 999px; overflow: hidden;">
+                            <div :style="uploadItemBarStyle(item)"></div>
+                        </div>
+
+                        <p class="muted" style="margin: 0; font-size: 0.78rem;">
+                            {{ formatFileSize(item.size) }} · {{ item.progress }}%
+                        </p>
+
+                        <p v-if="item.errorMessage" class="error-text">{{ item.errorMessage }}</p>
+                    </div>
+                </div>
+
+                <div class="media-grid media-grid--uploaded-preview" v-if="uploadedMedia.length > 0">
+                    <div
+                        v-for="media in uploadedMedia"
+                        :key="`new-media-${media.id}`"
+                        class="section-card uploaded-media-preview-card"
+                        style="padding: 0.5rem; box-shadow: none;"
+                    >
                         <button
                             v-if="media.type === 'image'"
                             type="button"
@@ -174,7 +222,14 @@
                                 @load="onUploadedMediaPreviewLoad(media, $event)"
                             >
                         </button>
-                        <MediaPlayer v-else type="video" :src="media.url" player-class="media-video"></MediaPlayer>
+                        <MediaPlayer
+                            v-else
+                            type="video"
+                            :src="media.url"
+                            :mime-type="media.mime_type"
+                            player-class="media-video"
+                            shell-class="media-player-shell--compact"
+                        ></MediaPlayer>
                         <button class="btn btn-danger btn-sm" style="margin-top: 0.5rem;" @click.prevent="removeMedia(media.id)">{{ $t('personal.removeMedia') }}</button>
                     </div>
                 </div>
@@ -187,6 +242,9 @@
                 </div>
                 <div v-if="errors.media_ids">
                     <p v-for="error in errors.media_ids" :key="error" class="error-text">{{ error }}</p>
+                </div>
+                <div v-if="postUploadErrors.length > 0">
+                    <p v-for="error in postUploadErrors" :key="error" class="error-text">{{ error }}</p>
                 </div>
 
                 <button class="btn btn-primary" @click.prevent="store" :disabled="isPublishing || isUploading">
@@ -221,6 +279,9 @@ import {
     stickerTokenFromId,
 } from '../../data/stickerCatalog'
 
+const POST_MEDIA_MAX_BYTES = 200 * 1024 * 1024
+const POST_MEDIA_ALLOWED_EXTENSIONS = ['jpg', 'jpeg', 'png', 'webp', 'gif', 'mp4', 'webm', 'mov', 'm4v', 'avi', 'mkv']
+
 export default {
     name: 'Personal',
     emits: ['auth-changed'],
@@ -238,6 +299,7 @@ export default {
             title: '',
             content: '',
             uploadedMedia: [],
+            uploadQueue: [],
             posts: [],
             errors: {},
             stats: {},
@@ -308,6 +370,22 @@ export default {
 
         hasAnyAvatar() {
             return Boolean(this.profileAvatarPreview || this.profileAvatarFile || this.currentUser?.avatar_url)
+        },
+
+        postUploadErrors() {
+            return this.collectErrorMessages(['file', 'media', 'general'])
+        },
+
+        overallUploadProgress() {
+            if (this.uploadQueue.length === 0) {
+                return 0
+            }
+
+            const progressSum = this.uploadQueue.reduce((sum, item) => {
+                return sum + Math.max(0, Math.min(100, Number(item.progress || 0)))
+            }, 0)
+
+            return Math.round(progressSum / this.uploadQueue.length)
         },
     },
 
@@ -441,6 +519,190 @@ export default {
             this.profileAvatarPreview = null
         },
 
+        createUploadQueue(files = []) {
+            const batchKey = `${Date.now()}-${Math.random().toString(36).slice(2)}`
+
+            return files.map((file, index) => ({
+                key: `${batchKey}-${index}`,
+                name: String(file?.name || '').trim() || this.$t('chats.file'),
+                size: Number(file?.size || 0),
+                progress: 0,
+                status: 'pending',
+                errorMessage: '',
+            }))
+        },
+
+        updateUploadQueueItem(queueKey, patch = {}) {
+            this.uploadQueue = this.uploadQueue.map((item) => {
+                if (item.key !== queueKey) {
+                    return item
+                }
+
+                return {
+                    ...item,
+                    ...patch,
+                }
+            })
+        },
+
+        uploadStatusLabel(item) {
+            switch (item?.status) {
+            case 'uploading':
+                return this.$t('personal.uploadStatusUploading')
+            case 'completed':
+                return this.$t('personal.uploadStatusCompleted')
+            case 'failed':
+                return this.$t('personal.uploadStatusFailed')
+            default:
+                return this.$t('personal.uploadStatusPending')
+            }
+        },
+
+        uploadItemBarStyle(item) {
+            const normalizedProgress = Math.max(0, Math.min(100, Number(item?.progress || 0)))
+            let background = 'var(--accent)'
+
+            if (item?.status === 'completed') {
+                background = '#16a34a'
+            } else if (item?.status === 'failed') {
+                background = '#dc2626'
+            }
+
+            return {
+                width: `${normalizedProgress}%`,
+                height: '100%',
+                borderRadius: '999px',
+                background,
+                transition: 'width 0.2s ease',
+            }
+        },
+
+        formatFileSize(size) {
+            const bytes = Math.max(0, Number(size || 0))
+            if (bytes < 1024) {
+                return `${bytes} B`
+            }
+
+            const kilobytes = bytes / 1024
+            if (kilobytes < 1024) {
+                return `${kilobytes.toFixed(kilobytes >= 100 ? 0 : 1)} KB`
+            }
+
+            const megabytes = kilobytes / 1024
+            if (megabytes < 1024) {
+                return `${megabytes.toFixed(megabytes >= 100 ? 0 : 1)} MB`
+            }
+
+            const gigabytes = megabytes / 1024
+            return `${gigabytes.toFixed(gigabytes >= 100 ? 0 : 1)} GB`
+        },
+
+        collectErrorMessages(keys = []) {
+            return keys
+                .flatMap((key) => Array.isArray(this.errors?.[key]) ? this.errors[key] : [])
+                .filter((message) => String(message || '').trim() !== '')
+        },
+
+        clearPostErrors(keys = []) {
+            if (!Array.isArray(keys) || keys.length === 0) {
+                this.errors = {}
+                return
+            }
+
+            const nextErrors = {...(this.errors || {})}
+
+            for (const key of keys) {
+                delete nextErrors[key]
+            }
+
+            this.errors = nextErrors
+        },
+
+        extractFileExtension(fileName) {
+            const normalizedName = String(fileName || '').trim().toLowerCase()
+            const lastDotIndex = normalizedName.lastIndexOf('.')
+
+            if (lastDotIndex === -1 || lastDotIndex === normalizedName.length - 1) {
+                return ''
+            }
+
+            return normalizedName.slice(lastDotIndex + 1)
+        },
+
+        validatePostMediaFile(file) {
+            const fileName = String(file?.name || '').trim() || this.$t('chats.file')
+            const fileSize = Number(file?.size || 0)
+            const extension = this.extractFileExtension(fileName)
+
+            if (!POST_MEDIA_ALLOWED_EXTENSIONS.includes(extension)) {
+                return this.$t('personal.uploadInvalidType', {name: fileName})
+            }
+
+            if (fileSize > POST_MEDIA_MAX_BYTES) {
+                return this.$t('personal.uploadTooLarge', {name: fileName})
+            }
+
+            return null
+        },
+
+        localizeUploadValidationMessage(message, file) {
+            const normalizedMessage = String(message || '').trim()
+            const lowered = normalizedMessage.toLowerCase()
+            const fileName = String(file?.name || '').trim() || this.$t('chats.file')
+
+            if (
+                lowered.includes('must not be greater than')
+                || lowered.includes('too large')
+                || lowered.includes('maximum')
+            ) {
+                return this.$t('personal.uploadTooLarge', {name: fileName})
+            }
+
+            if (
+                lowered.includes('must be a file of type')
+                || lowered.includes('supported formats')
+                || lowered.includes('format')
+                || lowered.includes('extension')
+                || lowered.includes('extensions')
+            ) {
+                return this.$t('personal.uploadInvalidType', {name: fileName})
+            }
+
+            if (lowered.includes('must be a file')) {
+                return this.$t('personal.uploadInvalidFile', {name: fileName})
+            }
+
+            if (lowered.includes('failed to upload') || lowered.includes('could not be uploaded')) {
+                return this.$t('personal.uploadServerRejected', {name: fileName})
+            }
+
+            return normalizedMessage || this.$t('personal.uploadError')
+        },
+
+        resolveUploadErrorMessages(error, file) {
+            const statusCode = Number(error?.response?.status || 0)
+            const validationErrors = error?.response?.data?.errors ?? {}
+            const message = String(error?.response?.data?.message || '').trim()
+            const normalizedValidationErrors = Object.values(validationErrors)
+                .flat()
+                .map((item) => this.localizeUploadValidationMessage(item, file))
+                .filter(Boolean)
+
+            if (statusCode === 413) {
+                return [this.$t('personal.uploadRequestTooLarge', {name: file?.name || this.$t('chats.file')})]
+            }
+
+            if (normalizedValidationErrors.length > 0) {
+                return normalizedValidationErrors
+            }
+
+            if (message !== '') {
+                return [this.localizeUploadValidationMessage(message, file)]
+            }
+
+            return [this.$t('personal.uploadServerRejected', {name: file?.name || this.$t('chats.file')})]
+        },
+
         async saveProfile(removeAvatar = false) {
             this.profileErrors = {}
             this.isSavingProfile = true
@@ -515,6 +777,7 @@ export default {
                 this.content = ''
                 this.clearUploadedMediaPreviews()
                 this.uploadedMedia = []
+                this.uploadQueue = []
                 this.postOptions = {
                     is_public: true,
                     show_in_feed: true,
@@ -541,9 +804,33 @@ export default {
                 return
             }
 
+            this.clearPostErrors(['file', 'media', 'general', 'media_ids'])
+            this.uploadQueue = this.createUploadQueue(files)
             this.isUploading = true
+            const uploadErrors = []
 
-            for (const file of files) {
+            for (const [index, file] of files.entries()) {
+                const queueKey = this.uploadQueue[index]?.key
+                const localValidationError = this.validatePostMediaFile(file)
+                if (localValidationError) {
+                    uploadErrors.push(localValidationError)
+                    if (queueKey) {
+                        this.updateUploadQueueItem(queueKey, {
+                            status: 'failed',
+                            errorMessage: localValidationError,
+                        })
+                    }
+                    continue
+                }
+
+                if (queueKey) {
+                    this.updateUploadQueueItem(queueKey, {
+                        status: 'uploading',
+                        progress: 0,
+                        errorMessage: '',
+                    })
+                }
+
                 const formData = new FormData()
                 formData.append('file', file)
                 const localPreviewUrl = URL.createObjectURL(file)
@@ -552,24 +839,59 @@ export default {
                     const response = await axios.post('/api/post_media', formData, {
                         headers: {
                             'Content-Type': 'multipart/form-data',
-                        }
+                        },
+                        onUploadProgress: (progressEvent) => {
+                            if (!queueKey) {
+                                return
+                            }
+
+                            const total = Number(progressEvent?.total || 0)
+                            const loaded = Number(progressEvent?.loaded || 0)
+
+                            if (total > 0) {
+                                this.updateUploadQueueItem(queueKey, {
+                                    progress: Math.min(98, Math.max(0, Math.round((loaded / total) * 100))),
+                                })
+                            }
+                        },
                     })
                     this.uploadedMedia.push({
                         ...response.data.data,
                         local_preview_url: localPreviewUrl,
                         preview_fallback_used: false,
                     })
+                    if (queueKey) {
+                        this.updateUploadQueueItem(queueKey, {
+                            status: 'completed',
+                            progress: 100,
+                            errorMessage: '',
+                        })
+                    }
                 } catch (error) {
                     URL.revokeObjectURL(localPreviewUrl)
-                    this.errors = error.response?.data?.errors ?? {
-                        media: [this.$t('personal.uploadError')]
+                    const resolvedErrors = this.resolveUploadErrorMessages(error, file)
+                    uploadErrors.push(...resolvedErrors)
+
+                    if (queueKey) {
+                        this.updateUploadQueueItem(queueKey, {
+                            status: 'failed',
+                            errorMessage: resolvedErrors[0] ?? this.$t('personal.uploadError'),
+                        })
                     }
-                    break
+                }
+            }
+
+            if (uploadErrors.length > 0) {
+                this.errors = {
+                    ...this.errors,
+                    media: [...new Set(uploadErrors)],
                 }
             }
 
             this.isUploading = false
-            this.$refs.file.value = null
+            if (this.$refs.file) {
+                this.$refs.file.value = null
+            }
         },
 
         removeMedia(id) {

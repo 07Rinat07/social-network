@@ -15,7 +15,7 @@ use App\Models\User;
 use App\Models\UserChatSetting;
 use App\Models\UserBlock;
 use App\Services\SiteSettingService;
-use Illuminate\Http\File;
+use App\Services\UploadedVideoTranscodeService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\UploadedFile;
@@ -25,7 +25,6 @@ use Illuminate\Support\Str;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Validation\Rule;
-use Symfony\Component\Process\Process;
 use Symfony\Component\HttpFoundation\StreamedResponse;
 
 /**
@@ -45,7 +44,10 @@ class ChatController extends Controller
     protected const CHAT_ARCHIVE_SCOPE_CONVERSATION = 'conversation';
     protected const CHAT_STORAGE_MAX_RETENTION_DAYS = 3650;
 
-    public function __construct(private readonly SiteSettingService $siteSettingService)
+    public function __construct(
+        private readonly SiteSettingService $siteSettingService,
+        private readonly UploadedVideoTranscodeService $uploadedVideoTranscodeService
+    )
     {
     }
 
@@ -1254,19 +1256,20 @@ class ChatController extends Controller
 
         if ($type === ConversationMessageAttachment::TYPE_VIDEO) {
             // Prefer MP4 for broad browser support and seekability.
-            $converted = $this->convertVideoAttachmentToMp4($file);
+            $converted = $this->uploadedVideoTranscodeService->maybeConvertToBrowserFriendlyMp4($file);
             if ($converted !== null) {
-                $convertedFile = null;
-
                 try {
-                    $convertedFile = new File($converted['path']);
-                    $path = $this->storeLocalFileWithFallback($convertedFile, $folder, $disk);
+                    $path = $this->uploadedVideoTranscodeService->storeTemporaryFileWithFallback(
+                        $converted['path'],
+                        $folder,
+                        $disk
+                    );
 
                     $message->attachments()->create([
                         'path' => $path['path'],
                         'storage_disk' => $path['disk'],
                         'type' => $type,
-                        'mime_type' => 'video/mp4',
+                        'mime_type' => (string) ($converted['mime_type'] ?? 'video/mp4'),
                         'size' => (int) ($converted['size'] ?? 0),
                         'original_name' => $converted['original_name'],
                     ]);
@@ -1297,193 +1300,6 @@ class ChatController extends Controller
             'size' => $file->getSize(),
             'original_name' => $file->getClientOriginalName(),
         ]);
-    }
-
-    /**
-     * Convert non-mp4 videos to mp4 using ffmpeg when available.
-     *
-     * @return array{path: string, original_name: string, size: int}|null
-     */
-    protected function convertVideoAttachmentToMp4(UploadedFile $file): ?array
-    {
-        $serverMimeType = strtolower((string) ($file->getMimeType() ?: ''));
-        $clientMimeType = strtolower((string) ($file->getClientMimeType() ?: ''));
-        $clientExtension = strtolower((string) $file->getClientOriginalExtension());
-
-        if (
-            $clientExtension === 'mp4'
-            || str_contains($serverMimeType, 'mp4')
-            || str_contains($clientMimeType, 'mp4')
-        ) {
-            return null;
-        }
-
-        $binary = $this->resolveChatFfmpegBinary();
-        if ($binary === null) {
-            return null;
-        }
-
-        $sourcePath = trim((string) $file->getRealPath());
-        if ($sourcePath === '' || !is_file($sourcePath)) {
-            return null;
-        }
-
-        $outputPath = tempnam(sys_get_temp_dir(), 'chat-mp4-');
-        if (!is_string($outputPath) || $outputPath === '') {
-            return null;
-        }
-
-        @unlink($outputPath);
-        $outputPath .= '.mp4';
-
-        $process = new Process([
-            $binary,
-            '-hide_banner',
-            '-nostdin',
-            '-loglevel', 'error',
-            '-y',
-            '-i', $sourcePath,
-            '-map', '0:v:0?',
-            '-map', '0:a:0?',
-            '-c:v', 'libx264',
-            '-preset', 'veryfast',
-            '-pix_fmt', 'yuv420p',
-            '-movflags', '+faststart',
-            '-c:a', 'aac',
-            '-b:a', '128k',
-            $outputPath,
-        ]);
-
-        $process->setTimeout(180);
-        $process->setIdleTimeout(180);
-
-        try {
-            $process->run();
-        } catch (\Throwable) {
-            if (is_file($outputPath)) {
-                @unlink($outputPath);
-            }
-            return null;
-        }
-
-        if (!$process->isSuccessful() || !is_file($outputPath) || filesize($outputPath) <= 0) {
-            if (is_file($outputPath)) {
-                @unlink($outputPath);
-            }
-            return null;
-        }
-
-        $originalName = $this->replaceFileExtensionWithMp4((string) $file->getClientOriginalName());
-        $size = (int) (filesize($outputPath) ?: 0);
-
-        return [
-            'path' => $outputPath,
-            'original_name' => $originalName,
-            'size' => $size,
-        ];
-    }
-
-    /**
-     * Persist local temporary file to preferred disk with fallback to public disk.
-     *
-     * @return array{path: string, disk: string}
-     */
-    protected function storeLocalFileWithFallback(File $file, string $folder, string $preferredDisk): array
-    {
-        try {
-            $path = Storage::disk($preferredDisk)->putFile($folder, $file);
-            if (!is_string($path) || trim($path) === '') {
-                throw new \RuntimeException('Failed to store converted chat file on preferred disk.');
-            }
-
-            return [
-                'path' => $path,
-                'disk' => $preferredDisk,
-            ];
-        } catch (\Throwable) {
-            $path = Storage::disk('public')->putFile($folder, $file);
-            if (!is_string($path) || trim($path) === '') {
-                throw new \RuntimeException('Failed to store converted chat file on fallback disk.');
-            }
-
-            return [
-                'path' => $path,
-                'disk' => 'public',
-            ];
-        }
-    }
-
-    /**
-     * Ensure resulting filename has mp4 extension.
-     */
-    protected function replaceFileExtensionWithMp4(string $originalName): string
-    {
-        $name = trim($originalName);
-        if ($name === '') {
-            return 'video.mp4';
-        }
-
-        $dotPosition = strrpos($name, '.');
-        if ($dotPosition === false) {
-            return $name . '.mp4';
-        }
-
-        $base = substr($name, 0, $dotPosition);
-        return ($base !== '' ? $base : 'video') . '.mp4';
-    }
-
-    /**
-     * Resolve first available ffmpeg binary for chat attachment conversion.
-     */
-    protected function resolveChatFfmpegBinary(): ?string
-    {
-        static $resolved = false;
-        static $binary = null;
-
-        if ($resolved) {
-            return $binary;
-        }
-
-        $configured = trim((string) env('CHAT_FFMPEG_BIN', env('IPTV_FFMPEG_BIN', 'ffmpeg')));
-        $candidates = [$configured !== '' ? $configured : 'ffmpeg', 'ffmpeg'];
-
-        if (DIRECTORY_SEPARATOR === '\\') {
-            $candidates[] = 'ffmpeg.exe';
-        }
-
-        $unique = [];
-        foreach ($candidates as $candidate) {
-            $normalized = trim((string) $candidate);
-            if ($normalized === '' || in_array($normalized, $unique, true)) {
-                continue;
-            }
-
-            $unique[] = $normalized;
-        }
-
-        foreach ($unique as $candidate) {
-            $probe = new Process([$candidate, '-version']);
-            $probe->setTimeout(15);
-            $probe->setIdleTimeout(15);
-
-            try {
-                $probe->run();
-            } catch (\Throwable) {
-                continue;
-            }
-
-            if (!$probe->isSuccessful()) {
-                continue;
-            }
-
-            $binary = $candidate;
-            $resolved = true;
-            return $binary;
-        }
-
-        $resolved = true;
-        $binary = null;
-        return null;
     }
 
     /**

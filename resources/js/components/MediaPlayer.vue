@@ -1,14 +1,20 @@
 <template>
-    <component
-        :is="tagName"
-        ref="mediaElement"
-        :class="playerClass"
-        :preload="preload"
-        :autoplay="autoplay"
-        :loop="loop"
-        :muted="muted"
-        :playsinline="isVideo ? true : null"
-    ></component>
+    <div
+        ref="playerShell"
+        :class="shellClasses"
+        data-media-player-shell
+    >
+        <component
+            :is="tagName"
+            ref="mediaElement"
+            :class="playerClass"
+            :preload="preload"
+            :autoplay="autoplay"
+            :loop="loop"
+            :muted="muted"
+            :playsinline="isVideo ? true : null"
+        ></component>
+    </div>
 </template>
 
 <script>
@@ -18,6 +24,8 @@ import 'plyr/dist/plyr.css'
 
 export default {
     name: 'MediaPlayer',
+
+    emits: ['enterfullscreen', 'exitfullscreen'],
 
     props: {
         src: {
@@ -55,11 +63,19 @@ export default {
             type: String,
             default: '',
         },
+        shellClass: {
+            type: String,
+            default: '',
+        },
     },
 
     data() {
         return {
             player: null,
+            playerContainerElement: null,
+            videoWrapperElement: null,
+            overlayPlayButtonElement: null,
+            pendingSurfaceClickTimer: null,
         }
     },
 
@@ -70,6 +86,14 @@ export default {
 
         tagName() {
             return this.isVideo ? 'video' : 'audio'
+        },
+
+        shellClasses() {
+            return [
+                'media-player-shell',
+                this.isVideo ? 'media-player-shell--video' : 'media-player-shell--audio',
+                this.shellClass,
+            ]
         },
     },
 
@@ -109,12 +133,26 @@ export default {
                     ? ['play-large', 'play', 'progress', 'current-time', 'duration', 'mute', 'volume', 'settings', 'fullscreen']
                     : ['play', 'progress', 'current-time', 'duration', 'mute', 'volume', 'settings'],
                 settings: ['speed'],
+                clickToPlay: !this.isVideo,
+                fullscreen: {
+                    enabled: this.isVideo,
+                    fallback: true,
+                    iosNative: false,
+                },
+                keyboard: {
+                    focused: true,
+                    global: false,
+                },
             })
 
             this.updateSource()
+            this.bindInteractiveElements()
         },
 
         destroyPlayer() {
+            this.clearPendingSurfaceClick()
+            this.unbindInteractiveElements()
+
             if (!this.player) {
                 return
             }
@@ -151,6 +189,10 @@ export default {
                 type: this.type,
                 sources: [source],
             }
+
+            nextTick(() => {
+                this.bindInteractiveElements()
+            })
         },
 
         async play() {
@@ -186,6 +228,223 @@ export default {
             this.player.pause()
         },
 
+        async togglePlayback() {
+            const mediaElement = this.$refs.mediaElement
+            if (!mediaElement) {
+                return false
+            }
+
+            if (!mediaElement.paused && !mediaElement.ended) {
+                this.pause()
+                return true
+            }
+
+            if (mediaElement.ended) {
+                mediaElement.currentTime = 0
+            }
+
+            return this.play()
+        },
+
+        toggleFullscreen() {
+            if (!this.isVideo || !this.player?.fullscreen || typeof this.player.fullscreen.toggle !== 'function') {
+                return
+            }
+
+            try {
+                this.player.fullscreen.toggle()
+            } catch (_error) {
+                // Ignore fullscreen toggle errors.
+            }
+        },
+
+        async enterFullscreen() {
+            if (!this.isVideo || !this.player?.fullscreen || typeof this.player.fullscreen.enter !== 'function') {
+                return false
+            }
+
+            try {
+                const result = this.player.fullscreen.enter()
+                if (result && typeof result.then === 'function') {
+                    await result
+                }
+
+                return true
+            } catch (_error) {
+                return false
+            }
+        },
+
+        async exitFullscreen() {
+            if (!this.isVideo || !this.player?.fullscreen || typeof this.player.fullscreen.exit !== 'function') {
+                return false
+            }
+
+            try {
+                const result = this.player.fullscreen.exit()
+                if (result && typeof result.then === 'function') {
+                    await result
+                }
+
+                return true
+            } catch (_error) {
+                return false
+            }
+        },
+
+        isFullscreen() {
+            return Boolean(this.player?.fullscreen?.active)
+        },
+
+        clearPendingSurfaceClick() {
+            if (this.pendingSurfaceClickTimer && typeof window !== 'undefined') {
+                window.clearTimeout(this.pendingSurfaceClickTimer)
+            }
+
+            this.pendingSurfaceClickTimer = null
+        },
+
+        shouldIgnoreSurfaceInteraction(event) {
+            const target = event?.target
+            if (!(target instanceof HTMLElement)) {
+                return true
+            }
+
+            return Boolean(
+                target.closest('.plyr__controls')
+                || target.closest('.plyr__menu')
+                || target.closest('.plyr__captions')
+                || target.closest('.plyr__progress')
+                || target.closest('.plyr__volume')
+                || target.closest('.plyr__control--overlaid')
+                || target.closest('a')
+                || target.closest('button')
+                || target.closest('input')
+            )
+        },
+
+        handleVideoSurfaceClick(event) {
+            if (this.shouldIgnoreSurfaceInteraction(event)) {
+                return
+            }
+
+            this.clearPendingSurfaceClick()
+
+            if (typeof window === 'undefined') {
+                void this.togglePlayback()
+                return
+            }
+
+            this.pendingSurfaceClickTimer = window.setTimeout(() => {
+                this.pendingSurfaceClickTimer = null
+                void this.togglePlayback()
+            }, 160)
+        },
+
+        handleVideoSurfaceDoubleClick(event) {
+            if (this.shouldIgnoreSurfaceInteraction(event)) {
+                return
+            }
+
+            event.preventDefault()
+            this.clearPendingSurfaceClick()
+            this.toggleFullscreen()
+        },
+
+        handleOverlayPlayClick(event) {
+            event.preventDefault()
+            event.stopPropagation()
+            if (typeof event.stopImmediatePropagation === 'function') {
+                event.stopImmediatePropagation()
+            }
+
+            this.clearPendingSurfaceClick()
+
+            if (typeof window === 'undefined') {
+                void this.togglePlayback()
+                return
+            }
+
+            this.pendingSurfaceClickTimer = window.setTimeout(() => {
+                this.pendingSurfaceClickTimer = null
+                void this.togglePlayback()
+            }, 160)
+        },
+
+        handleOverlayPlayDoubleClick(event) {
+            event.preventDefault()
+            event.stopPropagation()
+            if (typeof event.stopImmediatePropagation === 'function') {
+                event.stopImmediatePropagation()
+            }
+
+            this.clearPendingSurfaceClick()
+            this.toggleFullscreen()
+        },
+
+        handlePlayerEnterFullscreen() {
+            this.$emit('enterfullscreen')
+        },
+
+        handlePlayerExitFullscreen() {
+            this.$emit('exitfullscreen')
+        },
+
+        bindInteractiveElements() {
+            this.unbindInteractiveElements()
+
+            if (!this.isVideo) {
+                return
+            }
+
+            const shell = this.$refs.playerShell
+            if (!(shell instanceof HTMLElement)) {
+                return
+            }
+
+            const playerContainer = shell.querySelector('.plyr')
+            if (playerContainer instanceof HTMLElement) {
+                playerContainer.addEventListener('enterfullscreen', this.handlePlayerEnterFullscreen)
+                playerContainer.addEventListener('exitfullscreen', this.handlePlayerExitFullscreen)
+                this.playerContainerElement = playerContainer
+            }
+
+            const videoWrapper = shell.querySelector('.plyr__video-wrapper')
+            if (videoWrapper instanceof HTMLElement) {
+                videoWrapper.addEventListener('click', this.handleVideoSurfaceClick)
+                videoWrapper.addEventListener('dblclick', this.handleVideoSurfaceDoubleClick)
+                this.videoWrapperElement = videoWrapper
+            }
+
+            const overlayPlayButton = shell.querySelector('.plyr__control--overlaid')
+            if (overlayPlayButton instanceof HTMLElement) {
+                overlayPlayButton.addEventListener('click', this.handleOverlayPlayClick, true)
+                overlayPlayButton.addEventListener('dblclick', this.handleOverlayPlayDoubleClick, true)
+                this.overlayPlayButtonElement = overlayPlayButton
+            }
+        },
+
+        unbindInteractiveElements() {
+            if (this.playerContainerElement) {
+                this.playerContainerElement.removeEventListener('enterfullscreen', this.handlePlayerEnterFullscreen)
+                this.playerContainerElement.removeEventListener('exitfullscreen', this.handlePlayerExitFullscreen)
+            }
+
+            if (this.videoWrapperElement) {
+                this.videoWrapperElement.removeEventListener('click', this.handleVideoSurfaceClick)
+                this.videoWrapperElement.removeEventListener('dblclick', this.handleVideoSurfaceDoubleClick)
+            }
+
+            if (this.overlayPlayButtonElement) {
+                this.overlayPlayButtonElement.removeEventListener('click', this.handleOverlayPlayClick, true)
+                this.overlayPlayButtonElement.removeEventListener('dblclick', this.handleOverlayPlayDoubleClick, true)
+            }
+
+            this.playerContainerElement = null
+            this.videoWrapperElement = null
+            this.overlayPlayButtonElement = null
+        },
+
         guessMimeType(src) {
             const normalized = String(src).toLowerCase()
 
@@ -200,6 +459,9 @@ export default {
             }
             if (normalized.endsWith('.m4v')) {
                 return 'video/x-m4v'
+            }
+            if (normalized.endsWith('.mkv')) {
+                return 'video/x-matroska'
             }
             if (normalized.endsWith('.mp3')) {
                 return 'audio/mpeg'
