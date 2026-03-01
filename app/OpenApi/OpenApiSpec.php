@@ -7,8 +7,8 @@ use OpenApi\Annotations as OA;
 /**
  * @OA\Info(
  *     title="Solid Social API",
- *     version="1.3.0",
- *     description="API documentation for Solid Social Network SPA, synchronized with the latest verified routes for feed, media upload, chats, radio, IPTV, client analytics tracking, lifetime site error logging, and extended admin analytics/export flows. Detailed analytics formulas, diagnostics notes, and source tables are documented in docs/analytics-metrics.md."
+ *     version="1.4.0",
+ *     description="API documentation for Solid Social Network SPA, synchronized with the latest verified routes for feed, media upload, site config, chat settings/archives/mood status, radio favorites, IPTV playback/library, client analytics tracking, lifetime site error logging, and extended admin summary/analytics/export flows. Detailed analytics formulas, diagnostics notes, and source tables are documented in docs/analytics-metrics.md."
  * )
  *
  * @OA\Server(

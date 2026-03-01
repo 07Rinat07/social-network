@@ -19,12 +19,19 @@ class SwaggerDocumentationFeatureTest extends TestCase
         $spec = json_decode((string) file_get_contents($docsPath), true, 512, JSON_THROW_ON_ERROR);
 
         $this->assertSame('3.0.0', $spec['openapi'] ?? null);
+        $this->assertSame('1.4.0', $spec['info']['version'] ?? null);
         $this->assertArrayHasKey('/api/users', $spec['paths'] ?? []);
         $this->assertArrayHasKey('/api/post_media', $spec['paths'] ?? []);
+        $this->assertArrayHasKey('/api/site/config', $spec['paths'] ?? []);
         $this->assertArrayHasKey('/api/analytics/events', $spec['paths'] ?? []);
         $this->assertArrayHasKey('/api/client-errors', $spec['paths'] ?? []);
         $this->assertArrayHasKey('/api/posts/discover', $spec['paths'] ?? []);
+        $this->assertArrayHasKey('/api/radio/favorites', $spec['paths'] ?? []);
         $this->assertArrayHasKey('/api/iptv/playlist/fetch', $spec['paths'] ?? []);
+        $this->assertArrayHasKey('/api/chats/settings', $spec['paths'] ?? []);
+        $this->assertArrayHasKey('/api/chats/archives', $spec['paths'] ?? []);
+        $this->assertArrayHasKey('/api/chats/{conversation}/mood-status', $spec['paths'] ?? []);
+        $this->assertArrayHasKey('/api/admin/summary', $spec['paths'] ?? []);
         $this->assertArrayHasKey('/api/admin/dashboard', $spec['paths'] ?? []);
         $this->assertArrayHasKey('/api/admin/dashboard/export', $spec['paths'] ?? []);
         $this->assertArrayHasKey('/api/admin/error-log', $spec['paths'] ?? []);

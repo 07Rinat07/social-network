@@ -82,7 +82,8 @@
             </div>
         </div>
 
-        <SectionTopButton :has-persistent-widgets="canUsePersistentWidgets"></SectionTopButton>
+        <SectionTopButton side="left" :has-persistent-widgets="canUsePersistentWidgets"></SectionTopButton>
+        <SectionTopButton side="right" :has-persistent-widgets="canUsePersistentWidgets"></SectionTopButton>
 
         <div v-if="canUsePersistentWidgets" class="widget-docks">
             <PersistentRadioWidget

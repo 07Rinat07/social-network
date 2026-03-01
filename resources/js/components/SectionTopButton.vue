@@ -41,6 +41,13 @@ export default {
             type: Boolean,
             default: false,
         },
+        side: {
+            type: String,
+            default: 'right',
+            validator(value) {
+                return ['left', 'right'].includes(String(value))
+            },
+        },
     },
 
     data() {
@@ -54,6 +61,8 @@ export default {
         wrapClasses() {
             return {
                 'section-top-btn-wrap--with-widgets': this.hasPersistentWidgets,
+                'section-top-btn-wrap--left': this.side === 'left',
+                'section-top-btn-wrap--right': this.side !== 'left',
             }
         },
     },

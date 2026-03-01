@@ -1,5 +1,5 @@
 <template>
-    <div class="page-wrap grid-layout">
+    <div class="page-wrap grid-layout radio-page" :class="`radio-theme--${radioThemeMode}`">
         <section class="section-card radio-hero-card">
             <h2 class="section-title">{{ $t('radio.title') }}</h2>
             <p class="section-subtitle">{{ $t('radio.subtitle') }}</p>
@@ -18,7 +18,106 @@
                 </button>
             </div>
 
+            <div class="radio-motion-settings">
+                <div class="radio-motion-settings__group">
+                    <span class="muted radio-motion-settings__label">{{ $t('radio.carouselMotionLabel') }}</span>
+                    <div class="radio-motion-settings__switch" role="group" :aria-label="$t('radio.carouselMotionLabel')">
+                        <button
+                            type="button"
+                            class="btn btn-sm"
+                            :class="carouselMotionMode === 'auto' ? 'btn-primary' : 'btn-outline'"
+                            @click="setCarouselMotionMode('auto')"
+                        >
+                            {{ $t('radio.carouselMotionAuto') }}
+                        </button>
+                        <button
+                            type="button"
+                            class="btn btn-sm"
+                            :class="carouselMotionMode === 'manual' ? 'btn-primary' : 'btn-outline'"
+                            @click="setCarouselMotionMode('manual')"
+                        >
+                            {{ $t('radio.carouselMotionManual') }}
+                        </button>
+                    </div>
+                </div>
+
+                <div class="radio-motion-settings__group">
+                    <span class="muted radio-motion-settings__label">{{ $t('radio.carouselSpeedLabel') }}</span>
+                    <div class="radio-motion-settings__switch radio-motion-settings__switch--triple" role="group" :aria-label="$t('radio.carouselSpeedLabel')">
+                        <button
+                            type="button"
+                            class="btn btn-sm"
+                            :class="carouselSpeedMode === 'slow' ? 'btn-primary' : 'btn-outline'"
+                            @click="setCarouselSpeedMode('slow')"
+                        >
+                            {{ $t('radio.carouselSpeedSlow') }}
+                        </button>
+                        <button
+                            type="button"
+                            class="btn btn-sm"
+                            :class="carouselSpeedMode === 'normal' ? 'btn-primary' : 'btn-outline'"
+                            @click="setCarouselSpeedMode('normal')"
+                        >
+                            {{ $t('radio.carouselSpeedNormal') }}
+                        </button>
+                        <button
+                            type="button"
+                            class="btn btn-sm"
+                            :class="carouselSpeedMode === 'fast' ? 'btn-primary' : 'btn-outline'"
+                            @click="setCarouselSpeedMode('fast')"
+                        >
+                            {{ $t('radio.carouselSpeedFast') }}
+                        </button>
+                    </div>
+                </div>
+
+                <div class="radio-motion-settings__group">
+                    <span class="muted radio-motion-settings__label">{{ $t('radio.themeLabel') }}</span>
+                    <div class="radio-motion-settings__switch" role="group" :aria-label="$t('radio.themeLabel')">
+                        <button
+                            type="button"
+                            class="btn btn-sm"
+                            :class="radioThemeMode === 'transparent' ? 'btn-primary' : 'btn-outline'"
+                            @click="setRadioThemeMode('transparent')"
+                        >
+                            {{ $t('radio.themeTransparent') }}
+                        </button>
+                        <button
+                            type="button"
+                            class="btn btn-sm"
+                            :class="radioThemeMode === 'contrast' ? 'btn-primary' : 'btn-outline'"
+                            @click="setRadioThemeMode('contrast')"
+                        >
+                            {{ $t('radio.themeContrast') }}
+                        </button>
+                    </div>
+                </div>
+            </div>
+
             <div class="radio-featured-controls">
+                <div
+                    v-if="showFeaturedManualControls"
+                    class="radio-carousel-actions"
+                >
+                    <button
+                        class="btn btn-outline btn-sm radio-carousel-btn"
+                        type="button"
+                        :disabled="!canScrollFeaturedPrev"
+                        :aria-label="$t('radio.carouselPrevious')"
+                        @click="scrollFeaturedCarousel('prev')"
+                    >
+                        <span aria-hidden="true">‹</span>
+                    </button>
+                    <button
+                        class="btn btn-outline btn-sm radio-carousel-btn"
+                        type="button"
+                        :disabled="!canScrollFeaturedNext"
+                        :aria-label="$t('radio.carouselNext')"
+                        @click="scrollFeaturedCarousel('next')"
+                    >
+                        <span aria-hidden="true">›</span>
+                    </button>
+                </div>
                 <button
                     class="btn btn-outline btn-sm"
                     type="button"
@@ -37,83 +136,96 @@
                 </button>
             </div>
 
-            <div v-if="!isSectionCollapsed('featured')" class="radio-featured-grid">
-                <article
-                    v-for="preset in visibleFeaturedPresets"
-                    :key="`radio-preset-${preset.id}`"
-                    class="radio-featured-card"
+            <div
+                v-if="!isSectionCollapsed('featured')"
+                class="radio-featured-carousel-shell"
+                @mouseenter="pauseCarouselMotion('featured')"
+                @mouseleave="resumeCarouselMotion('featured')"
+                @focusin="pauseCarouselMotion('featured')"
+                @focusout="resumeCarouselMotion('featured')"
+            >
+                <div
+                    ref="featuredCarouselViewport"
+                    class="radio-carousel-marquee"
+                    :class="{ 'is-manual': !isCarouselAutoMotionEnabled }"
+                    @scroll="syncFeaturedCarouselState"
                 >
-                    <div class="radio-featured-head">
-                        <strong>{{ preset.name }}</strong>
-                        <span class="badge">{{ preset.shortLabel }}</span>
-                    </div>
-
-                    <p class="muted radio-featured-hint">{{ preset.hint }}</p>
                     <div
-                        v-if="preset.country || preset.language || preset.tag"
-                        class="radio-featured-meta"
+                        class="radio-carousel-track radio-carousel-track--featured"
+                        :class="{
+                            'is-paused': isFeaturedCarouselPaused || !shouldLoopFeaturedCarousel,
+                            'is-static': !shouldLoopFeaturedCarousel,
+                            'is-manual': !isCarouselAutoMotionEnabled,
+                        }"
+                        :style="featuredCarouselTrackStyle"
                     >
-                        <span v-if="preset.country" class="radio-featured-pill">{{ preset.country }}</span>
-                        <span v-if="preset.language" class="radio-featured-pill">{{ preset.language }}</span>
-                        <span v-if="preset.tag" class="radio-featured-pill">{{ preset.tag }}</span>
-                    </div>
-                    <p class="muted radio-featured-query">
-                        {{ $t('radio.featuredQueryLabel') }}: {{ preset.query }}
-                    </p>
+                        <article
+                            v-for="preset in featuredCarouselItems"
+                            :key="preset._trackKey"
+                            class="radio-carousel-card radio-featured-card"
+                            :class="{ 'is-active': isFeaturedPresetCurrent(preset) }"
+                        >
+                            <div class="radio-card-title-row">
+                                <strong>{{ preset.name }}</strong>
+                                <div class="radio-card-title-row__badges">
+                                    <span v-if="isFeaturedPresetCurrent(preset)" class="badge radio-live-pill">
+                                        <span class="radio-live-pill__bars" aria-hidden="true">
+                                            <i></i>
+                                            <i></i>
+                                            <i></i>
+                                        </span>
+                                        {{ $t('radio.live') }}
+                                    </span>
+                                    <span class="badge">{{ preset.shortLabel }}</span>
+                                </div>
+                            </div>
 
-                    <p
-                        v-if="featuredErrorMap[preset.id]"
-                        class="error-text radio-featured-status"
-                    >
-                        {{ featuredErrorMap[preset.id] }}
-                    </p>
-                    <p
-                        v-else-if="featuredStationMap[preset.id]"
-                        class="muted radio-featured-status"
-                    >
-                        {{ stationMeta(featuredStationMap[preset.id]) }}
-                    </p>
+                            <p class="muted radio-card-meta">{{ featuredPresetMeta(preset) }}</p>
 
-                    <div class="radio-actions">
-                        <button
-                            class="btn btn-primary btn-sm"
-                            type="button"
-                            :disabled="isFeaturedLoading(preset.id)"
-                            @click="playFeaturedPreset(preset)"
-                        >
-                            {{ isFeaturedLoading(preset.id) ? $t('radio.featuredLoading') : $t('radio.listen') }}
-                        </button>
-                        <button
-                            class="btn btn-outline btn-sm"
-                            type="button"
-                            :disabled="isFeaturedLoading(preset.id)"
-                            @click="refreshFeaturedPreset(preset)"
-                        >
-                            {{ $t('radio.featuredRefresh') }}
-                        </button>
-                        <button
-                            class="btn btn-outline btn-sm"
-                            type="button"
-                            :disabled="isFeaturedLoading(preset.id)"
-                            @click="toggleFeaturedFavorite(preset)"
-                        >
-                            {{
-                                featuredStationMap[preset.id] && isFavorite(featuredStationMap[preset.id].station_uuid)
-                                    ? $t('common.remove')
-                                    : $t('common.favorites')
-                            }}
-                        </button>
-                        <a
-                            v-if="preset.homepage"
-                            class="btn btn-outline btn-sm"
-                            :href="preset.homepage"
-                            target="_blank"
-                            rel="noopener noreferrer"
-                        >
-                            {{ $t('radio.stationWebsite') }}
-                        </a>
+                            <p
+                                v-if="featuredErrorMap[preset.id]"
+                                class="error-text radio-featured-status"
+                            >
+                                {{ featuredErrorMap[preset.id] }}
+                            </p>
+                            <p
+                                v-else-if="featuredStationMap[preset.id]"
+                                class="muted radio-featured-status"
+                            >
+                                {{ featuredStatusLabel(preset) }}
+                            </p>
+                            <p
+                                v-else
+                                class="muted radio-featured-status"
+                            >
+                                {{ featuredStatusLabel(preset) }}
+                            </p>
+
+                            <div class="radio-actions radio-actions--compact radio-carousel-card__actions">
+                                <button
+                                    class="btn btn-primary btn-sm"
+                                    type="button"
+                                    :disabled="isFeaturedLoading(preset.id)"
+                                    @click="playFeaturedPreset(preset)"
+                                >
+                                    {{ isFeaturedLoading(preset.id) ? $t('radio.featuredLoading') : $t('radio.listen') }}
+                                </button>
+                                <button
+                                    class="btn btn-outline btn-sm"
+                                    type="button"
+                                    :disabled="isFeaturedLoading(preset.id)"
+                                    @click="toggleFeaturedFavorite(preset)"
+                                >
+                                    {{
+                                        featuredStationMap[preset.id] && isFavorite(featuredStationMap[preset.id].station_uuid)
+                                            ? $t('common.remove')
+                                            : $t('common.favorites')
+                                    }}
+                                </button>
+                            </div>
+                        </article>
                     </div>
-                </article>
+                </div>
             </div>
             <p v-else class="muted radio-collapsed-note">{{ $t('radio.listCollapsedHint') }}</p>
 
@@ -148,29 +260,38 @@
         </section>
 
         <section class="section-card radio-now-card" v-if="currentStation">
-            <h3 class="section-title" style="font-size: 1.1rem; margin-bottom: 0.45rem;">{{ $t('radio.nowPlaying') }}</h3>
             <div class="radio-now-top">
-                <div class="radio-station-head">
-                    <img
-                        v-if="currentStation.favicon"
-                        :src="currentStation.favicon"
-                        alt="station icon"
-                        class="radio-station-icon"
-                        @error="hideBrokenIcon"
-                    >
-                    <span v-else class="avatar avatar-sm avatar-placeholder">♪</span>
-                    <div>
-                        <strong>{{ currentStation.name || $t('radio.untitled') }}</strong>
-                        <p class="muted" style="margin: 0.2rem 0 0; font-size: 0.82rem;">
-                            {{ stationMeta(currentStation) }}
-                        </p>
+                <div class="radio-now-main">
+                    <span class="radio-now-kicker">{{ $t('radio.nowPlaying') }}</span>
+                    <div class="radio-station-head radio-station-head--now">
+                        <img
+                            v-if="currentStation.favicon"
+                            :src="currentStation.favicon"
+                            alt="station icon"
+                            class="radio-station-icon"
+                            @error="hideBrokenIcon"
+                        >
+                        <span v-else class="avatar avatar-sm avatar-placeholder">♪</span>
+                        <div>
+                            <div class="radio-card-title-row radio-card-title-row--now">
+                                <strong>{{ currentStation.name || $t('radio.untitled') }}</strong>
+                                <span class="badge radio-live-pill">
+                                    <span class="radio-live-pill__bars" aria-hidden="true">
+                                        <i></i>
+                                        <i></i>
+                                        <i></i>
+                                    </span>
+                                    {{ playbackStatusLabel }}
+                                </span>
+                            </div>
+                            <p class="muted radio-now-inline-meta">
+                                {{ stationEssentialMeta(currentStation, { includeCodec: true }) }}
+                            </p>
+                        </div>
                     </div>
                 </div>
 
                 <div class="radio-now-badges">
-                    <span class="badge radio-now-status-badge" :class="`radio-now-status-badge--${playbackStatusTone}`">
-                        {{ playbackStatusLabel }}
-                    </span>
                     <span class="badge radio-now-info-badge">
                         {{ $t('radio.onSiteFor', { time: stationSessionLabel }) }}
                     </span>
@@ -201,7 +322,7 @@
                     <span class="radio-now-meta-label">{{ $t('radio.metaVotes') }}</span>
                     <strong>{{ currentStationVotesLabel }}</strong>
                 </div>
-                <div v-if="currentStationStreamHost" class="radio-now-meta-item">
+                <div v-if="currentStationStreamHost" class="radio-now-meta-item radio-now-meta-item--host">
                     <span class="radio-now-meta-label">{{ $t('radio.metaStreamHost') }}</span>
                     <strong>{{ currentStationStreamHost }}</strong>
                 </div>
@@ -211,36 +332,38 @@
                 {{ $t('radio.metaTags') }}: {{ currentStationTagsText }}
             </p>
 
-            <MediaPlayer
-                v-if="!isWidgetPlaybackBridgeEnabled"
-                ref="radioPlayer"
-                type="audio"
-                :src="playableCurrentStationStreamUrl"
-                player-class="media-audio"
-                :mime-type="resolveStationMimeType(currentStation)"
-                @playererror="handleRadioPlayerError"
-            ></MediaPlayer>
+            <div class="radio-now-footer">
+                <MediaPlayer
+                    v-if="!isWidgetPlaybackBridgeEnabled"
+                    ref="radioPlayer"
+                    type="audio"
+                    :src="playableCurrentStationStreamUrl"
+                    player-class="media-audio"
+                    :mime-type="resolveStationMimeType(currentStation)"
+                    @playererror="handleRadioPlayerError"
+                ></MediaPlayer>
 
-            <p v-else class="muted radio-sync-note">
-                {{ $t('radio.syncedWithWidget') }}
-            </p>
+                <p v-else class="muted radio-sync-note">
+                    {{ $t('radio.syncedWithWidget') }}
+                </p>
 
-            <div class="radio-now-actions">
-                <button class="btn btn-outline btn-sm" type="button" @click="toggleCurrentPlayback">
-                    {{ playbackState.isPlaying ? $t('radio.pause') : $t('radio.play') }}
-                </button>
-                <button class="btn btn-outline btn-sm" type="button" @click="toggleFavorite(currentStation)">
-                    {{ isFavorite(currentStation.station_uuid) ? $t('radio.removeFromFavorites') : $t('radio.addToFavorites') }}
-                </button>
-                <a
-                    v-if="currentStation.homepage"
-                    :href="currentStation.homepage"
-                    class="btn btn-outline btn-sm"
-                    target="_blank"
-                    rel="noopener noreferrer"
-                >
-                    {{ $t('radio.stationWebsite') }}
-                </a>
+                <div class="radio-now-actions">
+                    <button class="btn btn-outline btn-sm" type="button" @click="toggleCurrentPlayback">
+                        {{ playbackState.isPlaying ? $t('radio.pause') : $t('radio.play') }}
+                    </button>
+                    <button class="btn btn-outline btn-sm" type="button" @click="toggleFavorite(currentStation)">
+                        {{ isFavorite(currentStation.station_uuid) ? $t('radio.removeFromFavorites') : $t('radio.addToFavorites') }}
+                    </button>
+                    <a
+                        v-if="currentStation.homepage"
+                        :href="currentStation.homepage"
+                        class="btn btn-outline btn-sm"
+                        target="_blank"
+                        rel="noopener noreferrer"
+                    >
+                        {{ $t('radio.stationWebsite') }}
+                    </a>
+                </div>
             </div>
 
             <p v-if="autoplayNotice" class="muted" style="margin: 0.5rem 0 0; font-size: 0.78rem;">
@@ -252,6 +375,29 @@
             <div class="radio-section-head">
                 <h3 class="section-title" style="font-size: 1.1rem; margin: 0;">{{ $t('radio.favoriteStations') }}</h3>
                 <div class="radio-section-head-actions">
+                    <div
+                        v-if="showFavoritesManualControls"
+                        class="radio-carousel-actions"
+                    >
+                        <button
+                            class="btn btn-outline btn-sm radio-carousel-btn"
+                            type="button"
+                            :disabled="!canScrollFavoritesPrev"
+                            :aria-label="$t('radio.carouselPrevious')"
+                            @click="scrollFavoritesCarousel('prev')"
+                        >
+                            <span aria-hidden="true">‹</span>
+                        </button>
+                        <button
+                            class="btn btn-outline btn-sm radio-carousel-btn"
+                            type="button"
+                            :disabled="!canScrollFavoritesNext"
+                            :aria-label="$t('radio.carouselNext')"
+                            @click="scrollFavoritesCarousel('next')"
+                        >
+                            <span aria-hidden="true">›</span>
+                        </button>
+                    </div>
                     <span class="badge">{{ favorites.length }}</span>
                     <button
                         v-if="isMobileLayout"
@@ -268,56 +414,137 @@
             <p v-else-if="isLoadingFavorites" class="muted" style="margin: 0;">{{ $t('radio.loadingFavorites') }}</p>
             <p v-else-if="favorites.length === 0" class="muted" style="margin: 0;">{{ $t('radio.emptyFavorites') }}</p>
 
-            <div v-else class="simple-list radio-favorites-list">
-                <div v-for="favorite in favorites" :key="`favorite-${favorite.station_uuid}`" class="simple-item radio-favorite-item">
-                    <div class="radio-station-head">
-                        <img
-                            v-if="favorite.favicon"
-                            :src="favorite.favicon"
-                            alt="favorite icon"
-                            class="radio-station-icon"
-                            @error="hideBrokenIcon"
-                        >
-                        <span v-else class="avatar avatar-sm avatar-placeholder">♪</span>
-                        <div>
-                            <strong>{{ favorite.name || $t('radio.untitled') }}</strong>
-                            <p class="muted radio-favorite-meta">{{ stationMeta(favorite) }}</p>
+            <template v-else>
+                <div class="radio-favorites-toolbar">
+                    <div class="radio-toolbar-group">
+                        <span class="muted radio-toolbar-label">{{ $t('radio.favoriteSortLabel') }}</span>
+                        <div class="radio-toolbar-switch" role="group" :aria-label="$t('radio.favoriteSortLabel')">
+                            <button
+                                v-for="item in favoriteSortOptions"
+                                :key="`favorite-sort-${item.id}`"
+                                type="button"
+                                class="btn btn-sm"
+                                :class="favoriteSortMode === item.id ? 'btn-primary' : 'btn-outline'"
+                                @click="favoriteSortMode = item.id"
+                            >
+                                {{ item.label }}
+                            </button>
                         </div>
                     </div>
 
-                    <div class="radio-favorite-controls">
-                        <div class="radio-actions">
-                            <button class="btn btn-primary btn-sm" type="button" @click="playStation(favorite)">{{ $t('radio.listen') }}</button>
+                    <div class="radio-toolbar-group">
+                        <span class="muted radio-toolbar-label">{{ $t('radio.favoriteFilterLabel') }}</span>
+                        <div class="radio-toolbar-switch" role="group" :aria-label="$t('radio.favoriteFilterLabel')">
                             <button
-                                class="btn btn-danger btn-sm"
+                                v-for="item in favoriteFilterOptions"
+                                :key="`favorite-filter-${item.id}`"
                                 type="button"
-                                @click="toggleFavorite(favorite)"
-                                :disabled="isFavoriteSaving(favorite.station_uuid)"
+                                class="btn btn-sm"
+                                :class="favoriteFilterMode === item.id ? 'btn-primary' : 'btn-outline'"
+                                @click="favoriteFilterMode = item.id"
                             >
-                                {{ $t('common.delete') }}
+                                {{ item.label }} ({{ item.count }})
                             </button>
-                        </div>
-
-                        <div v-if="isCurrentStation(favorite)" class="radio-favorite-mini-player">
-                            <button class="btn btn-outline btn-sm" type="button" @click="toggleCurrentPlayback">
-                                {{ playbackState.isPlaying ? $t('radio.pause') : $t('radio.play') }}
-                            </button>
-                            <input
-                                class="radio-mini-progress"
-                                type="range"
-                                :min="0"
-                                :max="playbackSeekMax"
-                                :value="playbackSeekValue"
-                                step="1"
-                                :disabled="!isPlaybackSeekEnabled"
-                                @input="onPlaybackSeekInput"
-                                @change="onPlaybackSeekInput"
-                            >
-                            <span class="muted radio-mini-time">{{ playbackTimeLabel }}</span>
                         </div>
                     </div>
                 </div>
-            </div>
+
+                <p class="muted radio-toolbar-note">
+                    {{ $t('radio.favoriteViewSummary', { shown: visibleFavoriteStations.length, total: favorites.length }) }}
+                </p>
+
+                <p v-if="visibleFavoriteStations.length === 0" class="muted" style="margin: 0;">{{ $t('radio.emptyFavoritesByView') }}</p>
+
+                <div
+                    v-else
+                    class="radio-favorites-carousel-shell"
+                    @mouseenter="pauseCarouselMotion('favorites')"
+                    @mouseleave="resumeCarouselMotion('favorites')"
+                    @focusin="pauseCarouselMotion('favorites')"
+                    @focusout="resumeCarouselMotion('favorites')"
+                >
+                    <div
+                        ref="favoritesCarouselViewport"
+                        class="radio-carousel-marquee"
+                        :class="{ 'is-manual': !isCarouselAutoMotionEnabled }"
+                        @scroll="syncFavoritesCarouselState"
+                    >
+                        <div
+                            class="radio-carousel-track radio-carousel-track--favorites"
+                            :class="{
+                                'is-paused': isFavoritesCarouselPaused || !shouldLoopFavoritesCarousel,
+                                'is-static': !shouldLoopFavoritesCarousel,
+                                'is-manual': !isCarouselAutoMotionEnabled,
+                            }"
+                            :style="favoritesCarouselTrackStyle"
+                        >
+                            <div
+                                v-for="favorite in favoriteCarouselItems"
+                                :key="favorite._trackKey"
+                                class="radio-carousel-card radio-favorite-item radio-compact-item radio-favorite-card"
+                                :class="{ 'is-active': isCurrentStation(favorite) }"
+                            >
+                                <div class="radio-station-head">
+                                    <img
+                                        v-if="favorite.favicon"
+                                        :src="favorite.favicon"
+                                        alt="favorite icon"
+                                        class="radio-station-icon"
+                                        @error="hideBrokenIcon"
+                                    >
+                                    <span v-else class="avatar avatar-sm avatar-placeholder">♪</span>
+                                    <div>
+                                        <div class="radio-card-title-row">
+                                            <strong>{{ favorite.name || $t('radio.untitled') }}</strong>
+                                            <span v-if="isCurrentStation(favorite)" class="badge radio-live-pill">
+                                                <span class="radio-live-pill__bars" aria-hidden="true">
+                                                    <i></i>
+                                                    <i></i>
+                                                    <i></i>
+                                                </span>
+                                                {{ $t('radio.live') }}
+                                            </span>
+                                        </div>
+                                        <p class="muted radio-favorite-meta">{{ stationEssentialMeta(favorite) }}</p>
+                                    </div>
+                                </div>
+
+                                <div class="radio-favorite-controls">
+                                    <div class="radio-actions radio-actions--compact radio-carousel-card__actions">
+                                        <button class="btn btn-primary btn-sm" type="button" @click="playStation(favorite)">{{ $t('radio.listen') }}</button>
+                                        <button
+                                            class="btn btn-outline btn-sm"
+                                            type="button"
+                                            @click="toggleFavorite(favorite)"
+                                            :disabled="isFavoriteSaving(favorite.station_uuid)"
+                                        >
+                                            {{ $t('common.delete') }}
+                                        </button>
+                                    </div>
+
+                                    <div v-if="isCurrentStation(favorite)" class="radio-favorite-mini-player">
+                                        <button class="btn btn-outline btn-sm" type="button" @click="toggleCurrentPlayback">
+                                            {{ playbackState.isPlaying ? $t('radio.pause') : $t('radio.play') }}
+                                        </button>
+                                        <input
+                                            class="radio-mini-progress"
+                                            type="range"
+                                            :min="0"
+                                            :max="playbackSeekMax"
+                                            :value="playbackSeekValue"
+                                            step="1"
+                                            :disabled="!isPlaybackSeekEnabled"
+                                            @input="onPlaybackSeekInput"
+                                            @change="onPlaybackSeekInput"
+                                        >
+                                        <span class="muted radio-mini-time">{{ playbackTimeLabel }}</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </template>
         </section>
 
         <section class="section-card">
@@ -326,7 +553,7 @@
                 <div class="radio-section-head-actions">
                     <span class="badge">{{ stations.length }}</span>
                     <button
-                        v-if="isMobileLayout"
+                        v-if="isSectionCollapsible('stations')"
                         class="btn btn-outline btn-sm radio-collapse-toggle"
                         type="button"
                         @click="toggleSectionCollapse('stations')"
@@ -341,8 +568,13 @@
             <p v-else-if="!hasSearchResults" class="muted" style="margin: 0;">{{ $t('radio.useSearchHint') }}</p>
             <p v-else-if="stations.length === 0" class="muted" style="margin: 0;">{{ $t('radio.emptySearch') }}</p>
 
-            <div v-else class="radio-stations-grid">
-                <article v-for="station in stations" :key="`station-${station.station_uuid}`" class="radio-station-card">
+            <div v-else class="radio-compact-list radio-stations-list">
+                <article
+                    v-for="station in stations"
+                    :key="`station-${station.station_uuid}`"
+                    class="radio-station-card radio-compact-item"
+                    :class="{ 'is-active': isCurrentStation(station) }"
+                >
                     <div class="radio-station-head">
                         <img
                             v-if="station.favicon"
@@ -353,16 +585,25 @@
                         >
                         <span v-else class="avatar avatar-sm avatar-placeholder">♪</span>
                         <div>
-                            <strong>{{ station.name || $t('radio.untitled') }}</strong>
-                            <p class="muted radio-station-meta">{{ stationMeta(station) }}</p>
+                            <div class="radio-card-title-row">
+                                <strong>{{ station.name || $t('radio.untitled') }}</strong>
+                                <span v-if="isCurrentStation(station)" class="badge radio-live-pill">
+                                    <span class="radio-live-pill__bars" aria-hidden="true">
+                                        <i></i>
+                                        <i></i>
+                                        <i></i>
+                                    </span>
+                                    {{ $t('radio.live') }}
+                                </span>
+                            </div>
+                            <p class="muted radio-station-meta">{{ stationEssentialMeta(station, { includeCodec: true }) }}</p>
+                            <p v-if="station.tags" class="muted radio-compact-tags">
+                                {{ station.tags }}
+                            </p>
                         </div>
                     </div>
 
-                    <p class="muted radio-station-tags">
-                        {{ station.tags || $t('radio.noTags') }}
-                    </p>
-
-                    <div class="radio-actions">
+                    <div class="radio-actions radio-actions--compact">
                         <button
                             class="btn btn-primary btn-sm"
                             type="button"
@@ -406,6 +647,10 @@ const RADIO_PLAYBACK_SYNC_EVENT = 'social:radio:playback-sync'
 const RADIO_PLAYBACK_READY_EVENT = 'social:radio:playback-ready'
 const RADIO_PLAYBACK_SOURCE_PAGE = 'radio-page'
 const RADIO_PLAYBACK_SOURCE_WIDGET = 'widget-radio'
+const RADIO_CAROUSEL_MOTION_MODE_STORAGE_KEY = 'social-radio-carousel-motion-mode'
+const RADIO_CAROUSEL_SPEED_STORAGE_KEY = 'social-radio-carousel-speed'
+const RADIO_PLAY_COUNTS_STORAGE_KEY = 'social-radio-station-play-counts'
+const RADIO_THEME_MODE_STORAGE_KEY = 'social-radio-theme-mode'
 
 export default {
     name: 'Radio',
@@ -443,10 +688,23 @@ export default {
             uiNowTimestamp: Date.now(),
             uiNowTimerId: null,
             isMobileLayout: false,
+            carouselMotionMode: 'auto',
+            carouselSpeedMode: 'normal',
+            radioThemeMode: 'transparent',
+            canScrollFeaturedPrev: false,
+            canScrollFeaturedNext: false,
+            canScrollFavoritesPrev: false,
+            canScrollFavoritesNext: false,
+            isFeaturedCarouselPaused: false,
+            isFavoritesCarouselPaused: false,
+            prefersReducedMotion: false,
+            favoriteSortMode: 'recent',
+            favoriteFilterMode: 'all',
+            stationPlayCounts: {},
             collapsedSections: {
                 featured: false,
                 favorites: false,
-                stations: false,
+                stations: true,
             },
             playbackState: {
                 isPlaying: false,
@@ -466,12 +724,21 @@ export default {
             window.addEventListener(RADIO_PLAYBACK_READY_EVENT, this.handleWidgetPlaybackReady)
             window.addEventListener('resize', this.syncMobileLayoutState)
             this.widgetPlaybackBridgeReady = Boolean(window.__socialRadioWidgetReady)
+            this.prefersReducedMotion = Boolean(window.matchMedia?.('(prefers-reduced-motion: reduce)')?.matches)
+            this.restoreCarouselMotionMode()
+            this.restoreCarouselSpeedMode()
+            this.restoreRadioThemeMode()
+            this.restoreStationPlayCounts()
             this.syncMobileLayoutState()
         }
 
         this.siteSessionStartedAt = this.resolveSiteSessionStartedAt()
         this.startUiTicker()
         await this.loadFavorites()
+        this.$nextTick(() => {
+            this.resetFeaturedCarouselPosition()
+            this.resetFavoritesCarouselPosition()
+        })
 
         if (this.widgetPlaybackBridgeReady) {
             this.requestWidgetPlaybackState()
@@ -493,6 +760,48 @@ export default {
     watch: {
         'playbackState.isPlaying'() {
             this.syncStationSessionTimer()
+        },
+        featuredCategory() {
+            this.$nextTick(() => {
+                this.resetFeaturedCarouselPosition()
+            })
+        },
+        favorites() {
+            this.$nextTick(() => {
+                this.resetFavoritesCarouselPosition()
+            })
+        },
+        favoriteSortMode() {
+            this.$nextTick(() => {
+                this.resetFavoritesCarouselPosition()
+            })
+        },
+        favoriteFilterMode() {
+            this.$nextTick(() => {
+                this.resetFavoritesCarouselPosition()
+            })
+        },
+        currentStation() {
+            if (this.favoriteFilterMode !== 'active') {
+                return
+            }
+
+            this.$nextTick(() => {
+                this.resetFavoritesCarouselPosition()
+            })
+        },
+        carouselMotionMode() {
+            this.persistCarouselMotionMode()
+            this.$nextTick(() => {
+                this.resetFeaturedCarouselPosition()
+                this.resetFavoritesCarouselPosition()
+            })
+        },
+        carouselSpeedMode() {
+            this.persistCarouselSpeedMode()
+        },
+        radioThemeMode() {
+            this.persistRadioThemeMode()
         },
     },
 
@@ -538,6 +847,122 @@ export default {
             }
 
             return this.featuredPresetList.filter((preset) => preset.category === this.featuredCategory)
+        },
+
+        isCarouselAutoMotionEnabled() {
+            return this.carouselMotionMode === 'auto'
+        },
+
+        carouselDurationMultiplier() {
+            if (this.carouselSpeedMode === 'slow') {
+                return 1.35
+            }
+
+            if (this.carouselSpeedMode === 'fast') {
+                return 0.72
+            }
+
+            return 1
+        },
+
+        shouldLoopFeaturedCarousel() {
+            return this.isCarouselAutoMotionEnabled && this.visibleFeaturedPresets.length > 1
+        },
+
+        shouldLoopFavoritesCarousel() {
+            return this.isCarouselAutoMotionEnabled && this.visibleFavoriteStations.length > 1
+        },
+
+        featuredCarouselItems() {
+            const list = Array.isArray(this.visibleFeaturedPresets) ? this.visibleFeaturedPresets : []
+            const loops = this.shouldLoopFeaturedCarousel ? [0, 1] : [0]
+
+            return loops.flatMap((loop) => list.map((preset, index) => ({
+                ...preset,
+                _trackKey: `radio-featured-${loop}-${preset.id ?? 'preset'}-${index}`,
+            })))
+        },
+
+        favoriteCarouselItems() {
+            const list = Array.isArray(this.visibleFavoriteStations) ? this.visibleFavoriteStations : []
+            const loops = this.shouldLoopFavoritesCarousel ? [0, 1] : [0]
+
+            return loops.flatMap((loop) => list.map((station, index) => ({
+                ...station,
+                _trackKey: `radio-favorite-${loop}-${station.station_uuid ?? 'station'}-${index}`,
+            })))
+        },
+
+        featuredCarouselTrackStyle() {
+            const baseDuration = Math.max(18, Math.round(this.visibleFeaturedPresets.length * 3.1 * this.carouselDurationMultiplier))
+            return {
+                '--radio-carousel-duration': `${baseDuration}s`,
+            }
+        },
+
+        favoritesCarouselTrackStyle() {
+            const baseDuration = Math.max(20, Math.round(this.visibleFavoriteStations.length * 3.5 * this.carouselDurationMultiplier))
+            return {
+                '--radio-carousel-duration': `${baseDuration}s`,
+            }
+        },
+
+        showFeaturedManualControls() {
+            return !this.isCarouselAutoMotionEnabled && !this.isSectionCollapsed('featured') && this.visibleFeaturedPresets.length > 1
+        },
+
+        showFavoritesManualControls() {
+            return !this.isCarouselAutoMotionEnabled && !this.isSectionCollapsed('favorites') && this.visibleFavoriteStations.length > 1
+        },
+
+        favoriteSortOptions() {
+            return [
+                { id: 'recent', label: this.$t('radio.favoriteSortRecent') },
+                { id: 'frequent', label: this.$t('radio.favoriteSortFrequent') },
+                { id: 'name', label: this.$t('radio.favoriteSortName') },
+            ]
+        },
+
+        favoriteFilterOptions() {
+            return [
+                {
+                    id: 'all',
+                    label: this.$t('radio.favoriteFilterAll'),
+                    count: this.favorites.length,
+                },
+                {
+                    id: 'active',
+                    label: this.$t('radio.favoriteFilterActive'),
+                    count: this.favorites.filter((station) => this.matchesFavoriteFilter(station, 'active')).length,
+                },
+                {
+                    id: 'website',
+                    label: this.$t('radio.favoriteFilterWebsite'),
+                    count: this.favorites.filter((station) => this.matchesFavoriteFilter(station, 'website')).length,
+                },
+            ]
+        },
+
+        visibleFavoriteStations() {
+            const baseList = Array.isArray(this.favorites) ? [...this.favorites] : []
+            const filtered = baseList.filter((station) => this.matchesFavoriteFilter(station, this.favoriteFilterMode))
+
+            if (this.favoriteSortMode === 'name') {
+                return filtered.sort((left, right) => this.compareStationsByName(left, right))
+            }
+
+            if (this.favoriteSortMode === 'frequent') {
+                return filtered.sort((left, right) => {
+                    const diff = this.getStationPlayCount(right?.station_uuid) - this.getStationPlayCount(left?.station_uuid)
+                    if (diff !== 0) {
+                        return diff
+                    }
+
+                    return this.compareStationsByName(left, right)
+                })
+            }
+
+            return filtered
         },
 
         isPlaybackSeekEnabled() {
@@ -653,10 +1078,225 @@ export default {
             }
 
             this.isMobileLayout = isMobileViewport(window.innerWidth)
+            this.syncFeaturedCarouselState()
+            this.syncFavoritesCarouselState()
+        },
+
+        normalizeCarouselMotionMode(value) {
+            return String(value || '').trim().toLowerCase() === 'manual' ? 'manual' : 'auto'
+        },
+
+        normalizeCarouselSpeedMode(value) {
+            const normalized = String(value || '').trim().toLowerCase()
+            if (normalized === 'slow' || normalized === 'fast') {
+                return normalized
+            }
+
+            return 'normal'
+        },
+
+        normalizeRadioThemeMode(value) {
+            return String(value || '').trim().toLowerCase() === 'contrast' ? 'contrast' : 'transparent'
+        },
+
+        restoreCarouselMotionMode() {
+            if (typeof window === 'undefined') {
+                return
+            }
+
+            let nextMode = 'auto'
+            try {
+                const stored = window.localStorage?.getItem(RADIO_CAROUSEL_MOTION_MODE_STORAGE_KEY)
+                if (stored) {
+                    nextMode = this.normalizeCarouselMotionMode(stored)
+                } else if (this.prefersReducedMotion) {
+                    nextMode = 'manual'
+                }
+            } catch (_error) {
+                nextMode = this.prefersReducedMotion ? 'manual' : 'auto'
+            }
+
+            this.carouselMotionMode = nextMode
+        },
+
+        restoreCarouselSpeedMode() {
+            if (typeof window === 'undefined') {
+                return
+            }
+
+            let nextSpeed = 'normal'
+            try {
+                const stored = window.localStorage?.getItem(RADIO_CAROUSEL_SPEED_STORAGE_KEY)
+                if (stored) {
+                    nextSpeed = this.normalizeCarouselSpeedMode(stored)
+                }
+            } catch (_error) {
+                nextSpeed = 'normal'
+            }
+
+            this.carouselSpeedMode = nextSpeed
+        },
+
+        restoreRadioThemeMode() {
+            if (typeof window === 'undefined') {
+                return
+            }
+
+            let nextTheme = 'transparent'
+            try {
+                const stored = window.localStorage?.getItem(RADIO_THEME_MODE_STORAGE_KEY)
+                if (stored) {
+                    nextTheme = this.normalizeRadioThemeMode(stored)
+                }
+            } catch (_error) {
+                nextTheme = 'transparent'
+            }
+
+            this.radioThemeMode = nextTheme
+        },
+
+        persistCarouselMotionMode() {
+            if (typeof window === 'undefined') {
+                return
+            }
+
+            try {
+                window.localStorage?.setItem(RADIO_CAROUSEL_MOTION_MODE_STORAGE_KEY, this.carouselMotionMode)
+            } catch (_error) {
+                // Ignore storage failures and keep the in-memory preference.
+            }
+        },
+
+        persistCarouselSpeedMode() {
+            if (typeof window === 'undefined') {
+                return
+            }
+
+            try {
+                window.localStorage?.setItem(RADIO_CAROUSEL_SPEED_STORAGE_KEY, this.carouselSpeedMode)
+            } catch (_error) {
+                // Ignore storage failures and keep the in-memory preference.
+            }
+        },
+
+        persistRadioThemeMode() {
+            if (typeof window === 'undefined') {
+                return
+            }
+
+            try {
+                window.localStorage?.setItem(RADIO_THEME_MODE_STORAGE_KEY, this.radioThemeMode)
+            } catch (_error) {
+                // Ignore storage failures and keep the in-memory preference.
+            }
+        },
+
+        setCarouselMotionMode(mode) {
+            this.carouselMotionMode = this.normalizeCarouselMotionMode(mode)
+            this.isFeaturedCarouselPaused = false
+            this.isFavoritesCarouselPaused = false
+        },
+
+        setCarouselSpeedMode(mode) {
+            this.carouselSpeedMode = this.normalizeCarouselSpeedMode(mode)
+        },
+
+        setRadioThemeMode(mode) {
+            this.radioThemeMode = this.normalizeRadioThemeMode(mode)
+        },
+
+        restoreStationPlayCounts() {
+            if (typeof window === 'undefined') {
+                return
+            }
+
+            try {
+                const raw = window.localStorage?.getItem(RADIO_PLAY_COUNTS_STORAGE_KEY)
+                const parsed = JSON.parse(raw || '{}')
+                const nextMap = Object.entries(parsed || {}).reduce((carry, [stationUuid, playCount]) => {
+                    const normalizedStationUuid = String(stationUuid || '').trim()
+                    const normalizedPlayCount = Number(playCount || 0)
+                    if (normalizedStationUuid === '' || !Number.isFinite(normalizedPlayCount) || normalizedPlayCount <= 0) {
+                        return carry
+                    }
+
+                    carry[normalizedStationUuid] = Math.floor(normalizedPlayCount)
+                    return carry
+                }, {})
+
+                this.stationPlayCounts = nextMap
+            } catch (_error) {
+                this.stationPlayCounts = {}
+            }
+        },
+
+        persistStationPlayCounts() {
+            if (typeof window === 'undefined') {
+                return
+            }
+
+            try {
+                window.localStorage?.setItem(RADIO_PLAY_COUNTS_STORAGE_KEY, JSON.stringify(this.stationPlayCounts))
+            } catch (_error) {
+                // Ignore storage failures and keep the in-memory counters.
+            }
+        },
+
+        markStationPlayed(station) {
+            const stationUuid = String(station?.station_uuid || '').trim()
+            if (stationUuid === '') {
+                return
+            }
+
+            const currentCount = Math.max(0, Number(this.stationPlayCounts?.[stationUuid] || 0))
+            this.stationPlayCounts = {
+                ...this.stationPlayCounts,
+                [stationUuid]: currentCount + 1,
+            }
+            this.persistStationPlayCounts()
+            this.$nextTick(() => {
+                this.resetFavoritesCarouselPosition()
+            })
+        },
+
+        getStationPlayCount(stationUuid) {
+            const normalizedStationUuid = String(stationUuid || '').trim()
+            if (normalizedStationUuid === '') {
+                return 0
+            }
+
+            const playCount = Number(this.stationPlayCounts?.[normalizedStationUuid] || 0)
+            return Number.isFinite(playCount) && playCount > 0 ? playCount : 0
+        },
+
+        compareStationsByName(left, right) {
+            return String(left?.name || '').localeCompare(
+                String(right?.name || ''),
+                this.$i18n?.locale || 'ru',
+                { sensitivity: 'base' }
+            )
+        },
+
+        matchesFavoriteFilter(station, filterMode = this.favoriteFilterMode) {
+            const normalizedFilter = String(filterMode || 'all').trim().toLowerCase()
+
+            if (normalizedFilter === 'active') {
+                return this.isCurrentStation(station)
+            }
+
+            if (normalizedFilter === 'website') {
+                return String(station?.homepage || '').trim() !== ''
+            }
+
+            return true
+        },
+
+        isSectionCollapsible(sectionKey) {
+            return this.isMobileLayout || sectionKey === 'stations'
         },
 
         isSectionCollapsed(sectionKey) {
-            if (!this.isMobileLayout) {
+            if (!this.isSectionCollapsible(sectionKey)) {
                 return false
             }
 
@@ -664,7 +1304,7 @@ export default {
         },
 
         toggleSectionCollapse(sectionKey) {
-            if (!this.isMobileLayout) {
+            if (!this.isSectionCollapsible(sectionKey)) {
                 return
             }
 
@@ -678,6 +1318,134 @@ export default {
             return this.isSectionCollapsed(sectionKey)
                 ? this.$t('radio.expandList')
                 : this.$t('radio.collapseList')
+        },
+
+        getFeaturedCarouselViewportElement() {
+            const ref = this.$refs.featuredCarouselViewport
+            if (!ref || typeof ref !== 'object') {
+                return null
+            }
+
+            return ref
+        },
+
+        syncFeaturedCarouselState() {
+            const viewport = this.getFeaturedCarouselViewportElement()
+            if (!viewport || this.isCarouselAutoMotionEnabled) {
+                this.canScrollFeaturedPrev = false
+                this.canScrollFeaturedNext = false
+                return
+            }
+
+            const maxScrollLeft = Math.max(0, viewport.scrollWidth - viewport.clientWidth)
+            const scrollLeft = Math.max(0, Number(viewport.scrollLeft || 0))
+            this.canScrollFeaturedPrev = scrollLeft > 8
+            this.canScrollFeaturedNext = scrollLeft < maxScrollLeft - 8
+        },
+
+        getFavoritesCarouselViewportElement() {
+            const ref = this.$refs.favoritesCarouselViewport
+            if (!ref || typeof ref !== 'object') {
+                return null
+            }
+
+            return ref
+        },
+
+        syncFavoritesCarouselState() {
+            const viewport = this.getFavoritesCarouselViewportElement()
+            if (!viewport || this.isCarouselAutoMotionEnabled) {
+                this.canScrollFavoritesPrev = false
+                this.canScrollFavoritesNext = false
+                return
+            }
+
+            const maxScrollLeft = Math.max(0, viewport.scrollWidth - viewport.clientWidth)
+            const scrollLeft = Math.max(0, Number(viewport.scrollLeft || 0))
+            this.canScrollFavoritesPrev = scrollLeft > 8
+            this.canScrollFavoritesNext = scrollLeft < maxScrollLeft - 8
+        },
+
+        resetFeaturedCarouselPosition() {
+            const viewport = this.getFeaturedCarouselViewportElement()
+            if (!viewport) {
+                this.syncFeaturedCarouselState()
+                return
+            }
+
+            viewport.scrollTo({
+                left: 0,
+                behavior: 'auto',
+            })
+            this.syncFeaturedCarouselState()
+        },
+
+        resetFavoritesCarouselPosition() {
+            const viewport = this.getFavoritesCarouselViewportElement()
+            if (!viewport) {
+                this.syncFavoritesCarouselState()
+                return
+            }
+
+            viewport.scrollTo({
+                left: 0,
+                behavior: 'auto',
+            })
+            this.syncFavoritesCarouselState()
+        },
+
+        scrollFeaturedCarousel(direction = 'next') {
+            const viewport = this.getFeaturedCarouselViewportElement()
+            if (!viewport || this.isCarouselAutoMotionEnabled) {
+                return
+            }
+
+            const step = Math.max(240, Math.floor(viewport.clientWidth * 0.82))
+            const offset = direction === 'prev' ? -step : step
+            viewport.scrollBy({
+                left: offset,
+                behavior: 'smooth',
+            })
+        },
+
+        scrollFavoritesCarousel(direction = 'next') {
+            const viewport = this.getFavoritesCarouselViewportElement()
+            if (!viewport || this.isCarouselAutoMotionEnabled) {
+                return
+            }
+
+            const step = Math.max(260, Math.floor(viewport.clientWidth * 0.82))
+            const offset = direction === 'prev' ? -step : step
+            viewport.scrollBy({
+                left: offset,
+                behavior: 'smooth',
+            })
+        },
+
+        pauseCarouselMotion(section) {
+            if (!this.isCarouselAutoMotionEnabled) {
+                return
+            }
+
+            if (section === 'featured') {
+                this.isFeaturedCarouselPaused = true
+                return
+            }
+
+            this.isFavoritesCarouselPaused = true
+        },
+
+        resumeCarouselMotion(section) {
+            if (!this.isCarouselAutoMotionEnabled) {
+                return
+            }
+
+            if (section === 'featured') {
+                this.isFeaturedCarouselPaused = false
+                return
+            }
+
+            this.isFavoritesCarouselPaused = false
         },
 
         setRadioNotice(message = '') {
@@ -1277,6 +2045,58 @@ export default {
             }
         },
 
+        featuredPresetMeta(preset) {
+            const meta = []
+
+            if (preset?.country) {
+                meta.push(preset.country)
+            }
+            if (preset?.language) {
+                meta.push(preset.language)
+            }
+
+            return meta.length > 0 ? meta.join(' · ') : preset?.shortLabel || this.$t('radio.noMetadata')
+        },
+
+        featuredStatusLabel(preset) {
+            if (this.isFeaturedLoading(preset?.id)) {
+                return this.$t('radio.featuredLoading')
+            }
+
+            const station = this.featuredStationMap?.[preset?.id]
+            if (station) {
+                return this.stationEssentialMeta(station, { includeCodec: true })
+            }
+
+            return this.$t('radio.featuredTapHint')
+        },
+
+        isFeaturedPresetCurrent(preset) {
+            return this.isCurrentStation(this.featuredStationMap?.[preset?.id])
+        },
+
+        stationEssentialMeta(station, options = {}) {
+            const includeCodec = Boolean(options?.includeCodec)
+            const meta = []
+
+            if (station?.country) {
+                meta.push(station.country)
+            }
+            if (station?.language) {
+                meta.push(station.language)
+            }
+            if (Number(station?.bitrate || 0) > 0) {
+                meta.push(`${station.bitrate} kbps`)
+            }
+            if (includeCodec && station?.codec) {
+                meta.push(String(station.codec).toUpperCase())
+            } else if (meta.length === 0 && station?.codec) {
+                meta.push(String(station.codec).toUpperCase())
+            }
+
+            return meta.length > 0 ? meta.join(' · ') : this.$t('radio.noMetadata')
+        },
+
         stationMeta(station) {
             const meta = []
 
@@ -1383,6 +2203,9 @@ export default {
         applyFavoritesSnapshot(source) {
             this.favorites = this.normalizeFavoritesSnapshot(source)
             this.syncStationsFavoriteFlags()
+            this.$nextTick(() => {
+                this.syncFavoritesCarouselState()
+            })
         },
 
         syncStationsFavoriteFlags() {
@@ -1582,6 +2405,7 @@ export default {
                     ...this.playbackState,
                     isPlaying: true,
                 }
+                this.markStationPlayed(normalizedStation)
                 this.dispatchWidgetPlaybackCommand('play', normalizedStation)
                 return
             }
@@ -1601,6 +2425,7 @@ export default {
                     reason: 'autoplay-blocked',
                 })
             } else {
+                this.markStationPlayed(normalizedStation)
                 await this.reportRadioAnalytics(ANALYTICS_EVENTS.RADIO_PLAY_STARTED, normalizedStation, {
                     source: 'radio-page',
                 })
@@ -1674,6 +2499,11 @@ export default {
                 this.setFavoriteLoading(stationUuid, false)
             }
         },
+    },
+
+    updated() {
+        this.syncFeaturedCarouselState()
+        this.syncFavoritesCarouselState()
     },
 }
 </script>

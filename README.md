@@ -68,9 +68,10 @@ SPA-социальная сеть на `Laravel + Vue` с realtime-чатами,
 ### Радио
 - Поиск станций через Radio Browser API.
 - Встроенные подборки станций по категориям с проверкой доступности потоков.
+- Карусели подборок и избранного с режимами `Авто/Вручную`, скоростью автодвижения и темами `Прозрачнее/Контрастнее`.
 - Блок "Сейчас играет" со статусом воспроизведения, временем сессии и метаданными станции.
 - Синхронизация воспроизведения между страницей радио и виджетом, включая корректный `LIVE`-таймер сессии.
-- В мобильной версии списки (избранные, найденные, premium/встроенные) сворачиваются для компактного режима при всегда видимом плеере.
+- Компактный адаптивный режим: на телефонах блок "Сейчас играет" сжат, найденные станции по умолчанию свернуты, а счетчики/чипы и служебные badge усилены по контрасту.
 - Избранные станции пользователя с мини-контролом текущего трека (play/pause/seek для не-live потоков).
 - Одноразовая команда распределения избранного админов всем не-админам: `php artisan radio:distribute-admin-favorites` (`--dry-run` для проверки).
 
@@ -416,14 +417,19 @@ docker/
 - `npm run test:js`
 - `npm run build`
 
-Последний полный прогон (28 февраля 2026):
-- `php artisan test`: `203 passed` (`1744 assertions`).
+Последний полный прогон (1 марта 2026):
+- `php artisan test`: `205 passed` (`1760 assertions`).
 - `npm run test:js`: `33 passed`.
 
-Проверка зависимостей (28 февраля 2026):
+Проверка зависимостей (1 марта 2026):
 - `npm audit`: `0 vulnerabilities`.
 - `composer audit --format=json`: `0 advisories`.
 - `doctrine/annotations` помечен как `abandoned` транзитивно через `l5-swagger`; это maintenance-вопрос без security advisory, но `composer audit` из-за этого может завершаться с non-zero exit code.
+
+Ручной smoke-check интерфейса перед релизом:
+- длинные секции и кнопки `В начало` на desktop/tablet/mobile;
+- радио: карусели, счетчики, контрастные плашки, режимы `Прозрачнее/Контрастнее`, компактный mobile-блок `Сейчас играет`;
+- чаты и виджеты: кнопки удаления, контраст текста/статусов и адаптивные списки.
 
 ## API ориентиры
 
@@ -481,8 +487,8 @@ docker/
 - Сгенерированный JSON-файл на диске: `storage/api-docs/api-docs.json`
 - Генерация документации: `php artisan l5-swagger:generate`
 - Базовые аннотации: `app/OpenApi/OpenApiSpec.php`
-- Актуальная версия спецификации: `1.3.0`
-- Спецификация синхронизирована с ключевыми маршрутами `users`, `posts`, `post_media`, `chat settings/archives`, `IPTV library/playback sessions`, `activity heartbeat`, `client analytics events`, `client error logging`, `admin analytics/export`, `admin diagnostics error-log`.
+- Актуальная версия спецификации: `1.4.0`
+- Спецификация синхронизирована с ключевыми маршрутами `site config`, `users`, `posts`, `post_media`, `radio favorites`, `chat settings/archives/mood-status`, `IPTV library/playback sessions`, `activity heartbeat`, `client analytics events`, `client error logging`, `admin summary/analytics/export`, `admin diagnostics error-log`.
 - Для блока админ-аналитики Swagger синхронизирован с проектной методикой расчётов из [docs/analytics-metrics.md](docs/analytics-metrics.md).
 - Генерация и доступность Swagger UI дополнительно проверяются тестом `tests/Feature/SwaggerDocumentationFeatureTest.php`.
 

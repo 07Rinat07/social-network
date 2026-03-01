@@ -2,6 +2,11 @@
 
 Документ фиксирует, откуда берутся данные аналитики в проекте, какие формулы используются, какие есть fallback-алгоритмы и как проверить цифры вручную.
 
+Статус верификации на 1 марта 2026:
+- `GET /api/admin/summary` и `GET /api/admin/dashboard/export` покрыты feature-тестами.
+- Swagger/OpenAPI для аналитических endpoint-ов успешно генерируется и проверяется тестом `SwaggerDocumentationFeatureTest`.
+- Полный локальный прогон: `php artisan test` -> `205 passed` (`1760 assertions`), `npm run test:js` -> `33 passed`.
+
 ## 1. Основные API и код
 
 - `GET /api/admin/summary`

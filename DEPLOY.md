@@ -350,6 +350,8 @@ npm audit
 - `composer audit` сейчас показывает `0 advisories`, но может вернуть non-zero exit code из-за `abandoned` транзитивной зависимости `doctrine/annotations` через `l5-swagger`.
 - `npm run test:js` покрывает frontend helper-логику радио, IPTV, поиска по карусели авторов и глобальной кнопки возврата в начало.
 - `php artisan test` дополнительно покрывает admin analytics/export, client analytics endpoint, lifetime error log с filtered export/archive rotation и Swagger/OpenAPI генерацию.
+- На текущей ревизии полный локальный прогон дал: `php artisan test` -> `205 passed` (`1760 assertions`), `npm run test:js` -> `33 passed`, `npm audit` -> `0 vulnerabilities`, `composer audit --format=json` -> `0 advisories`.
+- После production rollout сделайте короткий UI smoke-check: радио (`Прозрачнее/Контрастнее`, карусели, mobile-блок `Сейчас играет`), чаты/виджеты, длинные экраны с кнопкой `В начало`.
 
 На production-сервере выполняйте только сам rollout:
 
