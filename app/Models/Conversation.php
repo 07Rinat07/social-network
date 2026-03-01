@@ -20,9 +20,36 @@ class Conversation extends Model
 
     protected $fillable = [
         'type',
+        'canonical_key',
         'title',
         'created_by',
     ];
+
+    protected static function booted(): void
+    {
+        static::creating(function (self $conversation): void {
+            if ($conversation->type === self::TYPE_GLOBAL && !is_string($conversation->canonical_key)) {
+                $conversation->canonical_key = self::canonicalKeyForGlobal();
+            }
+
+            if ($conversation->type === self::TYPE_GLOBAL && blank($conversation->title)) {
+                $conversation->title = 'Общий чат';
+            }
+        });
+    }
+
+    public static function canonicalKeyForGlobal(): string
+    {
+        return self::TYPE_GLOBAL;
+    }
+
+    public static function canonicalKeyForDirectUsers(int $firstUserId, int $secondUserId): string
+    {
+        $ordered = [max(0, $firstUserId), max(0, $secondUserId)];
+        sort($ordered, SORT_NUMERIC);
+
+        return sprintf('%s:%d:%d', self::TYPE_DIRECT, $ordered[0], $ordered[1]);
+    }
 
     public function creator(): BelongsTo
     {

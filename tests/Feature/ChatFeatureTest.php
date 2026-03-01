@@ -16,6 +16,7 @@ use App\Services\UploadedVideoTranscodeService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Event;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
 use Laravel\Sanctum\Sanctum;
 use Tests\TestCase;
@@ -42,6 +43,34 @@ class ChatFeatureTest extends TestCase
         ]);
 
         $this->assertSame(Conversation::TYPE_GLOBAL, $firstResponse->json('data.0.type'));
+    }
+
+    public function test_chat_index_reuses_legacy_global_chat_without_canonical_key(): void
+    {
+        $user = User::factory()->create();
+        Sanctum::actingAs($user);
+
+        $conversationId = DB::table('conversations')->insertGetId([
+            'type' => Conversation::TYPE_GLOBAL,
+            'canonical_key' => null,
+            'title' => 'Общий чат',
+            'created_by' => $user->id,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        $response = $this->getJson('/api/chats');
+
+        $response
+            ->assertOk()
+            ->assertJsonCount(1, 'data')
+            ->assertJsonPath('data.0.id', $conversationId);
+
+        $this->assertDatabaseCount('conversations', 1);
+        $this->assertDatabaseHas('conversations', [
+            'id' => $conversationId,
+            'canonical_key' => Conversation::canonicalKeyForGlobal(),
+        ]);
     }
 
     public function test_chats_users_endpoint_excludes_current_user_and_supports_search(): void
@@ -101,6 +130,51 @@ class ChatFeatureTest extends TestCase
         ]);
 
         $this->assertDatabaseCount('conversation_participants', 2);
+    }
+
+    public function test_direct_chat_creation_reuses_legacy_direct_chat_without_canonical_key(): void
+    {
+        $viewer = User::factory()->create();
+        $target = User::factory()->create();
+        Sanctum::actingAs($viewer);
+
+        $conversationId = DB::table('conversations')->insertGetId([
+            'type' => Conversation::TYPE_DIRECT,
+            'canonical_key' => null,
+            'title' => null,
+            'created_by' => $viewer->id,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        DB::table('conversation_participants')->insert([
+            [
+                'conversation_id' => $conversationId,
+                'user_id' => $viewer->id,
+                'last_read_at' => null,
+                'created_at' => now(),
+                'updated_at' => now(),
+            ],
+            [
+                'conversation_id' => $conversationId,
+                'user_id' => $target->id,
+                'last_read_at' => null,
+                'created_at' => now(),
+                'updated_at' => now(),
+            ],
+        ]);
+
+        $response = $this->postJson("/api/chats/direct/{$target->id}");
+
+        $response
+            ->assertOk()
+            ->assertJsonPath('data.id', $conversationId);
+
+        $this->assertDatabaseCount('conversations', 1);
+        $this->assertDatabaseHas('conversations', [
+            'id' => $conversationId,
+            'canonical_key' => Conversation::canonicalKeyForDirectUsers($viewer->id, $target->id),
+        ]);
     }
 
     public function test_non_participant_cannot_read_or_send_messages_in_direct_chat(): void

@@ -423,12 +423,19 @@
                                 </div>
                                 <button
                                     v-if="canDeleteMessage(message)"
-                                    class="btn btn-danger btn-sm chat-message-remove-btn"
+                                    class="btn btn-danger btn-sm chat-message-remove-btn chat-delete-icon-btn"
                                     type="button"
+                                    :title="isMessageDeleting(message.id) ? $t('chats.deleting') : $t('common.delete')"
+                                    :aria-label="isMessageDeleting(message.id) ? $t('chats.deleting') : $t('common.delete')"
                                     :disabled="isMessageDeleting(message.id)"
                                     @click.stop="deleteMessage(message)"
                                 >
-                                    {{ isMessageDeleting(message.id) ? $t('chats.deleting') : $t('common.delete') }}
+                                    <svg viewBox="0 0 24 24" focusable="false" aria-hidden="true">
+                                        <path
+                                            fill="currentColor"
+                                            d="M9 3a1 1 0 0 0-1 1v1H5a1 1 0 1 0 0 2h.1l.8 11.2A2 2 0 0 0 7.9 20h8.2a2 2 0 0 0 1.99-1.8L18.9 7H19a1 1 0 1 0 0-2h-3V4a1 1 0 0 0-1-1H9zm1 2h4H10zm-2.09 2h8.18l-.73 10.18a.5.5 0 0 1-.5.45H9.14a.5.5 0 0 1-.5-.45L7.91 7zM10 9a1 1 0 0 1 1 1v5a1 1 0 1 1-2 0v-5a1 1 0 0 1 1-1zm4 0a1 1 0 0 1 1 1v5a1 1 0 1 1-2 0v-5a1 1 0 0 1 1-1z"
+                                        />
+                                    </svg>
                                 </button>
                             </div>
                             <StickerRichText
@@ -490,12 +497,19 @@
                                     </button>
                                     <button
                                         v-if="canDeleteMessage(message)"
-                                        class="btn btn-danger btn-sm chat-attachment-remove-btn"
+                                        class="btn btn-danger btn-sm chat-attachment-remove-btn chat-delete-icon-btn"
                                         type="button"
+                                        :title="isAttachmentDeleting(message.id, attachment.id) ? $t('chats.deleting') : $t('chats.deleteFile')"
+                                        :aria-label="isAttachmentDeleting(message.id, attachment.id) ? $t('chats.deleting') : $t('chats.deleteFile')"
                                         :disabled="isAttachmentDeleting(message.id, attachment.id)"
                                         @click.stop="deleteAttachment(message, attachment)"
                                     >
-                                        {{ isAttachmentDeleting(message.id, attachment.id) ? $t('chats.deleting') : $t('chats.deleteFile') }}
+                                        <svg viewBox="0 0 24 24" focusable="false" aria-hidden="true">
+                                            <path
+                                                fill="currentColor"
+                                                d="M9 3a1 1 0 0 0-1 1v1H5a1 1 0 1 0 0 2h.1l.8 11.2A2 2 0 0 0 7.9 20h8.2a2 2 0 0 0 1.99-1.8L18.9 7H19a1 1 0 1 0 0-2h-3V4a1 1 0 0 0-1-1H9zm1 2h4H10zm-2.09 2h8.18l-.73 10.18a.5.5 0 0 1-.5.45H9.14a.5.5 0 0 1-.5-.45L7.91 7zM10 9a1 1 0 0 1 1 1v5a1 1 0 1 1-2 0v-5a1 1 0 0 1 1-1zm4 0a1 1 0 0 1 1 1v5a1 1 0 1 1-2 0v-5a1 1 0 0 1 1-1z"
+                                            />
+                                        </svg>
                                     </button>
                                 </div>
                             </div>
@@ -950,8 +964,19 @@
                         <p class="muted chat-preview-name" v-if="item.kind === 'audio' || item.kind === 'file'">
                             {{ item.name }}
                         </p>
-                        <button class="btn btn-danger btn-sm chat-preview-remove" type="button" @click="removeSelectedFile(item.key)">
-                            {{ $t('common.remove') }}
+                        <button
+                            class="btn btn-danger btn-sm chat-preview-remove chat-delete-icon-btn"
+                            type="button"
+                            :title="$t('common.remove')"
+                            :aria-label="$t('common.remove')"
+                            @click="removeSelectedFile(item.key)"
+                        >
+                            <svg viewBox="0 0 24 24" focusable="false" aria-hidden="true">
+                                <path
+                                    fill="currentColor"
+                                    d="M9 3a1 1 0 0 0-1 1v1H5a1 1 0 1 0 0 2h.1l.8 11.2A2 2 0 0 0 7.9 20h8.2a2 2 0 0 0 1.99-1.8L18.9 7H19a1 1 0 1 0 0-2h-3V4a1 1 0 0 0-1-1H9zm1 2h4H10zm-2.09 2h8.18l-.73 10.18a.5.5 0 0 1-.5.45H9.14a.5.5 0 0 1-.5-.45L7.91 7zM10 9a1 1 0 0 1 1 1v5a1 1 0 1 1-2 0v-5a1 1 0 0 1 1-1zm4 0a1 1 0 0 1 1 1v5a1 1 0 1 1-2 0v-5a1 1 0 0 1 1-1z"
+                                />
+                            </svg>
                         </button>
                     </div>
                 </div>

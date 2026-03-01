@@ -16,6 +16,7 @@ use App\Models\UserChatSetting;
 use App\Models\UserBlock;
 use App\Services\SiteSettingService;
 use App\Services\UploadedVideoTranscodeService;
+use Illuminate\Database\QueryException;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\UploadedFile;
@@ -58,13 +59,7 @@ class ChatController extends Controller
     {
         $user = $request->user();
 
-        $globalConversation = Conversation::query()->firstOrCreate(
-            ['type' => Conversation::TYPE_GLOBAL],
-            [
-                'title' => 'Общий чат',
-                'created_by' => $user->id,
-            ]
-        );
+        $globalConversation = $this->resolveGlobalConversation($user->id);
 
         $conversations = Conversation::query()
             ->where(function ($query) use ($user) {
@@ -249,13 +244,7 @@ class ChatController extends Controller
         }
 
         if ($scope === self::CHAT_ARCHIVE_SCOPE_ALL) {
-            $globalConversation = Conversation::query()->firstOrCreate(
-                ['type' => Conversation::TYPE_GLOBAL],
-                [
-                    'title' => 'Общий чат',
-                    'created_by' => $user->id,
-                ]
-            );
+            $globalConversation = $this->resolveGlobalConversation($user->id);
 
             $conversations = Conversation::query()
                 ->forUser($user->id)
@@ -736,26 +725,7 @@ class ChatController extends Controller
             ], 423);
         }
 
-        $conversation = Conversation::query()
-            ->where('type', Conversation::TYPE_DIRECT)
-            ->withCount('participants')
-            ->whereHas('participants', fn ($query) => $query->where('users.id', $viewer->id))
-            ->whereHas('participants', fn ($query) => $query->where('users.id', $user->id))
-            ->get()
-            ->first(fn (Conversation $item) => (int) $item->participants_count === 2);
-
-        if (!$conversation) {
-            $conversation = DB::transaction(function () use ($viewer, $user) {
-                $created = Conversation::query()->create([
-                    'type' => Conversation::TYPE_DIRECT,
-                    'created_by' => $viewer->id,
-                ]);
-
-                $created->participants()->sync([$viewer->id, $user->id]);
-
-                return $created;
-            });
-        }
+        $conversation = $this->resolveDirectConversation($viewer->id, $user->id);
 
         $conversation->load([
             'participants:id,name,nickname,avatar_path,is_admin',
@@ -926,13 +896,7 @@ class ChatController extends Controller
     {
         $viewer = $request->user();
 
-        $globalConversation = Conversation::query()->firstOrCreate(
-            ['type' => Conversation::TYPE_GLOBAL],
-            [
-                'title' => 'Общий чат',
-                'created_by' => $viewer->id,
-            ]
-        );
+        $globalConversation = $this->resolveGlobalConversation($viewer->id);
 
         $conversations = Conversation::query()
             ->forUser($viewer->id)
@@ -1430,6 +1394,148 @@ class ChatController extends Controller
     protected function isBinaryMimeType(string $mimeType): bool
     {
         return in_array($mimeType, ['application/octet-stream', 'binary/octet-stream'], true);
+    }
+
+    protected function resolveGlobalConversation(int $userId): Conversation
+    {
+        $canonicalKey = Conversation::canonicalKeyForGlobal();
+
+        $existing = Conversation::query()
+            ->where('canonical_key', $canonicalKey)
+            ->first();
+
+        if ($existing instanceof Conversation) {
+            return $existing;
+        }
+
+        $legacy = Conversation::query()
+            ->where('type', Conversation::TYPE_GLOBAL)
+            ->orderByDesc('updated_at')
+            ->orderBy('id')
+            ->first();
+
+        if ($legacy instanceof Conversation) {
+            try {
+                $legacy->forceFill([
+                    'canonical_key' => $canonicalKey,
+                    'title' => $legacy->title ?: 'Общий чат',
+                ])->save();
+            } catch (QueryException $exception) {
+                if (!$this->isUniqueConstraintViolation($exception)) {
+                    throw $exception;
+                }
+            }
+
+            return Conversation::query()
+                ->where('canonical_key', $canonicalKey)
+                ->first()
+                ?? $legacy->fresh();
+        }
+
+        try {
+            return Conversation::query()->create([
+                'type' => Conversation::TYPE_GLOBAL,
+                'canonical_key' => $canonicalKey,
+                'title' => 'Общий чат',
+                'created_by' => $userId,
+            ]);
+        } catch (QueryException $exception) {
+            if (!$this->isUniqueConstraintViolation($exception)) {
+                throw $exception;
+            }
+
+            return Conversation::query()
+                ->where('canonical_key', $canonicalKey)
+                ->firstOrFail();
+        }
+    }
+
+    protected function resolveDirectConversation(int $viewerId, int $targetUserId): Conversation
+    {
+        $canonicalKey = Conversation::canonicalKeyForDirectUsers($viewerId, $targetUserId);
+
+        $existing = Conversation::query()
+            ->where('canonical_key', $canonicalKey)
+            ->first();
+
+        if ($existing instanceof Conversation) {
+            $existing->participants()->syncWithoutDetaching([$viewerId, $targetUserId]);
+
+            return $existing->fresh();
+        }
+
+        $legacy = Conversation::query()
+            ->where('type', Conversation::TYPE_DIRECT)
+            ->withCount('participants')
+            ->whereHas('participants', fn ($query) => $query->where('users.id', $viewerId))
+            ->whereHas('participants', fn ($query) => $query->where('users.id', $targetUserId))
+            ->orderByDesc('updated_at')
+            ->get()
+            ->first(fn (Conversation $item) => (int) $item->participants_count === 2);
+
+        if ($legacy instanceof Conversation) {
+            try {
+                $legacy->forceFill([
+                    'canonical_key' => $canonicalKey,
+                ])->save();
+            } catch (QueryException $exception) {
+                if (!$this->isUniqueConstraintViolation($exception)) {
+                    throw $exception;
+                }
+            }
+
+            $resolved = Conversation::query()
+                ->where('canonical_key', $canonicalKey)
+                ->first()
+                ?? $legacy->fresh();
+
+            $resolved->participants()->syncWithoutDetaching([$viewerId, $targetUserId]);
+
+            return $resolved->fresh();
+        }
+
+        try {
+            /** @var Conversation $created */
+            $created = DB::transaction(function () use ($viewerId, $targetUserId, $canonicalKey): Conversation {
+                $conversation = Conversation::query()->create([
+                    'type' => Conversation::TYPE_DIRECT,
+                    'canonical_key' => $canonicalKey,
+                    'created_by' => $viewerId,
+                ]);
+
+                $conversation->participants()->sync([$viewerId, $targetUserId]);
+
+                return $conversation;
+            });
+
+            return $created;
+        } catch (QueryException $exception) {
+            if (!$this->isUniqueConstraintViolation($exception)) {
+                throw $exception;
+            }
+
+            $resolved = Conversation::query()
+                ->where('canonical_key', $canonicalKey)
+                ->firstOrFail();
+
+            $resolved->participants()->syncWithoutDetaching([$viewerId, $targetUserId]);
+
+            return $resolved->fresh();
+        }
+    }
+
+    protected function isUniqueConstraintViolation(QueryException $exception): bool
+    {
+        $sqlState = (string) $exception->getCode();
+        if (in_array($sqlState, ['23000', '23505'], true)) {
+            return true;
+        }
+
+        $message = mb_strtolower($exception->getMessage());
+
+        return str_contains($message, 'duplicate entry')
+            || str_contains($message, 'unique constraint failed')
+            || str_contains($message, 'unique violation');
     }
 
     /**
