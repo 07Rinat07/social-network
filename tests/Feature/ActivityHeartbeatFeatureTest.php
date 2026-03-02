@@ -2,6 +2,8 @@
 
 namespace Tests\Feature;
 
+use App\Models\UserActivityDailyStat;
+use App\Models\UserActivitySession;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Laravel\Sanctum\Sanctum;
@@ -62,6 +64,55 @@ class ActivityHeartbeatFeatureTest extends TestCase
             'heartbeats_count' => 2,
             'is_active' => true,
         ]);
+    }
+
+    public function test_repeated_heartbeats_reuse_single_session_and_daily_rows(): void
+    {
+        $user = User::factory()->create();
+        Sanctum::actingAs($user);
+
+        $payload = [
+            'feature' => 'social',
+            'session_id' => 'social:duplicate-safe-001',
+        ];
+
+        $this->postJson('/api/activity/heartbeat', [
+            ...$payload,
+            'elapsed_seconds' => 5,
+        ])->assertOk();
+
+        $this->postJson('/api/activity/heartbeat', [
+            ...$payload,
+            'elapsed_seconds' => 30,
+        ])->assertOk();
+
+        $this->postJson('/api/activity/heartbeat', [
+            ...$payload,
+            'elapsed_seconds' => 20,
+            'ended' => true,
+        ])->assertOk();
+
+        $sessions = UserActivitySession::query()
+            ->where('user_id', $user->id)
+            ->where('feature', 'social')
+            ->where('session_id', 'social:duplicate-safe-001')
+            ->get();
+
+        $dailyStats = UserActivityDailyStat::query()
+            ->where('user_id', $user->id)
+            ->where('feature', 'social')
+            ->whereDate('activity_date', now()->toDateString())
+            ->get();
+
+        $this->assertCount(1, $sessions);
+        $this->assertSame(55, (int) $sessions->first()->total_seconds);
+        $this->assertSame(3, (int) $sessions->first()->heartbeats_count);
+        $this->assertFalse((bool) $sessions->first()->is_active);
+        $this->assertNotNull($sessions->first()->ended_at);
+
+        $this->assertCount(1, $dailyStats);
+        $this->assertSame(55, (int) $dailyStats->first()->seconds_total);
+        $this->assertSame(3, (int) $dailyStats->first()->heartbeats_count);
     }
 
     public function test_authenticated_user_can_store_activity_heartbeat_and_update_session_and_daily_stats(): void

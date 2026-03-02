@@ -209,12 +209,10 @@ class RadioController extends Controller
             'votes' => ['nullable', 'integer', 'min:0', 'max:99999999'],
         ]);
 
-        $favorite = RadioFavorite::query()->updateOrCreate(
-            [
+        RadioFavorite::query()->upsert(
+            [[
                 'user_id' => $request->user()->id,
                 'station_uuid' => $payload['station_uuid'],
-            ],
-            [
                 'name' => $payload['name'],
                 'stream_url' => $payload['stream_url'],
                 'homepage' => $payload['homepage'] ?? null,
@@ -225,8 +223,15 @@ class RadioController extends Controller
                 'codec' => $payload['codec'] ?? null,
                 'bitrate' => $payload['bitrate'] ?? null,
                 'votes' => $payload['votes'] ?? null,
-            ]
+            ]],
+            ['user_id', 'station_uuid'],
+            ['name', 'stream_url', 'homepage', 'favicon', 'country', 'language', 'tags', 'codec', 'bitrate', 'votes']
         );
+
+        $favorite = RadioFavorite::query()
+            ->where('user_id', $request->user()->id)
+            ->where('station_uuid', $payload['station_uuid'])
+            ->firstOrFail();
 
         return response()->json([
             'message' => 'Станция добавлена в избранное.',

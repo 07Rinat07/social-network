@@ -593,6 +593,54 @@ class IptvFeatureTest extends TestCase
         ]);
     }
 
+    public function test_repeated_saved_iptv_requests_update_single_playlist_and_channel_rows(): void
+    {
+        $user = User::factory()->create();
+        Sanctum::actingAs($user);
+
+        $this->postJson('/api/iptv/saved/playlists', [
+            'name' => 'Первый список',
+            'url' => 'https://iptv.example.com/dup-list.m3u',
+            'channels_count' => 10,
+        ])->assertStatus(201);
+
+        $this->postJson('/api/iptv/saved/playlists', [
+            'name' => 'Обновленный список',
+            'url' => 'https://iptv.example.com/dup-list.m3u',
+            'channels_count' => 25,
+        ])->assertStatus(201);
+
+        $this->postJson('/api/iptv/saved/channels', [
+            'name' => 'Первый канал',
+            'url' => 'https://stream.example.com/dup-channel.m3u8',
+            'group' => 'News',
+        ])->assertStatus(201);
+
+        $this->postJson('/api/iptv/saved/channels', [
+            'name' => 'Обновленный канал',
+            'url' => 'https://stream.example.com/dup-channel.m3u8',
+            'group' => 'Updated',
+            'logo' => 'https://img.example.com/dup-channel.png',
+        ])->assertStatus(201);
+
+        $this->assertDatabaseCount('iptv_saved_playlists', 1);
+        $this->assertDatabaseHas('iptv_saved_playlists', [
+            'user_id' => $user->id,
+            'source_url' => 'https://iptv.example.com/dup-list.m3u',
+            'name' => 'Обновленный список',
+            'channels_count' => 25,
+        ]);
+
+        $this->assertDatabaseCount('iptv_saved_channels', 1);
+        $this->assertDatabaseHas('iptv_saved_channels', [
+            'user_id' => $user->id,
+            'stream_url' => 'https://stream.example.com/dup-channel.m3u8',
+            'name' => 'Обновленный канал',
+            'group_title' => 'Updated',
+            'logo_url' => 'https://img.example.com/dup-channel.png',
+        ]);
+    }
+
     public function test_user_can_rename_saved_iptv_library_items(): void
     {
         $user = User::factory()->create();

@@ -139,6 +139,37 @@ class RadioFeatureTest extends TestCase
         ]);
     }
 
+    public function test_repeated_radio_favorite_requests_update_single_row(): void
+    {
+        $user = User::factory()->create();
+        Sanctum::actingAs($user);
+
+        $this->postJson('/api/radio/favorites', [
+            'station_uuid' => 'station-dup',
+            'name' => 'Station One',
+            'stream_url' => 'https://stream.example.com/one',
+            'codec' => 'AAC',
+        ])->assertStatus(201);
+
+        $this->postJson('/api/radio/favorites', [
+            'station_uuid' => 'station-dup',
+            'name' => 'Station One Updated',
+            'stream_url' => 'https://stream.example.com/two',
+            'codec' => 'MP3',
+            'votes' => 321,
+        ])->assertStatus(201);
+
+        $this->assertDatabaseCount('radio_favorites', 1);
+        $this->assertDatabaseHas('radio_favorites', [
+            'user_id' => $user->id,
+            'station_uuid' => 'station-dup',
+            'name' => 'Station One Updated',
+            'stream_url' => 'https://stream.example.com/two',
+            'codec' => 'MP3',
+            'votes' => 321,
+        ]);
+    }
+
     public function test_radio_stream_proxy_returns_upstream_audio_stream(): void
     {
         $user = User::factory()->create();

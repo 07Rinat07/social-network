@@ -40,44 +40,22 @@ class ActivityHeartbeatController extends Controller
         $activityDate = $now->toDateString();
 
         DB::transaction(function () use ($activityDate, $elapsedSeconds, $ended, $feature, $now, $sessionId, $user): void {
-            $session = UserActivitySession::query()->firstOrNew([
-                'user_id' => $user->id,
-                'feature' => $feature,
-                'session_id' => $sessionId,
-            ]);
+            $this->upsertActivitySession(
+                userId: (int) $user->id,
+                feature: $feature,
+                sessionId: $sessionId,
+                elapsedSeconds: $elapsedSeconds,
+                ended: $ended,
+                now: $now,
+            );
 
-            if (!$session->exists) {
-                $session->started_at = $now;
-                $session->total_seconds = 0;
-                $session->heartbeats_count = 0;
-            }
-
-            $session->last_heartbeat_at = $now;
-            $session->total_seconds = (int) $session->total_seconds + $elapsedSeconds;
-            $session->heartbeats_count = (int) $session->heartbeats_count + 1;
-            $session->is_active = !$ended;
-            $session->ended_at = $ended ? $now : null;
-            $session->save();
-
-            $daily = UserActivityDailyStat::query()
-                ->where('user_id', $user->id)
-                ->where('feature', $feature)
-                ->whereDate('activity_date', $activityDate)
-                ->first();
-
-            if (!$daily) {
-                $daily = new UserActivityDailyStat([
-                    'user_id' => $user->id,
-                    'feature' => $feature,
-                    'activity_date' => $activityDate,
-                    'seconds_total' => 0,
-                    'heartbeats_count' => 0,
-                ]);
-            }
-
-            $daily->seconds_total = (int) $daily->seconds_total + $elapsedSeconds;
-            $daily->heartbeats_count = (int) $daily->heartbeats_count + 1;
-            $daily->save();
+            $this->upsertDailyActivityStat(
+                userId: (int) $user->id,
+                feature: $feature,
+                activityDate: $activityDate,
+                elapsedSeconds: $elapsedSeconds,
+                now: $now,
+            );
         });
 
         return response()->json([
@@ -90,5 +68,70 @@ class ActivityHeartbeatController extends Controller
                 'tracked_at' => $now->toIso8601String(),
             ],
         ]);
+    }
+
+    private function upsertActivitySession(
+        int $userId,
+        string $feature,
+        string $sessionId,
+        int $elapsedSeconds,
+        bool $ended,
+        $now
+    ): void {
+        UserActivitySession::query()->upsert(
+            [[
+                'user_id' => $userId,
+                'feature' => $feature,
+                'session_id' => $sessionId,
+                'started_at' => $now,
+                'last_heartbeat_at' => $now,
+                'total_seconds' => $elapsedSeconds,
+                'heartbeats_count' => 1,
+                'is_active' => !$ended,
+                'ended_at' => $ended ? $now : null,
+                'created_at' => $now,
+                'updated_at' => $now,
+            ]],
+            ['user_id', 'feature', 'session_id'],
+            [
+                'last_heartbeat_at' => $now,
+                'total_seconds' => $this->incrementExpression('total_seconds', $elapsedSeconds),
+                'heartbeats_count' => $this->incrementExpression('heartbeats_count', 1),
+                'is_active' => !$ended,
+                'ended_at' => $ended ? $now : null,
+                'updated_at' => $now,
+            ]
+        );
+    }
+
+    private function upsertDailyActivityStat(
+        int $userId,
+        string $feature,
+        string $activityDate,
+        int $elapsedSeconds,
+        $now
+    ): void {
+        UserActivityDailyStat::query()->upsert(
+            [[
+                'user_id' => $userId,
+                'feature' => $feature,
+                'activity_date' => $activityDate,
+                'seconds_total' => $elapsedSeconds,
+                'heartbeats_count' => 1,
+                'created_at' => $now,
+                'updated_at' => $now,
+            ]],
+            ['user_id', 'feature', 'activity_date'],
+            [
+                'seconds_total' => $this->incrementExpression('seconds_total', $elapsedSeconds),
+                'heartbeats_count' => $this->incrementExpression('heartbeats_count', 1),
+                'updated_at' => $now,
+            ]
+        );
+    }
+
+    private function incrementExpression(string $column, int $amount)
+    {
+        return DB::raw(sprintf('%s + %d', $column, max(0, $amount)));
     }
 }

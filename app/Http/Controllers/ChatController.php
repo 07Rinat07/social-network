@@ -483,16 +483,20 @@ class ChatController extends Controller
 
     protected function resolveUserChatSetting(User $user): UserChatSetting
     {
-        return UserChatSetting::query()->firstOrCreate(
-            ['user_id' => $user->id],
-            [
-                'save_text_messages' => true,
-                'save_media_attachments' => true,
-                'save_file_attachments' => true,
-                'retention_days' => null,
-                'auto_archive_enabled' => true,
-            ]
-        );
+        UserChatSetting::query()->insertOrIgnore([
+            'user_id' => $user->id,
+            'save_text_messages' => true,
+            'save_media_attachments' => true,
+            'save_file_attachments' => true,
+            'retention_days' => null,
+            'auto_archive_enabled' => true,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        return UserChatSetting::query()
+            ->where('user_id', $user->id)
+            ->firstOrFail();
     }
 
     /**
@@ -820,16 +824,18 @@ class ChatController extends Controller
                 ->where('user_id', $viewerId)
                 ->delete();
         } else {
-            ConversationMoodStatus::query()->updateOrCreate(
-                [
+            $hiddenForUserIds = json_encode($isVisibleToAll ? [] : $hiddenUserIds, JSON_UNESCAPED_UNICODE);
+
+            ConversationMoodStatus::query()->upsert(
+                [[
                     'conversation_id' => $conversation->id,
                     'user_id' => $viewerId,
-                ],
-                [
                     'text' => $text,
                     'is_visible_to_all' => $isVisibleToAll,
-                    'hidden_for_user_ids' => $isVisibleToAll ? [] : $hiddenUserIds,
-                ]
+                    'hidden_for_user_ids' => $hiddenForUserIds === false ? '[]' : $hiddenForUserIds,
+                ]],
+                ['conversation_id', 'user_id'],
+                ['text', 'is_visible_to_all', 'hidden_for_user_ids']
             );
         }
 
@@ -1623,14 +1629,14 @@ class ChatController extends Controller
      */
     protected function markConversationAsRead(Conversation $conversation, int $userId): void
     {
-        ConversationParticipant::query()->updateOrCreate(
-            [
+        ConversationParticipant::query()->upsert(
+            [[
                 'conversation_id' => $conversation->id,
                 'user_id' => $userId,
-            ],
-            [
                 'last_read_at' => now(),
-            ]
+            ]],
+            ['conversation_id', 'user_id'],
+            ['last_read_at']
         );
     }
 

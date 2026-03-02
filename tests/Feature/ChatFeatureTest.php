@@ -1298,6 +1298,59 @@ class ChatFeatureTest extends TestCase
         ]);
     }
 
+    public function test_chat_settings_do_not_duplicate_rows_when_requested_multiple_times(): void
+    {
+        $user = User::factory()->create();
+        Sanctum::actingAs($user);
+
+        $this->getJson('/api/chats/settings')->assertOk();
+        $this->getJson('/api/chats/settings')->assertOk();
+
+        $this->patchJson('/api/chats/settings', [
+            'save_text_messages' => false,
+            'save_media_attachments' => false,
+            'save_file_attachments' => true,
+            'retention_days' => 30,
+            'auto_archive_enabled' => true,
+        ])->assertOk();
+
+        $this->assertDatabaseCount('user_chat_settings', 1);
+        $this->assertDatabaseHas('user_chat_settings', [
+            'user_id' => $user->id,
+            'save_text_messages' => false,
+            'save_media_attachments' => false,
+            'save_file_attachments' => true,
+            'retention_days' => 30,
+            'auto_archive_enabled' => true,
+        ]);
+    }
+
+    public function test_repeated_user_block_requests_update_single_row(): void
+    {
+        $viewer = User::factory()->create();
+        $target = User::factory()->create();
+
+        Sanctum::actingAs($viewer);
+
+        $this->postJson("/api/users/{$target->id}/block", [
+            'mode' => 'temporary',
+            'duration_minutes' => 30,
+            'reason' => 'Initial cooldown.',
+        ])->assertOk();
+
+        $this->postJson("/api/users/{$target->id}/block", [
+            'mode' => 'permanent',
+            'reason' => 'Escalated.',
+        ])->assertOk();
+
+        $this->assertDatabaseCount('user_blocks', 1);
+        $this->assertDatabaseHas('user_blocks', [
+            'blocker_id' => $viewer->id,
+            'blocked_user_id' => $target->id,
+            'reason' => 'Escalated.',
+        ]);
+    }
+
     public function test_user_can_create_download_and_restore_chat_archive(): void
     {
         Storage::fake('public');

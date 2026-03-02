@@ -33,9 +33,11 @@ COPY --from=composer:2 /usr/bin/composer /usr/bin/composer
 WORKDIR /var/www/html
 
 COPY docker/php/php.ini /usr/local/etc/php/conf.d/99-app.ini
+COPY docker/php/www.conf /usr/local/etc/php-fpm.d/zz-app-pool.conf
 COPY docker/php/entrypoint.sh /usr/local/bin/entrypoint
+COPY docker/php/healthcheck.sh /usr/local/bin/docker-healthcheck
 
-RUN chmod +x /usr/local/bin/entrypoint
+RUN chmod +x /usr/local/bin/entrypoint /usr/local/bin/docker-healthcheck
 
 ENTRYPOINT ["entrypoint"]
 CMD ["php-fpm"]

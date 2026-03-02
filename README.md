@@ -343,6 +343,8 @@ docker/
 - `ffmpeg` уже установлен в образе `app`;
 - отдельный websocket сервис поднимает Reverb на `6001`.
 - при первом запуске зависимости (`composer`/`npm`) могут ставиться несколько минут, это нормально.
+- `frontend-build` это одноразовый сервис сборки ассетов, поэтому состояние `Exited (0)` для него нормально;
+- runtime-директории Laravel (`bootstrap/cache`, `storage/framework/*`) вынесены в named volumes, чтобы уменьшить лаги на Windows/macOS/Linux bind-mount.
 
 ### Полезные Docker команды
 - Миграции вручную: `docker compose exec --user=www-data app php artisan migrate --seed`
@@ -572,6 +574,11 @@ docker/
 - Локально: запущен ли `npm run dev`.
 - Docker: пересоберите фронт `docker compose run --rm frontend-build`.
 - Сделайте `Ctrl+F5`.
+
+### Контейнер `frontend-build` в `Exited (0)`
+- Это нормально: сервис делает `npm run build` и завершается после успешной сборки.
+- Проверяйте именно долгоживущие сервисы: `app`, `web`, `websocket`, `db`.
+- Если после простоя сайт отвечает медленно, смотрите `docker compose ps` и `docker compose logs --tail=100 app web db websocket`, а не статус `frontend-build`.
 
 ### `403` на `/api/broadcasting/auth`
 - Убедитесь, что пользователь авторизован.

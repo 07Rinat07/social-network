@@ -6,6 +6,7 @@ services:
     working_dir: /var/www/html
     env_file:
       - ./${DOCKER_ENV_FILE:-.env.docker.example}
+    # One-shot asset build container. `Exited (0)` is expected after success.
     command: sh -lc "sh docker/node/ensure-node-deps.sh && npm run build"
     volumes:
       - ./:/var/www/html
@@ -29,11 +30,15 @@ services:
       - ./:/var/www/html
       - vendor_data:/var/www/html/vendor
       - composer_cache:/tmp/composer
+      - bootstrap_cache:/var/www/html/bootstrap/cache
+      - framework_cache:/var/www/html/storage/framework/cache
+      - framework_sessions:/var/www/html/storage/framework/sessions
+      - framework_views:/var/www/html/storage/framework/views
     depends_on:
       db:
         condition: service_healthy
     healthcheck:
-      test: ["CMD-SHELL", "php -r \"exit(@fsockopen('127.0.0.1', 9000) ? 0 : 1);\""]
+      test: ["CMD", "docker-healthcheck"]
       interval: 5s
       timeout: 3s
       retries: 30
@@ -74,6 +79,10 @@ services:
     volumes:
       - ./:/var/www/html
       - vendor_data:/var/www/html/vendor
+      - bootstrap_cache:/var/www/html/bootstrap/cache
+      - framework_cache:/var/www/html/storage/framework/cache
+      - framework_sessions:/var/www/html/storage/framework/sessions
+      - framework_views:/var/www/html/storage/framework/views
     depends_on:
       app:
         condition: service_healthy
@@ -131,6 +140,10 @@ services:
       - ./:/var/www/html
       - vendor_data:/var/www/html/vendor
       - composer_cache:/tmp/composer
+      - bootstrap_cache:/var/www/html/bootstrap/cache
+      - framework_cache:/var/www/html/storage/framework/cache
+      - framework_sessions:/var/www/html/storage/framework/sessions
+      - framework_views:/var/www/html/storage/framework/views
     profiles:
       - test
     networks:
@@ -141,6 +154,10 @@ volumes:
   composer_cache:
   vendor_data:
   node_modules:
+  bootstrap_cache:
+  framework_cache:
+  framework_sessions:
+  framework_views:
 
 networks:
   appnet:

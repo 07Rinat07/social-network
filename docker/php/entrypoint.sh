@@ -28,6 +28,14 @@ run_with_retry() {
     done
 }
 
+ensure_writable_dir() {
+    dir_path="$1"
+
+    mkdir -p "$dir_path"
+    chown -R www-data:www-data "$dir_path" 2>/dev/null || true
+    chmod -R ug+rwX "$dir_path" 2>/dev/null || true
+}
+
 should_seed_on_empty_users_table() {
     php <<'PHP'
 <?php
@@ -77,6 +85,12 @@ if [ ! -f "${TARGET_ENV_FILE}" ]; then
         cp .env.example "${TARGET_ENV_FILE}"
     fi
 fi
+
+ensure_writable_dir bootstrap/cache
+ensure_writable_dir storage/framework/cache
+ensure_writable_dir storage/framework/sessions
+ensure_writable_dir storage/framework/views
+ensure_writable_dir storage/logs
 
 if [ ! -f vendor/autoload.php ]; then
     run_with_retry 5 5 composer install --no-interaction --prefer-dist --optimize-autoloader

@@ -53,16 +53,21 @@ class UserBlockController extends Controller
             ? now()->addMinutes((int) $validated['duration_minutes'])
             : null;
 
-        $block = UserBlock::query()->updateOrCreate(
-            [
+        UserBlock::query()->upsert(
+            [[
                 'blocker_id' => $viewer->id,
                 'blocked_user_id' => $user->id,
-            ],
-            [
                 'expires_at' => $expiresAt,
                 'reason' => $validated['reason'] ?? null,
-            ]
+            ]],
+            ['blocker_id', 'blocked_user_id'],
+            ['expires_at', 'reason']
         );
+
+        $block = UserBlock::query()
+            ->where('blocker_id', $viewer->id)
+            ->where('blocked_user_id', $user->id)
+            ->firstOrFail();
 
         $block->load('blockedUser:id,name,email');
 

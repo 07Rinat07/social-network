@@ -137,17 +137,22 @@ class IptvController extends Controller
             $name = $this->guessNameFromUrl($sourceUrl);
         }
 
-        $playlist = IptvSavedPlaylist::query()->updateOrCreate(
-            [
+        IptvSavedPlaylist::query()->upsert(
+            [[
                 'user_id' => (int) $request->user()->id,
                 'source_url_hash' => $normalizedUrlHash,
-            ],
-            [
                 'name' => mb_substr($name, 0, 120),
                 'source_url' => $sourceUrl,
                 'channels_count' => (int) ($payload['channels_count'] ?? 0),
-            ]
+            ]],
+            ['user_id', 'source_url_hash'],
+            ['name', 'source_url', 'channels_count']
         );
+
+        $playlist = IptvSavedPlaylist::query()
+            ->where('user_id', (int) $request->user()->id)
+            ->where('source_url_hash', $normalizedUrlHash)
+            ->firstOrFail();
 
         $this->trimSavedPlaylists((int) $request->user()->id, 200);
 
@@ -237,18 +242,23 @@ class IptvController extends Controller
 
         $normalizedUrlHash = hash('sha256', mb_strtolower(trim($streamUrl)));
 
-        $channel = IptvSavedChannel::query()->updateOrCreate(
-            [
+        IptvSavedChannel::query()->upsert(
+            [[
                 'user_id' => (int) $request->user()->id,
                 'stream_url_hash' => $normalizedUrlHash,
-            ],
-            [
                 'name' => mb_substr(trim((string) $payload['name']), 0, 120),
                 'stream_url' => $streamUrl,
                 'group_title' => mb_substr(trim((string) ($payload['group'] ?? '')), 0, 160),
                 'logo_url' => $logoUrl === '' ? null : $logoUrl,
-            ]
+            ]],
+            ['user_id', 'stream_url_hash'],
+            ['name', 'stream_url', 'group_title', 'logo_url']
         );
+
+        $channel = IptvSavedChannel::query()
+            ->where('user_id', (int) $request->user()->id)
+            ->where('stream_url_hash', $normalizedUrlHash)
+            ->firstOrFail();
 
         $this->trimSavedChannels((int) $request->user()->id, 500);
 
