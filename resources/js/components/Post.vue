@@ -13,19 +13,21 @@
                     <span v-else class="avatar post-avatar avatar-placeholder">{{ initials(post.user) }}</span>
                 </router-link>
 
-                <div>
-                <h3 class="post-title">{{ post.title }}</h3>
-                <router-link class="post-author" :to="{name: 'user.show', params: {id: post.user.id}}">
-                    {{ displayName(post.user) }}
-                </router-link>
+                <div class="post-author-details">
+                    <h3 class="post-title">{{ post.title }}</h3>
+                    <router-link class="post-author" :to="{name: 'user.show', params: {id: post.user.id}}">
+                        {{ displayName(post.user) }}
+                    </router-link>
                 </div>
             </div>
-            <span class="post-date">{{ post.date }}</span>
+            <div class="post-meta">
+                <span class="post-date">{{ post.date }}</span>
+                <span class="post-views-badge">
+                    <span class="post-views-icon" aria-hidden="true">👁</span>
+                    <span>{{ post.views_count ?? 0 }} просмотров</span>
+                </span>
+            </div>
         </header>
-
-        <p class="muted" style="margin: -0.35rem 0 0; font-size: 0.8rem;">
-            👁 {{ post.views_count ?? 0 }} просмотров
-        </p>
 
         <StickerRichText
             as="p"
