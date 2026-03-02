@@ -24,7 +24,7 @@
                 <span class="post-date">{{ post.date }}</span>
                 <span class="post-views-badge">
                     <span class="post-views-icon" aria-hidden="true">👁</span>
-                    <span>{{ post.views_count ?? 0 }} просмотров</span>
+                    <span>{{ $t('post.viewsCounter', { count: post.views_count ?? 0 }) }}</span>
                 </span>
             </div>
         </header>
@@ -50,7 +50,7 @@
                             :alt="post.title"
                             loading="lazy"
                             decoding="async"
-                            @error="handlePreviewError($event, post.title || 'media')"
+                            @error="handlePreviewError($event, post.title)"
                             @load="handlePreviewLoad"
                         >
                     </button>
@@ -85,14 +85,14 @@
                         class="btn btn-danger btn-sm post-media-remove-btn"
                         @click.prevent="removeMedia(post, media)"
                     >
-                        Удалить файл
+                        {{ $t('post.removeFile') }}
                     </button>
                 </div>
             </template>
         </div>
 
         <section v-if="post.reposted_post" class="repost-box">
-            <strong>Репост оригинала</strong>
+            <strong>{{ $t('post.originalRepost') }}</strong>
             <p style="margin: 0;"><strong>{{ post.reposted_post.title }}</strong></p>
             <router-link class="post-author" :to="{name: 'user.show', params: {id: post.reposted_post.user.id}}">
                 {{ displayName(post.reposted_post.user) }}
@@ -117,7 +117,7 @@
                             :alt="post.reposted_post.title"
                             loading="lazy"
                             decoding="async"
-                            @error="handlePreviewError($event, post.reposted_post.title || 'media')"
+                            @error="handlePreviewError($event, post.reposted_post.title)"
                             @load="handlePreviewLoad"
                         >
                     </button>
@@ -155,7 +155,7 @@
                 ❤️ {{ post.likes_count }}
             </button>
             <button v-if="post.is_liked" class="icon-btn" @click.prevent="removeLike(post)">
-                ❌ Убрать лайк
+                ❌ {{ $t('post.removeLike') }}
             </button>
             <button class="icon-btn" :disabled="isPersonal()" @click.prevent="toggleRepostForm">
                 🔁 {{ post.reposted_by_posts_count }}
@@ -166,15 +166,15 @@
         </div>
 
         <div v-if="isRepostOpened" class="repost-box">
-            <input v-model.trim="title" class="input-field" type="text" placeholder="Заголовок репоста">
+            <input v-model.trim="title" class="input-field" type="text" :placeholder="$t('post.repostTitlePlaceholder')">
             <textarea
                 v-model.trim="content"
                 class="textarea-field"
-                placeholder="Комментарий к репосту"
+                :placeholder="$t('post.repostCommentPlaceholder')"
                 @input="handleRepostInput"
             ></textarea>
             <button class="btn btn-outline btn-sm" type="button" @click.prevent="toggleRepostStickerTray">
-                {{ showRepostStickerTray ? 'Скрыть стикеры' : 'Стикеры' }}
+                {{ showRepostStickerTray ? $t('post.hideStickers') : $t('post.stickers') }}
             </button>
             <div v-if="showRepostStickerTray" class="chat-sticker-tray">
                 <StickerPicker
@@ -182,21 +182,21 @@
                     @select="insertRepostSticker"
                 ></StickerPicker>
             </div>
-            <button class="btn btn-primary" @click.prevent="repost(post)">Опубликовать репост</button>
+            <button class="btn btn-primary" @click.prevent="repost(post)">{{ $t('post.publishRepost') }}</button>
         </div>
 
         <div class="comments-box">
             <div class="form-grid">
                 <div v-if="comment" class="muted" style="font-size: 0.82rem;">
-                    Ответ пользователю {{ displayName(comment.user) }}
-                    <button class="btn btn-outline btn-sm" style="margin-left: 0.5rem;" @click.prevent="comment = null">Отменить</button>
+                    {{ $t('post.replyToUser', { name: displayName(comment.user) }) }}
+                    <button class="btn btn-outline btn-sm" style="margin-left: 0.5rem;" @click.prevent="comment = null">{{ $t('post.cancelReply') }}</button>
                 </div>
 
                 <input
                     v-model.trim="body"
                     class="input-field"
                     type="text"
-                    placeholder="Ваш комментарий..."
+                    :placeholder="$t('post.commentPlaceholder')"
                     @input="handleCommentInput"
                 >
 
@@ -207,7 +207,7 @@
                 </div>
 
                 <button class="btn btn-outline btn-sm" type="button" @click="toggleCommentStickerTray">
-                    {{ showCommentStickerTray ? 'Скрыть стикеры' : 'Стикеры' }}
+                    {{ showCommentStickerTray ? $t('post.hideStickers') : $t('post.stickers') }}
                 </button>
 
                 <div v-if="showCommentStickerTray" class="chat-sticker-tray">
@@ -217,11 +217,11 @@
                     ></StickerPicker>
                 </div>
 
-                <button class="btn btn-sun" @click.prevent="storeComment(post)">Отправить комментарий</button>
+                <button class="btn btn-sun" @click.prevent="storeComment(post)">{{ $t('post.sendComment') }}</button>
             </div>
 
             <div v-if="isCommentsOpened">
-                <div v-if="comments.length === 0" class="muted">Комментариев пока нет.</div>
+                <div v-if="comments.length === 0" class="muted">{{ $t('post.noComments') }}</div>
 
                 <div v-for="commentItem in comments" :key="commentItem.id" class="comment-item">
                     <div class="comment-head">
@@ -233,13 +233,13 @@
                         <StickerRichText as="span" :text="commentItem.body"></StickerRichText>
                     </p>
                     <div style="display: flex; gap: 0.35rem; flex-wrap: wrap;">
-                        <button class="btn btn-outline btn-sm" @click="setParentId(commentItem)">Ответить</button>
+                        <button class="btn btn-outline btn-sm" @click="setParentId(commentItem)">{{ $t('post.reply') }}</button>
                         <button
                             v-if="commentItem.can_delete"
                             class="btn btn-danger btn-sm"
                             @click.prevent="removeComment(post, commentItem)"
                         >
-                            Удалить комментарий
+                            {{ $t('post.deleteComment') }}
                         </button>
                     </div>
                 </div>
@@ -373,8 +373,8 @@ export default {
     },
 
     methods: {
-        handlePreviewError(event, label = 'Preview unavailable') {
-            applyImagePreviewFallback(event, label)
+        handlePreviewError(event, label = '') {
+            applyImagePreviewFallback(event, this.previewFallbackLabel(label))
         },
 
         handlePreviewLoad(event) {
@@ -382,11 +382,11 @@ export default {
         },
 
         displayName(user) {
-            return user?.display_name || user?.name || 'Пользователь'
+            return user?.display_name || user?.name || this.$t('common.user')
         },
 
-        openMedia(url, alt = 'Фото') {
-            this.$refs.mediaLightbox?.open(url, alt)
+        openMedia(url, alt = '') {
+            this.$refs.mediaLightbox?.open(url, this.mediaAltText(alt))
         },
 
         mediaPlayerPreload(media) {
@@ -647,7 +647,19 @@ export default {
 
         mediaDownloadLabel(media) {
             const extension = this.mediaFileExtension(media).toUpperCase()
-            return extension !== '' ? `📥 Скачать ${extension}` : '📥 Скачать файл'
+            return extension !== ''
+                ? this.$t('post.downloadFormat', { format: extension })
+                : this.$t('post.downloadFile')
+        },
+
+        mediaAltText(value = '') {
+            const label = String(value || '').trim()
+            return label !== '' ? label : this.$t('post.mediaAlt')
+        },
+
+        previewFallbackLabel(value = '') {
+            const label = String(value || '').trim()
+            return label !== '' ? label : this.$t('post.previewUnavailable')
         },
 
         normalizeAvatarUrl(value) {
