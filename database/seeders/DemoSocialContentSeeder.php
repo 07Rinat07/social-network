@@ -317,6 +317,7 @@ class DemoSocialContentSeeder extends Seeder
         }
 
         $followingsPerUser = min(4, $usersCount - 1);
+        $rows = [];
 
         foreach ($users as $userIndex => $subscriber) {
             foreach (range(1, $followingsPerUser) as $offset) {
@@ -328,19 +329,30 @@ class DemoSocialContentSeeder extends Seeder
                 }
 
                 $createdAt = now()->subDays(($userIndex + 1) + $offset);
+                $pairKey = sprintf('%d:%d', (int) $subscriber->id, (int) $following->id);
 
-        DB::table('subscriber_followings')->updateOrInsert(
-                    [
-                        'subscriber_id' => $subscriber->id,
-                        'following_id' => $following->id,
-                    ],
-                    [
-                        'created_at' => $createdAt,
-                        'updated_at' => $createdAt,
-                    ]
-                );
+                if (isset($rows[$pairKey])) {
+                    continue;
+                }
+
+                $rows[$pairKey] = [
+                    'subscriber_id' => $subscriber->id,
+                    'following_id' => $following->id,
+                    'created_at' => $createdAt,
+                    'updated_at' => $createdAt,
+                ];
             }
         }
+
+        if ($rows === []) {
+            return;
+        }
+
+        DB::table('subscriber_followings')->upsert(
+            array_values($rows),
+            ['subscriber_id', 'following_id'],
+            ['updated_at']
+        );
     }
 
     /**

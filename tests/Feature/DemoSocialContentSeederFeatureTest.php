@@ -6,6 +6,7 @@ use App\Models\Comment;
 use App\Models\LikedPost;
 use App\Models\Post;
 use App\Models\PostImage;
+use App\Models\SubscriberFollowing;
 use App\Models\User;
 use Database\Seeders\DemoSocialContentSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -95,5 +96,27 @@ class DemoSocialContentSeederFeatureTest extends TestCase
         $this->assertStringStartsWith('seed/avatars/clothed-avatar-', (string) $legacyUser->avatar_path);
         $this->assertStringEndsWith('.svg', (string) $legacyUser->avatar_path);
         $this->assertTrue(Storage::disk('public')->exists((string) $legacyUser->avatar_path));
+    }
+
+    public function test_demo_social_content_seeder_can_run_twice_without_duplicate_followings(): void
+    {
+        Storage::fake('public');
+        putenv('DEMO_SEED_USE_REMOTE_IMAGES=0');
+
+        Http::preventStrayRequests();
+
+        $this->seed(DemoSocialContentSeeder::class);
+        $firstFollowingsCount = SubscriberFollowing::query()->count();
+
+        $this->seed(DemoSocialContentSeeder::class);
+
+        $this->assertSame($firstFollowingsCount, SubscriberFollowing::query()->count());
+        $this->assertSame(
+            $firstFollowingsCount,
+            SubscriberFollowing::query()
+                ->select('subscriber_id', 'following_id')
+                ->distinct()
+                ->count()
+        );
     }
 }
