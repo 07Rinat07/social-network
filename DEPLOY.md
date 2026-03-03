@@ -77,7 +77,7 @@ DB_PASSWORD=strong_password_here
 BROADCAST_DRIVER=pusher
 QUEUE_CONNECTION=sync
 SESSION_DRIVER=file
-CACHE_DRIVER=database
+CACHE_DRIVER=file
 
 IPTV_FFMPEG_BIN=/usr/bin/ffmpeg
 
@@ -105,6 +105,17 @@ VITE_REVERB_PATH="${REVERB_PATH}"
 ```
 
 Для lifetime error log убедитесь, что `www-data` имеет права на запись в `storage/logs` и архивную папку `storage/logs/site-errors-archive`.
+
+Рекомендуемый выбор cache store:
+- `CACHE_DRIVER=file` для single-host production и для окружений с отдельным `reverb`-процессом без внешнего cache backend.
+- `CACHE_DRIVER=redis` для multi-node/scale-out конфигурации, если у вас уже есть доступный Redis и он должен быть общим для `app`, очередей и realtime.
+- `CACHE_DRIVER=database` используйте только осознанно: после применения cache-миграции и с пониманием, что `reverb` тоже будет зависеть от доступности MySQL.
+
+В этом проекте cache-миграция уже есть в репозитории (`2026_02_26_140000_create_cache_tables.php`), поэтому для `database` достаточно убедиться, что она применена:
+
+```bash
+php artisan migrate --force
+```
 
 Если у вас HTTPS, переключите:
 - `APP_URL=https://your-domain.com`

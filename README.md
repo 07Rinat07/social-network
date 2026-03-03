@@ -342,6 +342,7 @@ docker/
 - при пустой БД (например после `docker compose down -v`) сиды запускаются автоматически (`RUN_SEEDERS_ON_EMPTY_DB=1`);
 - `ffmpeg` уже установлен в образе `app`;
 - отдельный websocket сервис поднимает Reverb на `6001`.
+- Docker-шаблон использует `CACHE_DRIVER=file`, чтобы `websocket`/Reverb не зависел от таблицы `cache` и доступности MySQL при старте.
 - при первом запуске зависимости (`composer`/`npm`) могут ставиться несколько минут, это нормально.
 - `frontend-build` это одноразовый сервис сборки ассетов, поэтому состояние `Exited (0)` для него нормально;
 - runtime-директории Laravel (`bootstrap/cache`, `storage/framework/*`) вынесены в named volumes, чтобы уменьшить лаги на Windows/macOS/Linux bind-mount.
@@ -370,6 +371,7 @@ docker/
 - Локальный режим: используйте `.env` (из `.env.example`).
 - Docker режим: сервисы используют `${DOCKER_ENV_FILE}`; рекомендуемый рабочий файл `.env.docker`, шаблон `.env.docker.example`.
 - Не смешивайте local и docker cookies/домены в одном браузерном контексте.
+- Если меняете cache backend для Docker на `database` или `redis`, он должен быть доступен и `app`, и `websocket`; для `database` также нужны таблицы `cache`/`cache_locks`.
 
 ### Ключевые env-переменные
 - Приложение: `APP_ENV`, `APP_DEBUG`, `APP_URL`
@@ -579,6 +581,14 @@ docker/
 - Это нормально: сервис делает `npm run build` и завершается после успешной сборки.
 - Проверяйте именно долгоживущие сервисы: `app`, `web`, `websocket`, `db`.
 - Если после простоя сайт отвечает медленно, смотрите `docker compose ps` и `docker compose logs --tail=100 app web db websocket`, а не статус `frontend-build`.
+
+### `502 Bad Gateway` в Docker
+- Короткий `502` во время ручного `docker compose up -d --force-recreate app` возможен, пока `php-fpm` поднимается заново.
+- Постоянный `502` уже не должен быть связан со stale upstream IP: `web` резолвит `app` через Docker DNS во время работы.
+- Если `502` не исчезает после того, как `app` стал `healthy`, проверьте:
+  - `docker compose ps`
+  - `docker compose logs --tail=100 app web`
+  - `docker compose exec --user=www-data app php artisan optimize:clear`
 
 ### `403` на `/api/broadcasting/auth`
 - Убедитесь, что пользователь авторизован.
