@@ -24,7 +24,7 @@ Route::middleware(['auth:sanctum', 'throttle:600,1'])->get('/user', function (Re
 Route::middleware(['auth:sanctum', 'throttle:600,1'])->get('/media/avatars/{user}', [MediaController::class, 'showAvatar'])->name('media.avatars.show');
 
 Route::post('/feedback', [FeedbackController::class, 'store'])
-    ->middleware('throttle:20,1');
+    ->middleware('throttle:feedback');
 Route::post('/client-errors', [SiteErrorLogController::class, 'storeClientError'])
     ->middleware('throttle:30,1');
 Route::get('/site/home-content', [SiteSettingController::class, 'homeContent'])

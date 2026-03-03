@@ -56,7 +56,12 @@ class ApiRateLimitFeatureTest extends TestCase
                 ->assertCreated();
         }
 
-        $this->postJson('/api/feedback', $payload)
-            ->assertStatus(429);
+        $response = $this->postJson('/api/feedback', $payload);
+
+        $response
+            ->assertStatus(429)
+            ->assertJsonStructure(['message', 'retry_after_seconds']);
+
+        $this->assertGreaterThan(0, (int) $response->json('retry_after_seconds'));
     }
 }

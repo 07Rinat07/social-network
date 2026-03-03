@@ -1179,9 +1179,13 @@
                         </div>
                         <div class="admin-feedback-actions">
                             <select class="select-field admin-feedback-status-field" v-model="item.status">
-                                <option value="new">new</option>
-                                <option value="in_progress">in_progress</option>
-                                <option value="resolved">resolved</option>
+                                <option
+                                    v-for="option in adminFeedbackStatusOptions"
+                                    :key="`admin-feedback-status-${option.value}`"
+                                    :value="option.value"
+                                >
+                                    {{ option.label }}
+                                </option>
                             </select>
                             <button class="btn btn-success btn-sm" @click="saveFeedback(item)">{{ $t('admin.update') }}</button>
                             <button class="btn btn-danger btn-sm" @click="removeFeedback(item)">{{ $t('common.delete') }}</button>
@@ -1790,6 +1794,7 @@ export default {
                 valueText: '',
                 description: '',
             },
+            subscribedAdminFeedbackChannelName: null,
         }
     },
 
@@ -2240,6 +2245,14 @@ export default {
             ]
         },
 
+        adminFeedbackStatusOptions() {
+            return [
+                { value: 'new', label: this.$t('admin.feedbackStatusNew') },
+                { value: 'in_progress', label: this.$t('admin.feedbackStatusInProgress') },
+                { value: 'resolved', label: this.$t('admin.feedbackStatusResolved') },
+            ]
+        },
+
         activeHomeContentLocalePayload() {
             if (!this.homeContentForm?.locales || typeof this.homeContentForm.locales !== 'object') {
                 return this.defaultHomeContentPayload(this.homeContentActiveLocale)
@@ -2254,6 +2267,11 @@ export default {
     async mounted() {
         await this.loadSummary()
         await this.selectTab(this.activeTab)
+        this.subscribeAdminFeedbackRealtime()
+    },
+
+    beforeUnmount() {
+        this.unsubscribeAdminFeedbackRealtime()
     },
 
     methods: {
@@ -3180,7 +3198,70 @@ export default {
 
         async loadFeedback() {
             const response = await axios.get('/api/admin/feedback', { params: { per_page: 50 } })
-            this.feedback = response.data.data ?? []
+            this.feedback = (response.data.data ?? []).map((item) => this.normalizeAdminFeedback(item))
+        },
+
+        normalizeAdminFeedback(item) {
+            return {
+                ...item,
+                id: Number(item?.id ?? 0),
+                user_id: item?.user_id ?? null,
+                name: String(item?.name ?? ''),
+                email: String(item?.email ?? ''),
+                message: String(item?.message ?? ''),
+                status: String(item?.status ?? 'new'),
+                admin_note: item?.admin_note ?? null,
+                user: item?.user ?? null,
+            }
+        },
+
+        subscribeAdminFeedbackRealtime() {
+            if (typeof window === 'undefined' || !window.Echo || this.subscribedAdminFeedbackChannelName) {
+                return
+            }
+
+            const channelName = 'admin.feedback'
+
+            window.Echo.private(channelName)
+                .listen('.feedback.created', (payload) => {
+                    this.handleAdminFeedbackCreated(payload)
+                })
+
+            this.subscribedAdminFeedbackChannelName = channelName
+        },
+
+        unsubscribeAdminFeedbackRealtime() {
+            if (typeof window === 'undefined' || !window.Echo || !this.subscribedAdminFeedbackChannelName) {
+                this.subscribedAdminFeedbackChannelName = null
+                return
+            }
+
+            window.Echo.leave(this.subscribedAdminFeedbackChannelName)
+            this.subscribedAdminFeedbackChannelName = null
+        },
+
+        handleAdminFeedbackCreated(payload) {
+            const item = this.normalizeAdminFeedback(payload ?? {})
+            if (!item.id) {
+                return
+            }
+
+            const index = this.feedback.findIndex((feedbackItem) => feedbackItem.id === item.id)
+            if (index === -1) {
+                this.feedback.unshift(item)
+                this.feedback = this.feedback.slice(0, 50)
+            } else {
+                this.feedback.splice(index, 1, {
+                    ...this.feedback[index],
+                    ...item,
+                })
+            }
+
+            const currentNewTotal = Number(this.summary?.feedback_new ?? 0)
+            this.summary = {
+                ...this.summary,
+                feedback_new: index === -1 ? currentNewTotal + 1 : currentNewTotal,
+            }
         },
 
         async saveFeedback(item) {

@@ -4,6 +4,7 @@ namespace App\Providers;
 
 use Illuminate\Cache\RateLimiting\Limit;
 use Illuminate\Foundation\Support\Providers\RouteServiceProvider as ServiceProvider;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Support\Facades\Route;
@@ -52,5 +53,28 @@ class RouteServiceProvider extends ServiceProvider
 
             return Limit::perMinute(240)->by('api:guest:' . $request->ip());
         });
+
+        RateLimiter::for('feedback', function (Request $request) {
+            $perMinute = $this->app->environment('local') ? 120 : 20;
+            $key = $request->user()
+                ? 'feedback:user:' . $request->user()->getAuthIdentifier()
+                : 'feedback:guest:' . $request->ip();
+
+            return Limit::perMinute($perMinute)
+                ->by($key)
+                ->response(function (Request $request, array $headers): JsonResponse {
+                    return $this->feedbackThrottleResponse($headers);
+                });
+        });
+    }
+
+    protected function feedbackThrottleResponse(array $headers): JsonResponse
+    {
+        $retryAfter = max(1, (int) ($headers['Retry-After'] ?? 60));
+
+        return response()->json([
+            'message' => 'Слишком много попыток отправки. Попробуйте еще раз позже.',
+            'retry_after_seconds' => $retryAfter,
+        ], 429, $headers);
     }
 }

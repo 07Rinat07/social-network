@@ -80,3 +80,7 @@ Broadcast::channel('chat.presence.{conversationId}', function ($user, int $conve
 Broadcast::channel('feedback.user.{userId}', function ($user, int $userId) {
     return (int) $user->id === $userId;
 });
+
+Broadcast::channel('admin.feedback', function ($user) {
+    return (bool) $user->is_admin;
+});

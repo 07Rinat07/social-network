@@ -1234,6 +1234,7 @@ export default {
                 this.form.message = ''
             } catch (error) {
                 const validationErrors = error.response?.data?.errors
+                const statusCode = Number(error.response?.status ?? 0)
 
                 if (validationErrors && Object.keys(validationErrors).length > 0) {
                     this.errors = validationErrors
@@ -1245,6 +1246,13 @@ export default {
 
                 if (error.code === 'ECONNABORTED') {
                     message = this.$t('home.feedbackTimeoutError')
+                } else if (statusCode === 429) {
+                    const retryAfterRaw = error.response?.data?.retry_after_seconds ?? error.response?.headers?.['retry-after']
+                    const retryAfter = Number.parseInt(retryAfterRaw, 10)
+
+                    message = Number.isFinite(retryAfter) && retryAfter > 0
+                        ? this.$t('home.feedbackRateLimitErrorWithRetry', { seconds: retryAfter })
+                        : this.$t('home.feedbackRateLimitError')
                 }
 
                 this.errors = {

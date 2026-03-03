@@ -2,8 +2,10 @@
 
 namespace Tests\Feature;
 
+use App\Events\AdminFeedbackCreated;
 use App\Models\FeedbackMessage;
 use App\Models\User;
+use Illuminate\Support\Facades\Event;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Schema;
 use Laravel\Sanctum\Sanctum;
@@ -15,6 +17,10 @@ class FeedbackFeatureTest extends TestCase
 
     public function test_guest_can_send_feedback_message(): void
     {
+        Event::fake([
+            AdminFeedbackCreated::class,
+        ]);
+
         $response = $this->postJson('/api/feedback', [
             'name' => 'Guest Reporter',
             'email' => 'guest@example.com',
@@ -31,6 +37,12 @@ class FeedbackFeatureTest extends TestCase
             'status' => FeedbackMessage::STATUS_NEW,
             'user_id' => null,
         ]);
+
+        Event::assertDispatched(AdminFeedbackCreated::class, function (AdminFeedbackCreated $event): bool {
+            return $event->feedback->name === 'Guest Reporter'
+                && $event->feedback->email === 'guest@example.com'
+                && $event->feedback->status === FeedbackMessage::STATUS_NEW;
+        });
     }
 
     public function test_authenticated_user_feedback_is_bound_to_user(): void

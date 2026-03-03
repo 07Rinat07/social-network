@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Events\AdminFeedbackCreated;
 use App\Http\Requests\Feedback\StoreRequest;
 use App\Models\FeedbackMessage;
 use Illuminate\Http\JsonResponse;
@@ -42,6 +43,8 @@ class FeedbackController extends Controller
                 'message' => 'Сервис обратной связи временно недоступен. Попробуйте позже.',
             ], 503);
         }
+
+        broadcast(new AdminFeedbackCreated($feedback));
 
         return response()->json([
             'message' => 'Спасибо! Ваше сообщение отправлено администрации.',

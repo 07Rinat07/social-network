@@ -148,6 +148,35 @@ class BroadcastChannelsFeatureTest extends TestCase
         $response->assertForbidden();
     }
 
+    public function test_admin_can_authorize_admin_feedback_channel(): void
+    {
+        $admin = User::factory()->create([
+            'is_admin' => true,
+        ]);
+
+        $response = $this->authorizeBroadcastChannel(
+            $admin,
+            'private-admin.feedback'
+        );
+
+        $response->assertOk();
+        $this->assertNotEmpty($response->json('auth'));
+    }
+
+    public function test_non_admin_cannot_authorize_admin_feedback_channel(): void
+    {
+        $user = User::factory()->create([
+            'is_admin' => false,
+        ]);
+
+        $response = $this->authorizeBroadcastChannel(
+            $user,
+            'private-admin.feedback'
+        );
+
+        $response->assertForbidden();
+    }
+
     private function createDirectConversation(User $firstUser, User $secondUser): Conversation
     {
         $conversation = Conversation::query()->create([
