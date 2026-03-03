@@ -24,6 +24,8 @@ services:
       - ./${DOCKER_ENV_FILE:-.env.docker.example}
     environment:
       COMPOSER_HOME: /tmp/composer
+      HOME: /tmp
+      XDG_CONFIG_HOME: /tmp/.config
       LARAVEL_ENV_FILE: ${DOCKER_ENV_FILE:-.env.docker.example}
       RUN_MIGRATIONS: ${RUN_MIGRATIONS:-1}
     volumes:
@@ -73,6 +75,8 @@ services:
     env_file:
       - ./${DOCKER_ENV_FILE:-.env.docker.example}
     environment:
+      HOME: /tmp
+      XDG_CONFIG_HOME: /tmp/.config
       LARAVEL_ENV_FILE: ${DOCKER_ENV_FILE:-.env.docker.example}
     ports:
       - "${REVERB_FORWARD_PORT:-6001}:6001"
@@ -131,6 +135,8 @@ services:
     command: sh -lc "php artisan test"
     environment:
       COMPOSER_HOME: /tmp/composer
+      HOME: /tmp
+      XDG_CONFIG_HOME: /tmp/.config
       APP_ENV: testing
       APP_KEY: base64:7ax4IsfouQ0uL8g2/9VglVdW+PzRl+Y3Q1yR1p0u8C4=
       DB_CONNECTION: sqlite
