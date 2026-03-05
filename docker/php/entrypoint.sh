@@ -78,6 +78,57 @@ try {
 PHP
 }
 
+wait_for_mysql_connection() {
+    php <<'PHP'
+<?php
+
+$connection = getenv('DB_CONNECTION') ?: 'mysql';
+if ($connection !== 'mysql') {
+    exit(0);
+}
+
+$host = getenv('DB_HOST') ?: 'db';
+$port = getenv('DB_PORT') ?: '3306';
+$database = getenv('DB_DATABASE') ?: '';
+$username = getenv('DB_USERNAME') ?: '';
+$password = getenv('DB_PASSWORD') ?: '';
+$timeout = (int) (getenv('DB_CONNECT_TIMEOUT') ?: 5);
+
+try {
+    $dsn = sprintf('mysql:host=%s;port=%s;dbname=%s', $host, $port, $database);
+    $pdo = new PDO($dsn, $username, $password, [
+        PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
+        PDO::ATTR_TIMEOUT => max(1, $timeout),
+    ]);
+
+    $pdo->query('SELECT 1');
+    exit(0);
+} catch (Throwable $exception) {
+    fwrite(STDERR, sprintf(
+        "WARN: waiting for MySQL at %s:%s: %s\n",
+        $host,
+        $port,
+        $exception->getMessage()
+    ));
+    exit(1);
+}
+PHP
+}
+
+MYSQL_READY=0
+ensure_mysql_ready() {
+    if [ "${DB_CONNECTION:-mysql}" != "mysql" ]; then
+        return 0
+    fi
+
+    if [ "$MYSQL_READY" = "1" ]; then
+        return 0
+    fi
+
+    run_with_retry 20 3 wait_for_mysql_connection
+    MYSQL_READY=1
+}
+
 if [ ! -f "${TARGET_ENV_FILE}" ]; then
     if [ -f "${DEFAULT_DOCKER_ENV_FILE}" ]; then
         cp "${DEFAULT_DOCKER_ENV_FILE}" "${TARGET_ENV_FILE}"
@@ -105,10 +156,12 @@ if ! grep -Eq '^APP_KEY=base64:' "${TARGET_ENV_FILE}"; then
 fi
 
 if [ "${RUN_MIGRATIONS:-0}" = "1" ]; then
+    ensure_mysql_ready
     run_with_retry 20 3 php artisan migrate --force --no-interaction
 fi
 
 if [ "${RUN_SEEDERS_ON_EMPTY_DB:-1}" = "1" ]; then
+    ensure_mysql_ready
     should_seed="$(should_seed_on_empty_users_table)"
     if [ "$should_seed" = "1" ]; then
         run_with_retry 10 3 php artisan db:seed --force --no-interaction
