@@ -36,6 +36,15 @@ ensure_writable_dir() {
     chmod -R ug+rwX "$dir_path" 2>/dev/null || true
 }
 
+run_as_www_data() {
+    if [ "$(id -u)" -eq 0 ]; then
+        su -s /bin/sh www-data -c "$*"
+        return $?
+    fi
+
+    "$@"
+}
+
 should_seed_on_empty_users_table() {
     php <<'PHP'
 <?php
@@ -142,6 +151,10 @@ ensure_writable_dir storage/framework/cache
 ensure_writable_dir storage/framework/sessions
 ensure_writable_dir storage/framework/views
 ensure_writable_dir storage/logs
+ensure_writable_dir storage/app/public
+ensure_writable_dir storage/app/public/seed
+ensure_writable_dir storage/app/public/seed/avatars
+ensure_writable_dir storage/app/public/seed/posts
 
 if [ ! -f vendor/autoload.php ]; then
     run_with_retry 5 5 composer install --no-interaction --prefer-dist --optimize-autoloader
@@ -152,21 +165,26 @@ if [ -f composer.lock ] && [ composer.lock -nt vendor/autoload.php ]; then
 fi
 
 if ! grep -Eq '^APP_KEY=base64:' "${TARGET_ENV_FILE}"; then
-    php artisan key:generate --force --no-interaction
+    run_as_www_data php artisan key:generate --force --no-interaction
 fi
 
 if [ "${RUN_MIGRATIONS:-0}" = "1" ]; then
     ensure_mysql_ready
-    run_with_retry 20 3 php artisan migrate --force --no-interaction
+    run_with_retry 20 3 run_as_www_data php artisan migrate --force --no-interaction
 fi
 
 if [ "${RUN_SEEDERS_ON_EMPTY_DB:-1}" = "1" ]; then
     ensure_mysql_ready
     should_seed="$(should_seed_on_empty_users_table)"
     if [ "$should_seed" = "1" ]; then
-        run_with_retry 10 3 php artisan db:seed --force --no-interaction
+        run_with_retry 10 3 run_as_www_data php artisan db:seed --force --no-interaction
     fi
 fi
+
+ensure_writable_dir storage/app/public
+ensure_writable_dir storage/app/public/seed
+ensure_writable_dir storage/app/public/seed/avatars
+ensure_writable_dir storage/app/public/seed/posts
 
 # Docker profile expects ffmpeg preinstalled in the image.
 # Fail fast if it is missing so IPTV transcode does not break silently.

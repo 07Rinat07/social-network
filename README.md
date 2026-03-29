@@ -328,7 +328,11 @@ docker/
 
 ### 2) Docker режим
 1. Запуск:
-   - Рекомендуется создать отдельный Docker env: `.env.docker` из `.env.docker.example`
+   - Обязательно создайте отдельный Docker env из шаблона `.env.docker.example`:
+     - Linux/macOS: `cp .env.docker.example .env.docker`
+     - PowerShell: `Copy-Item .env.docker.example .env.docker -Force`
+     - CMD: `copy .env.docker.example .env.docker`
+   - Не копируйте локальный `.env` в `.env.docker`: для Docker здесь нужны `DB_HOST=db` и переменные инициализации MySQL (`MYSQL_DATABASE`, `MYSQL_USER`, `MYSQL_PASSWORD`, `MYSQL_ROOT_PASSWORD`).
    - `docker compose up -d --build`
    - Если порты заняты, задайте forward-порты перед запуском (PowerShell):
      `$env:WEB_FORWARD_PORT=8081; $env:DB_FORWARD_PORT=3308; $env:VITE_FORWARD_PORT=5174; $env:REVERB_FORWARD_PORT=6002; docker compose up -d --build`
@@ -340,6 +344,7 @@ docker/
 В Docker:
 - миграции запускаются автоматически (`RUN_MIGRATIONS=1`);
 - при пустой БД (например после `docker compose down -v`) сиды запускаются автоматически (`RUN_SEEDERS_ON_EMPTY_DB=1`);
+- если нужны реальные demo-фото в seed-постах, включите `DEMO_SEED_USE_REMOTE_IMAGES=1` в `.env.docker` и затем повторно запустите `docker compose exec --user=www-data app php artisan db:seed --class=DemoSocialContentSeeder --force`;
 - `ffmpeg` уже установлен в образе `app`;
 - отдельный websocket сервис поднимает Reverb на `6001`.
 - Docker-шаблон использует `CACHE_DRIVER=file`, чтобы `websocket`/Reverb не зависел от таблицы `cache` и доступности MySQL при старте.
@@ -376,6 +381,7 @@ docker/
 ### Ключевые env-переменные
 - Приложение: `APP_ENV`, `APP_DEBUG`, `APP_URL`
 - База: `DB_CONNECTION`, `DB_HOST`, `DB_PORT`, `DB_DATABASE`, `DB_USERNAME`, `DB_PASSWORD`
+- Инициализация MySQL в Docker: `MYSQL_DATABASE`, `MYSQL_USER`, `MYSQL_PASSWORD`, `MYSQL_ROOT_PASSWORD`
 - Безопасность/сессия: `SANCTUM_STATEFUL_DOMAINS`, `CORS_ALLOWED_ORIGINS`, `SESSION_COOKIE`, `XSRF_COOKIE`, `VITE_XSRF_COOKIE_NAME`
 - Realtime: `REVERB_*`, `VITE_REVERB_*`
 - IPTV: `IPTV_FFMPEG_BIN`
@@ -508,15 +514,31 @@ docker/
 
 `DemoSocialContentSeeder` дополнительно создаёт демо-посты, комментарии, лайки, подписки и placeholder-изображения.
 По умолчанию изображения генерируются локально (без зависимости от интернета). Если нужны внешние фото из `loremflickr.com`, включите `DEMO_SEED_USE_REMOTE_IMAGES=1`.
+Если seed-посты уже были созданы с локальными SVG-плейсхолдерами, повторный запуск `DemoSocialContentSeeder` при `DEMO_SEED_USE_REMOTE_IMAGES=1` заменит их на реальные загруженные изображения.
 
 ## Частые проблемы
 
 ### `SQLSTATE[HY000] [2002] Connection refused`
 - Проверьте `DB_HOST`/`DB_PORT` в активном env-файле.
-- В Docker MySQL доступен на `127.0.0.1:3307`.
+- Из контейнеров Docker MySQL доступен как `db:3306`.
+- С хоста Windows/MySQL доступен как `127.0.0.1:3307`.
 
 ### `Access denied`
 - Проверьте `DB_USERNAME`/`DB_PASSWORD` и пользователя в MySQL.
+
+### `Container social-network-db-1 is unhealthy`
+- Самая частая причина: Docker запущен с неправильным `.env.docker` или без `MYSQL_ROOT_PASSWORD`.
+- Пересоздайте docker-env из шаблона:
+  - PowerShell: `Copy-Item .env.docker.example .env.docker -Force`
+- Проверьте, что в `.env.docker` есть:
+  - `DB_HOST=db`
+  - `MYSQL_DATABASE=...`
+  - `MYSQL_USER=...`
+  - `MYSQL_PASSWORD=...`
+  - `MYSQL_ROOT_PASSWORD=...`
+- После исправления env перезапустите стек:
+  - `docker compose down -v`
+  - `docker compose up -d --build`
 
 ### `ports are not available` / `bind ... already in use`
 - Порт уже занят другим приложением.

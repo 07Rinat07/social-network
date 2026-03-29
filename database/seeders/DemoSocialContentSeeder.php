@@ -397,23 +397,16 @@ class DemoSocialContentSeeder extends Seeder
 
         $disk = Storage::disk('public');
         $basePath = sprintf('seed/%s/%s-%dx%d-%d', $group, $normalizedCategory, $width, $height, $lock);
+        $existingAsset = $this->resolveExistingPlaceholderAsset($disk, $basePath);
+        $shouldFetchRemote = $this->shouldFetchRemotePlaceholders();
 
-        foreach (['jpg', 'jpeg', 'png', 'webp', 'svg'] as $ext) {
-            $path = $basePath . '.' . $ext;
-            if ($disk->exists($path)) {
-                $asset = [
-                    'path' => $path,
-                    'mime' => $this->mimeFromExtension($ext),
-                    'size' => (int) ($disk->size($path) ?: 0),
-                ];
+        if ($existingAsset && !($shouldFetchRemote && $existingAsset['mime'] === 'image/svg+xml')) {
+            $this->assetCache[$cacheKey] = $existingAsset;
 
-                $this->assetCache[$cacheKey] = $asset;
-
-                return $asset;
-            }
+            return $existingAsset;
         }
 
-        if ($this->shouldFetchRemotePlaceholders()) {
+        if ($shouldFetchRemote) {
             $url = sprintf('https://loremflickr.com/%d/%d/%s?lock=%d', $width, $height, $normalizedCategory, $lock);
 
             try {
@@ -432,6 +425,7 @@ class DemoSocialContentSeeder extends Seeder
                 ) {
                     $extension = $this->extensionFromMime($mimeType);
                     $path = $basePath . '.' . $extension;
+                    $this->deleteSiblingPlaceholderAssets($disk, $basePath, $path);
                     $disk->put($path, $body);
 
                     $asset = [
@@ -447,10 +441,17 @@ class DemoSocialContentSeeder extends Seeder
             } catch (Throwable) {
                 // Fallback to local SVG placeholder when external image is unavailable.
             }
+
+            if ($existingAsset) {
+                $this->assetCache[$cacheKey] = $existingAsset;
+
+                return $existingAsset;
+            }
         }
 
         $path = $basePath . '.svg';
         $svg = $this->buildFallbackSvg($width, $height, $normalizedCategory);
+        $this->deleteSiblingPlaceholderAssets($disk, $basePath, $path);
         $disk->put($path, $svg);
 
         $asset = [
@@ -462,6 +463,43 @@ class DemoSocialContentSeeder extends Seeder
         $this->assetCache[$cacheKey] = $asset;
 
         return $asset;
+    }
+
+    /**
+     * @param \Illuminate\Contracts\Filesystem\Filesystem $disk
+     * @return array{path: string, mime: string, size: int}|null
+     */
+    protected function resolveExistingPlaceholderAsset($disk, string $basePath): ?array
+    {
+        foreach (['jpg', 'jpeg', 'png', 'webp', 'svg'] as $ext) {
+            $path = $basePath . '.' . $ext;
+            if (! $disk->exists($path)) {
+                continue;
+            }
+
+            return [
+                'path' => $path,
+                'mime' => $this->mimeFromExtension($ext),
+                'size' => (int) ($disk->size($path) ?: 0),
+            ];
+        }
+
+        return null;
+    }
+
+    /**
+     * @param \Illuminate\Contracts\Filesystem\Filesystem $disk
+     */
+    protected function deleteSiblingPlaceholderAssets($disk, string $basePath, string $exceptPath): void
+    {
+        foreach (['jpg', 'jpeg', 'png', 'webp', 'svg'] as $ext) {
+            $path = $basePath . '.' . $ext;
+            if ($path === $exceptPath || ! $disk->exists($path)) {
+                continue;
+            }
+
+            $disk->delete($path);
+        }
     }
 
     protected function extensionFromMime(string $mimeType): string

@@ -69,6 +69,42 @@ class DemoSocialContentSeederFeatureTest extends TestCase
         $this->assertTrue(Storage::disk('public')->exists((string) $postImage?->path));
     }
 
+    public function test_demo_social_content_seeder_upgrades_existing_svg_placeholders_to_remote_images_when_enabled(): void
+    {
+        Storage::fake('public');
+        putenv('DEMO_SEED_USE_REMOTE_IMAGES=0');
+
+        Http::preventStrayRequests();
+        $this->seed(DemoSocialContentSeeder::class);
+
+        /** @var PostImage|null $postImage */
+        $postImage = PostImage::query()->where('path', 'like', 'seed/posts/%')->first();
+        $this->assertNotNull($postImage);
+        $this->assertStringEndsWith('.svg', (string) $postImage->path);
+        $legacySvgPath = (string) $postImage->path;
+        $this->assertTrue(Storage::disk('public')->exists($legacySvgPath));
+
+        putenv('DEMO_SEED_USE_REMOTE_IMAGES=1');
+
+        try {
+            Http::fake([
+                'https://loremflickr.com/*' => Http::response("\xFF\xD8\xFF\xD9", 200, [
+                    'Content-Type' => 'image/jpeg',
+                ]),
+            ]);
+
+            $this->seed(DemoSocialContentSeeder::class);
+        } finally {
+            putenv('DEMO_SEED_USE_REMOTE_IMAGES=0');
+        }
+
+        $postImage->refresh();
+
+        $this->assertStringEndsWith('.jpg', (string) $postImage->path);
+        $this->assertTrue(Storage::disk('public')->exists((string) $postImage->path));
+        $this->assertFalse(Storage::disk('public')->exists($legacySvgPath));
+    }
+
     public function test_demo_social_content_seeder_replaces_legacy_seed_avatar_with_clothed_svg_avatar(): void
     {
         Storage::fake('public');
