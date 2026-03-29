@@ -7,7 +7,7 @@ use OpenApi\Annotations as OA;
 /**
  * @OA\Info(
  *     title="Solid Social API",
- *     version="1.4.0",
+ *     version="1.4.1",
  *     description="API documentation for Solid Social Network SPA, synchronized with the latest verified routes for feed, media upload, site config, chat settings/archives/mood status, radio favorites, IPTV playback/library, client analytics tracking, lifetime site error logging, and extended admin summary/analytics/export flows. Detailed analytics formulas, diagnostics notes, and source tables are documented in docs/analytics-metrics.md."
  * )
  *
@@ -150,6 +150,18 @@ use OpenApi\Annotations as OA;
  *     @OA\Property(property="mime_type", type="string", example="video/mp4"),
  *     @OA\Property(property="size", type="integer", example=10485760),
  *     @OA\Property(property="original_name", type="string", example="clip.mp4")
+ * )
+ *
+ * @OA\Schema(
+ *     schema="PostComment",
+ *     type="object",
+ *     required={"id","body","date","can_delete","user"},
+ *     @OA\Property(property="id", type="integer", example=15),
+ *     @OA\Property(property="body", type="string", example="Отличный пост."),
+ *     @OA\Property(property="date", type="string", example="2 minutes ago"),
+ *     @OA\Property(property="answered_for_user", type="string", nullable=true, example="Admin"),
+ *     @OA\Property(property="can_delete", type="boolean", example=false),
+ *     @OA\Property(property="user", ref="#/components/schemas/UserSummary")
  * )
  *
  * @OA\Schema(
@@ -664,6 +676,29 @@ class OpenApiSpec
      * )
      */
     public function markPostViewed(): void
+    {
+    }
+
+    /**
+     * @OA\Get(
+     *     path="/api/posts/{post}/comment",
+     *     operationId="getPostComments",
+     *     tags={"Posts"},
+     *     summary="Get paginated comments for a post",
+     *     security={{"sanctumCookie":{}}},
+     *     @OA\Parameter(name="post", in="path", required=true, @OA\Schema(type="integer", minimum=1)),
+     *     @OA\Parameter(name="per_page", in="query", required=false, @OA\Schema(type="integer", minimum=1, maximum=100)),
+     *     @OA\Response(
+     *         response=200,
+     *         description="Paginated post comments",
+     *         @OA\JsonContent(
+     *             @OA\Property(property="data", type="array", @OA\Items(ref="#/components/schemas/PostComment"))
+     *         )
+     *     ),
+     *     @OA\Response(response=401, description="Unauthenticated")
+     * )
+     */
+    public function getPostComments(): void
     {
     }
 

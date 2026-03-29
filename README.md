@@ -42,6 +42,8 @@ SPA-социальная сеть на `Laravel + Vue` с realtime-чатами,
 - Регистрация, вход, подтверждение email.
 - Профиль пользователя, подписки, лента подписок.
 - Посты, комментарии, лайки, репосты, просмотры.
+- Список комментариев к посту заново запрашивается с сервера при каждом открытии, поэтому новые комментарии и удаления видны разным пользователям без hard refresh.
+- Если у поста уже есть комментарии, но они свернуты, карточка показывает отдельную заметную плашку `Показать комментарии`, чтобы не пропустить обсуждение.
 - Загрузка изображений и видео через отдельные API-эндпоинты.
 - Поддержка форматов пост-медиа: `jpg/jpeg/png/webp/gif/mp4/webm/mov/m4v/avi/mkv`, размер файла до `200 MB`.
 - В личном кабинете отображаются очередь загрузки, общий и покомпонентный прогресс, статусы и ошибки по каждому файлу.
@@ -456,7 +458,7 @@ docker/
 - Посты и медиа:
   - `POST /api/post_media`, `GET /api/media/post-images/{postImage}`
   - `GET /api/posts`, `POST /api/posts`, `GET /api/posts/discover`, `GET /api/posts/carousel`
-  - `POST /api/posts/{post}/view`, `POST /api/posts/{post}/comment`
+  - `POST /api/posts/{post}/view`, `GET /api/posts/{post}/comment`, `POST /api/posts/{post}/comment`, `DELETE /api/posts/{post}/comments/{comment}`
 - Чаты:
   - `GET /api/chats`, `GET /api/chats/unread-summary`, `GET /api/chats/users`
   - `POST /api/chats/direct/{user}`, `GET /api/chats/{conversation}`, `POST /api/chats/{conversation}/read`
@@ -497,7 +499,7 @@ docker/
 - Сгенерированный JSON-файл на диске: `storage/api-docs/api-docs.json`
 - Генерация документации: `php artisan l5-swagger:generate`
 - Базовые аннотации: `app/OpenApi/OpenApiSpec.php`
-- Актуальная версия спецификации: `1.4.0`
+- Актуальная версия спецификации: `1.4.1`
 - Спецификация синхронизирована с ключевыми маршрутами `site config`, `users`, `posts`, `post_media`, `radio favorites`, `chat settings/archives/mood-status`, `IPTV library/playback sessions`, `activity heartbeat`, `client analytics events`, `client error logging`, `admin summary/analytics/export`, `admin diagnostics error-log`.
 - Для блока админ-аналитики Swagger синхронизирован с проектной методикой расчётов из [docs/analytics-metrics.md](docs/analytics-metrics.md).
 - Генерация и доступность Swagger UI дополнительно проверяются тестом `tests/Feature/SwaggerDocumentationFeatureTest.php`.

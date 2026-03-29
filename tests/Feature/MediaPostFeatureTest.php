@@ -89,6 +89,42 @@ class MediaPostFeatureTest extends TestCase
         ]);
     }
 
+    public function test_authenticated_viewer_can_see_other_users_comments_in_post_comment_list(): void
+    {
+        $author = User::factory()->create();
+        $commentAuthor = User::factory()->create([
+            'name' => 'Visible Comment Author',
+        ]);
+        $viewer = User::factory()->create();
+
+        $post = Post::query()->create([
+            'title' => 'Shared discussion post',
+            'content' => 'Comments should be visible to other authenticated viewers.',
+            'user_id' => $author->id,
+            'is_public' => true,
+            'show_in_feed' => true,
+        ]);
+
+        $comment = Comment::query()->create([
+            'body' => 'Comment from another user',
+            'user_id' => $commentAuthor->id,
+            'post_id' => $post->id,
+            'parent_id' => null,
+        ]);
+
+        Sanctum::actingAs($viewer);
+
+        $response = $this->getJson("/api/posts/{$post->id}/comment?per_page=100");
+
+        $response
+            ->assertOk()
+            ->assertJsonPath('data.0.id', $comment->id)
+            ->assertJsonPath('data.0.body', 'Comment from another user')
+            ->assertJsonPath('data.0.user.id', $commentAuthor->id)
+            ->assertJsonPath('data.0.user.name', 'Visible Comment Author')
+            ->assertJsonPath('data.0.can_delete', false);
+    }
+
     public function test_user_cannot_delete_foreign_comment(): void
     {
         $author = User::factory()->create();

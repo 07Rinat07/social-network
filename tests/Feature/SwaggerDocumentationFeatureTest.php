@@ -19,13 +19,14 @@ class SwaggerDocumentationFeatureTest extends TestCase
         $spec = json_decode((string) file_get_contents($docsPath), true, 512, JSON_THROW_ON_ERROR);
 
         $this->assertSame('3.0.0', $spec['openapi'] ?? null);
-        $this->assertSame('1.4.0', $spec['info']['version'] ?? null);
+        $this->assertSame('1.4.1', $spec['info']['version'] ?? null);
         $this->assertArrayHasKey('/api/users', $spec['paths'] ?? []);
         $this->assertArrayHasKey('/api/post_media', $spec['paths'] ?? []);
         $this->assertArrayHasKey('/api/site/config', $spec['paths'] ?? []);
         $this->assertArrayHasKey('/api/analytics/events', $spec['paths'] ?? []);
         $this->assertArrayHasKey('/api/client-errors', $spec['paths'] ?? []);
         $this->assertArrayHasKey('/api/posts/discover', $spec['paths'] ?? []);
+        $this->assertArrayHasKey('/api/posts/{post}/comment', $spec['paths'] ?? []);
         $this->assertArrayHasKey('/api/radio/favorites', $spec['paths'] ?? []);
         $this->assertArrayHasKey('/api/iptv/playlist/fetch', $spec['paths'] ?? []);
         $this->assertArrayHasKey('/api/chats/settings', $spec['paths'] ?? []);
@@ -40,6 +41,7 @@ class SwaggerDocumentationFeatureTest extends TestCase
         $this->assertArrayHasKey('/api/admin/error-log/download', $spec['paths'] ?? []);
         $this->assertArrayHasKey('/api/chats/users', $spec['paths'] ?? []);
         $this->assertArrayHasKey('UserSummary', $spec['components']['schemas'] ?? []);
+        $this->assertArrayHasKey('PostComment', $spec['components']['schemas'] ?? []);
         $this->assertArrayHasKey('UploadedPostMedia', $spec['components']['schemas'] ?? []);
         $this->assertArrayHasKey('PlaybackSession', $spec['components']['schemas'] ?? []);
         $this->assertArrayHasKey('AnalyticsEventRequest', $spec['components']['schemas'] ?? []);
@@ -61,6 +63,10 @@ class SwaggerDocumentationFeatureTest extends TestCase
         );
         $this->assertContains('search', $diagnosticsParameterNames);
         $this->assertContains('type', $diagnosticsParameterNames);
+
+        $postCommentOperations = $spec['paths']['/api/posts/{post}/comment'] ?? [];
+        $this->assertArrayHasKey('get', $postCommentOperations);
+        $this->assertArrayHasKey('post', $postCommentOperations);
     }
 
     public function test_swagger_ui_route_is_available(): void

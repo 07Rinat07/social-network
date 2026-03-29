@@ -160,10 +160,27 @@
             <button class="icon-btn" :disabled="isPersonal()" @click.prevent="toggleRepostForm">
                 🔁 {{ post.reposted_by_posts_count }}
             </button>
-            <button class="icon-btn" :class="{'active': isCommentsOpened}" @click.prevent="toggleComments(post)">
-                💬 {{ post.comments_count }}
+            <button
+                class="icon-btn"
+                :class="{
+                    'active': isCommentsOpened,
+                    'icon-btn--attention': hasHiddenComments(post),
+                }"
+                @click.prevent="toggleComments(post)"
+            >
+                💬 {{ commentButtonLabel(post) }}
             </button>
         </div>
+
+        <button
+            v-if="hasHiddenComments(post)"
+            type="button"
+            class="post-comments-summary"
+            @click.prevent="toggleComments(post)"
+        >
+            <span class="post-comments-summary__label">{{ collapsedCommentsHint(post) }}</span>
+            <span class="post-comments-summary__count">{{ post.comments_count }}</span>
+        </button>
 
         <div v-if="isRepostOpened" class="repost-box">
             <input v-model.trim="title" class="input-field" type="text" :placeholder="$t('post.repostTitlePlaceholder')">
@@ -300,6 +317,7 @@ export default {
             comments: [],
             isCommentsOpened: false,
             commentsLoaded: false,
+            isCommentsLoading: false,
             comment: null,
             emojis: ['🔥', '👍', '❤️', '👏', '😂', '😎'],
             showCommentStickerTray: false,
@@ -307,6 +325,12 @@ export default {
             failedAvatarUrls: {},
             videoAnalyticsSessions: {},
         }
+    },
+
+    watch: {
+        'post.id'() {
+            this.resetCommentState()
+        },
     },
 
     computed: {
@@ -662,6 +686,30 @@ export default {
             return label !== '' ? label : this.$t('post.previewUnavailable')
         },
 
+        hasComments(post) {
+            return Number(post?.comments_count || 0) > 0
+        },
+
+        hasHiddenComments(post) {
+            return this.hasComments(post) && !this.isCommentsOpened
+        },
+
+        commentButtonLabel(post) {
+            return this.$t('post.commentsToggle', {
+                count: Number(post?.comments_count || 0),
+            })
+        },
+
+        collapsedCommentsHint(post) {
+            if (this.isCommentsLoading) {
+                return this.$t('post.commentsLoading')
+            }
+
+            return this.$t('post.commentsAvailable', {
+                count: Number(post?.comments_count || 0),
+            })
+        },
+
         normalizeAvatarUrl(value) {
             const raw = String(value || '').trim()
             if (raw === '') {
@@ -775,6 +823,33 @@ export default {
             }
         },
 
+        resetCommentState() {
+            this.comments = []
+            this.isCommentsOpened = false
+            this.commentsLoaded = false
+            this.isCommentsLoading = false
+            this.comment = null
+            this.body = ''
+            this.showCommentStickerTray = false
+        },
+
+        async loadComments(post) {
+            if (this.isCommentsLoading) {
+                return
+            }
+
+            this.isCommentsLoading = true
+
+            try {
+                const response = await axios.get(`/api/posts/${post.id}/comment`, {params: {per_page: 100}})
+                this.comments = response.data.data ?? []
+                this.commentsLoaded = true
+                this.isCommentsOpened = true
+            } finally {
+                this.isCommentsLoading = false
+            }
+        },
+
         normalizeStickerAliases(text) {
             return replaceStickerTokensWithMarkedEmoji(
                 String(text || '')
@@ -837,23 +912,13 @@ export default {
                 })
         },
 
-        toggleComments(post) {
+        async toggleComments(post) {
             if (this.isCommentsOpened) {
                 this.isCommentsOpened = false
                 return
             }
 
-            if (this.commentsLoaded) {
-                this.isCommentsOpened = true
-                return
-            }
-
-            axios.get(`/api/posts/${post.id}/comment`, {params: {per_page: 100}})
-                .then((response) => {
-                    this.comments = response.data.data ?? []
-                    this.commentsLoaded = true
-                    this.isCommentsOpened = true
-                })
+            await this.loadComments(post)
         },
 
         removeComment(post, commentItem) {
