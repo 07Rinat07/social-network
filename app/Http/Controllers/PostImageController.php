@@ -96,6 +96,8 @@ class PostImageController extends Controller
         $normalizedDetectedMimeType = strtolower(trim($detectedMimeType));
         $normalizedClientMimeType = strtolower(trim($clientMimeType));
         $normalizedExtension = strtolower(trim($extension));
+        $normalizedDetectedMimeType = $this->canonicalizeUploadedMimeType($normalizedExtension, $normalizedDetectedMimeType);
+        $normalizedClientMimeType = $this->canonicalizeUploadedMimeType($normalizedExtension, $normalizedClientMimeType);
 
         if ($normalizedDetectedMimeType !== '' && $normalizedDetectedMimeType !== 'application/octet-stream') {
             return $normalizedDetectedMimeType;
@@ -118,5 +120,14 @@ class PostImageController extends Controller
             'mkv' => 'video/x-matroska',
             default => $normalizedDetectedMimeType !== '' ? $normalizedDetectedMimeType : $normalizedClientMimeType,
         };
+    }
+
+    protected function canonicalizeUploadedMimeType(string $extension, string $mimeType): string
+    {
+        if ($extension === 'mkv' && in_array($mimeType, ['audio/matroska', 'audio/x-matroska', 'video/matroska'], true)) {
+            return 'video/x-matroska';
+        }
+
+        return $mimeType;
     }
 }

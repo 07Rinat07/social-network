@@ -10,7 +10,7 @@ sudo apt update
 sudo apt install -y nginx mysql-server ffmpeg unzip git curl supervisor software-properties-common
 sudo add-apt-repository ppa:ondrej/php -y
 sudo apt update
-sudo apt install -y php8.3-fpm php8.3-cli php8.3-mysql php8.3-mbstring php8.3-xml php8.3-curl php8.3-zip php8.3-bcmath php8.3-intl
+sudo apt install -y php8.5-fpm php8.5-cli php8.5-mysql php8.5-mbstring php8.5-xml php8.5-curl php8.5-zip php8.5-bcmath php8.5-intl
 ```
 
 Установите Composer:
@@ -36,8 +36,9 @@ composer install --no-dev --optimize-autoloader
 Сборка фронта (если на сервере есть Node):
 
 ```bash
-curl -fsSL https://deb.nodesource.com/setup_22.x | sudo -E bash -
+curl -fsSL https://deb.nodesource.com/setup_24.x | sudo -E bash -
 sudo apt install -y nodejs
+sudo apt install -y git openssh-client
 npm ci
 npm run build
 ```
@@ -202,7 +203,7 @@ server {
 
     location ~ \.php$ {
         include snippets/fastcgi-php.conf;
-        fastcgi_pass unix:/run/php/php8.3-fpm.sock;
+        fastcgi_pass unix:/run/php/php8.5-fpm.sock;
     }
 
     location ~ /\.ht {
@@ -219,7 +220,7 @@ server {
 sudo ln -s /etc/nginx/sites-available/social-network /etc/nginx/sites-enabled/social-network
 sudo nginx -t
 sudo systemctl restart nginx
-sudo systemctl restart php8.3-fpm
+sudo systemctl restart php8.5-fpm
 ```
 
 ## 7. Supervisor (Reverb обязательно)
@@ -311,9 +312,7 @@ curl -I "http://your-domain.com/docs?api-docs.json"
 curl -I "http://your-domain.com/api/admin/dashboard/export?format=json&date_from=2026-01-01&date_to=2026-01-31"
 ```
 
-Методика расчёта аналитики, формулы и источники данных описаны в:
-
-- [docs/analytics-metrics.md](docs/analytics-metrics.md)
+Методика расчёта аналитики, формулы и источники данных закреплены в README, Swagger/OpenAPI и проектном отчете.
 
 Для ручной сверки аналитики после деплоя:
 
@@ -358,10 +357,10 @@ npm audit
 ```
 
 Примечание:
-- `composer audit` сейчас показывает `0 advisories`, но может вернуть non-zero exit code из-за `abandoned` транзитивной зависимости `doctrine/annotations` через `l5-swagger`.
+- `composer audit` сейчас показывает `0 advisories`; abandoned-зависимость `doctrine/annotations` удалена после миграции Swagger/OpenAPI на PHP attributes.
 - `npm run test:js` покрывает frontend helper-логику радио, IPTV, поиска по карусели авторов и глобальной кнопки возврата в начало.
 - `php artisan test` дополнительно покрывает admin analytics/export, client analytics endpoint, lifetime error log с filtered export/archive rotation и Swagger/OpenAPI генерацию.
-- На текущей ревизии полный локальный прогон дал: `php artisan test` -> `205 passed` (`1760 assertions`), `npm run test:js` -> `33 passed`, `npm audit` -> `0 vulnerabilities`, `composer audit --format=json` -> `0 advisories`.
+- На текущей ревизии полный Docker-прогон дал: `docker compose run --rm test` -> `215 passed` (`1817 assertions`), `npm run test:js` -> `33 passed`, `npm run build` -> success на Vite 8, `npm audit` -> `0 vulnerabilities`, `composer audit` -> `0 advisories`.
 - После production rollout сделайте короткий UI smoke-check: радио (`Прозрачнее/Контрастнее`, карусели, mobile-блок `Сейчас играет`), чаты/виджеты, длинные экраны с кнопкой `В начало`.
 
 На production-сервере выполняйте только сам rollout:

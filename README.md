@@ -205,7 +205,7 @@ flowchart LR
   - роутер: `resources/js/router/index.js`
   - представления: `resources/js/views`
   - i18n: `resources/js/i18n`
-- **Backend (Laravel 10):**
+- **Backend (Laravel 13):**
   - HTTP API: `routes/api.php`
   - web/shell: `routes/web.php`
   - broadcast channels: `routes/channels.php`
@@ -216,11 +216,9 @@ flowchart LR
 
 ## Методика аналитики
 
-Подробная спецификация аналитики вынесена в отдельный документ:
+Методика аналитики описана прямо в README, Swagger/OpenAPI и проектном отчете без отдельного markdown-файла.
 
-- [docs/analytics-metrics.md](docs/analytics-metrics.md)
-
-Что в нём зафиксировано:
+Что зафиксировано:
 
 - точные таблицы-источники и endpoint-источники;
 - формулы всех KPI и блоков `summary`, `dashboard`, `retention`, `content`, `chats`, `media`, `radio`, `iptv`, `errors_and_moderation`;
@@ -301,32 +299,36 @@ docker/
 - IPTV сессии ограничены по количеству и TTL (proxy/transcode).
 
 ## Технологический стек
-- **Backend:** PHP `^8.2` (Docker: PHP 8.3), Laravel 10, Sanctum, Reverb.
-- **Frontend:** Vue 3, Vue Router, Axios, Vite 7, Tailwind CSS 4.
+- **Backend:** PHP `^8.5` (Docker: PHP 8.5 FPM), Laravel 13, Sanctum 4, Reverb 1.10, L5 Swagger 11.
+- **Frontend:** Node 24, Vue 3.5, Vue Router 5, Axios, Vite 8, Laravel Vite Plugin 3, Tailwind CSS 4.
 - **Media/Streaming:** HLS.js, DASH.js, MPEGTS.js, Plyr, FFmpeg.
 - **Database:** MySQL (Docker: `mysql:8.4`).
-- **Infra:** Docker Compose (Nginx + PHP-FPM + Reverb + MySQL + Node profiles).
+- **Infra:** Docker Compose (Nginx 1.28 + PHP-FPM + Reverb + MySQL + Node profiles).
 
 ## Быстрый старт
 
 ### 1) Локальный режим (без Docker)
-1. Установите зависимости:
+1. Проверьте локальные версии:
+   - PHP `8.5` (`.php-version`)
+   - Node `24` (`.nvmrc`)
+   - npm использует проектный cache из `.npmrc`, чтобы не зависеть от прав на глобальный cache Windows/OSPanel.
+2. Установите зависимости:
    - `composer install`
    - `npm ci`
-2. Создайте `.env` из примера:
+3. Создайте `.env` из примера:
    - Linux/macOS: `cp .env.example .env`
    - PowerShell: `Copy-Item .env.example .env`
    - CMD: `copy .env.example .env`
-3. Настройте подключение к БД в `.env`.
-4. Выполните инициализацию:
+4. Настройте подключение к БД в `.env`.
+5. Выполните инициализацию:
    - `php artisan key:generate`
    - `php artisan migrate --seed` (включая демо-контент: пользователи, посты, комментарии, лайки, изображения)
    - `php artisan storage:link`
-5. Запустите процессы:
+6. Запустите процессы:
    - `php artisan serve`
    - `npm run dev`
    - `php artisan reverb:start --host=0.0.0.0 --port=6001`
-6. Откройте `http://127.0.0.1:8000`.
+7. Откройте `http://127.0.0.1:8000`.
 
 ### 2) Docker режим
 1. Запуск:
@@ -349,6 +351,7 @@ docker/
 - если нужны реальные demo-фото в seed-постах, включите `DEMO_SEED_USE_REMOTE_IMAGES=1` в `.env.docker` и затем повторно запустите `docker compose exec --user=www-data app php artisan db:seed --class=DemoSocialContentSeeder --force`;
 - `ffmpeg` уже установлен в образе `app`;
 - отдельный websocket сервис поднимает Reverb на `6001`.
+- Node-сервисы используют кастомный образ `docker/node/Dockerfile` на базе `node:24-alpine` с `git`/`openssh-client`, чтобы `npm ci` воспроизводимо ставил GitHub-зависимость `mpegts.js`.
 - Docker-шаблон использует `CACHE_DRIVER=file`, чтобы `websocket`/Reverb не зависел от таблицы `cache` и доступности MySQL при старте.
 - при первом запуске зависимости (`composer`/`npm`) могут ставиться несколько минут, это нормально.
 - `frontend-build` это одноразовый сервис сборки ассетов, поэтому состояние `Exited (0)` для него нормально;
@@ -429,14 +432,15 @@ docker/
 - `npm run test:js`
 - `npm run build`
 
-Последний полный прогон (1 марта 2026):
-- `php artisan test`: `205 passed` (`1760 assertions`).
-- `npm run test:js`: `33 passed`.
+Контрольный набор перед релизом:
+- `docker compose run --rm test`
+- `docker compose run --rm --no-deps --entrypoint npm node run test:js`
+- `docker compose run --rm --no-deps frontend-build`
 
-Проверка зависимостей (1 марта 2026):
-- `npm audit`: `0 vulnerabilities`.
-- `composer audit --format=json`: `0 advisories`.
-- `doctrine/annotations` помечен как `abandoned` транзитивно через `l5-swagger`; это maintenance-вопрос без security advisory, но `composer audit` из-за этого может завершаться с non-zero exit code.
+Проверка зависимостей:
+- `npm outdated` — контроль устаревших проектных пакетов.
+- `npm audit` — должен завершаться без уязвимостей.
+- `composer audit` — должен завершаться без security advisories; abandoned-зависимости удалены после миграции Swagger/OpenAPI с PHPDoc на PHP attributes.
 
 Ручной smoke-check интерфейса перед релизом:
 - длинные секции и кнопки `В начало` на desktop/tablet/mobile;
@@ -491,17 +495,18 @@ docker/
 - Экспорт запускается из админки и возвращает поток файла (`Content-Disposition`) для прямого скачивания.
 - JSON/XLS payload синхронизирован с блоками `retention`, `content`, `chats`, `media`, `radio`, `iptv`, `errors_and_moderation`.
 - Lifetime error log работает как отдельный operational diagnostics контур: хранит подробные сырые записи за весь срок жизни сайта, умеет искать по активному логу и архивам и не зависит от периодного dashboard payload.
-- Формулы и источники данных описаны в [docs/analytics-metrics.md](docs/analytics-metrics.md).
+- JSON/XLS payload строится из heartbeat, client analytics events, users/posts/comments/media/chats/radio/IPTV/error-log данных и покрывается feature-тестами.
 
 ## Swagger / OpenAPI
 - Swagger UI: `GET /api/documentation`
 - Docs route для JSON, который использует Swagger UI: `GET /docs?api-docs.json`
 - Сгенерированный JSON-файл на диске: `storage/api-docs/api-docs.json`
 - Генерация документации: `php artisan l5-swagger:generate`
-- Базовые аннотации: `app/OpenApi/OpenApiSpec.php`
-- Актуальная версия спецификации: `1.4.1`
+- Базовая спецификация на PHP attributes: `app/OpenApi/OpenApiSpec.php`
+- Актуальная версия спецификации: `1.5.0`
 - Спецификация синхронизирована с ключевыми маршрутами `site config`, `users`, `posts`, `post_media`, `radio favorites`, `chat settings/archives/mood-status`, `IPTV library/playback sessions`, `activity heartbeat`, `client analytics events`, `client error logging`, `admin summary/analytics/export`, `admin diagnostics error-log`.
-- Для блока админ-аналитики Swagger синхронизирован с проектной методикой расчётов из [docs/analytics-metrics.md](docs/analytics-metrics.md).
+- Для блока админ-аналитики Swagger синхронизирован с маршрутами dashboard/export и проверяется `SwaggerDocumentationFeatureTest`.
+- На L5 Swagger 11 спецификация переведена на `OpenApi\Attributes`; abandoned-пакет `doctrine/annotations` больше не нужен.
 - Генерация и доступность Swagger UI дополнительно проверяются тестом `tests/Feature/SwaggerDocumentationFeatureTest.php`.
 
 ## Тестовые аккаунты

@@ -2,7 +2,9 @@ name: social-network
 
 services:
   frontend-build:
-    image: node:22-alpine
+    build:
+      context: .
+      dockerfile: docker/node/Dockerfile
     working_dir: /var/www/html
     env_file:
       - ./${DOCKER_ENV_FILE:-.env.docker.example}
@@ -50,7 +52,7 @@ services:
       - appnet
 
   web:
-    image: nginx:1.27-alpine
+    image: nginx:1.28-alpine
     restart: unless-stopped
     ports:
       - "${WEB_FORWARD_PORT:-8080}:80"
@@ -112,7 +114,9 @@ services:
       - appnet
 
   node:
-    image: node:22-alpine
+    build:
+      context: .
+      dockerfile: docker/node/Dockerfile
     working_dir: /var/www/html
     env_file:
       - ./${DOCKER_ENV_FILE:-.env.docker.example}

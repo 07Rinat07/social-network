@@ -10,7 +10,7 @@
 
 Опционально для новой аналитики админки:
 - `admin-dashboard.png` — вкладка дашборда (KPI, графики подписок и активности, retention/content/media/radio/IPTV analytics).
-- `admin-dashboard-formulas-reference.png` — при необходимости отдельный скриншот блока аналитики, если обновляется `docs/analytics-metrics.md` и нужно показать заказчику сам экран, к которому относятся формулы.
+- `admin-dashboard-formulas-reference.png` — при необходимости отдельный скриншот блока аналитики, если обновляется раздел админ-аналитики и нужно показать заказчику экран KPI/формул.
 - `cabinet-upload-progress.png` — отдельный акцентный скриншот очереди загрузки медиа в личном кабинете.
 - `api-documentation.png` — Swagger/OpenAPI UI после `php artisan l5-swagger:generate`, если обновляется раздел API-документации в `README.md`.
 - `home-back-to-top.png` — экран с глобальной кнопкой `В начало`, если обновляется описание навигации и адаптива.

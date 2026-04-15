@@ -19,7 +19,7 @@ class SwaggerDocumentationFeatureTest extends TestCase
         $spec = json_decode((string) file_get_contents($docsPath), true, 512, JSON_THROW_ON_ERROR);
 
         $this->assertSame('3.0.0', $spec['openapi'] ?? null);
-        $this->assertSame('1.4.1', $spec['info']['version'] ?? null);
+        $this->assertSame('1.5.0', $spec['info']['version'] ?? null);
         $this->assertArrayHasKey('/api/users', $spec['paths'] ?? []);
         $this->assertArrayHasKey('/api/post_media', $spec['paths'] ?? []);
         $this->assertArrayHasKey('/api/site/config', $spec['paths'] ?? []);
